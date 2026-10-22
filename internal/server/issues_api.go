@@ -1082,23 +1082,25 @@ func fieldsOf(hist []store.History) []string {
 }
 
 // lazyEvent queues a Core event about an issue in the saving transaction.
+// Everything that needs the database is looked up before the transaction
+// starts: the hook runs while it holds SQLite's only connection.
 func (s *Server) lazyEvent(ctx context.Context, topic string, is *store.Issue, who actor, extra map[string]any) store.TxHook {
+	if !s.core.Configured() {
+		return func(*sql.Tx) error { return nil }
+	}
+	p := map[string]any{"audience_emails": s.teamEmails(ctx, is.TeamID), "source": who.app}
+	if who.id > 0 {
+		p["user_email"] = s.userEmail(ctx, who.id)
+	}
+	if is.AssigneeID != nil {
+		p["assignee_email"] = s.userEmail(ctx, *is.AssigneeID)
+	}
+	for k, v := range extra {
+		p[k] = v
+	}
 	return func(tx *sql.Tx) error {
-		if !s.core.Configured() {
-			return nil
-		}
-		p := map[string]any{"id": is.ID, "identifier": is.Identifier, "title": is.Title, "team_id": is.TeamID, "state_id": is.StateID,
-			"priority": is.Priority, "due_date": is.DueDate, "project_id": is.ProjectID, "assignee_id": is.AssigneeID,
-			"url": who.base + "/issue/" + is.Identifier, "audience_emails": s.teamEmails(ctx, is.TeamID), "source": who.app}
-		if who.id > 0 {
-			p["user_email"] = s.userEmail(ctx, who.id)
-		}
-		if is.AssigneeID != nil {
-			p["assignee_email"] = s.userEmail(ctx, *is.AssigneeID)
-		}
-		for k, v := range extra {
-			p[k] = v
-		}
+		p["id"], p["identifier"], p["title"], p["team_id"], p["state_id"] = is.ID, is.Identifier, is.Title, is.TeamID, is.StateID
+		p["priority"], p["due_date"], p["project_id"], p["assignee_id"], p["url"] = is.Priority, is.DueDate, is.ProjectID, is.AssigneeID, who.base+"/issue/"+is.Identifier
 		return s.coreEvent(ctx, topic, "issue:"+strconv.FormatInt(is.ID, 10), p)(tx)
 	}
 }

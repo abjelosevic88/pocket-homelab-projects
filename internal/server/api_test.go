@@ -18,11 +18,17 @@ import (
 )
 
 func apiServer(t *testing.T) (*Server, http.Handler) {
+	return apiServerCore(t, "")
+}
+
+// apiServerCore runs with a Pocket Core address (nothing answers there): every
+// change then also queues its Core event inside the saving transaction.
+func apiServerCore(t *testing.T, coreURL string) (*Server, http.Handler) {
 	t.Helper()
 	t.Setenv("DATA_DIR", t.TempDir())
 	t.Setenv("AUTH_MODE", "local")
 	t.Setenv("TZ", "Europe/Sarajevo")
-	t.Setenv("CORE_URL", "")
+	t.Setenv("CORE_URL", coreURL)
 	t.Setenv("BASE_URL", "https://projects.example")
 	t.Setenv("DEMO_DATA", "")
 	cfg, err := config.Load()
@@ -439,6 +445,26 @@ func TestLinkRoutes(t *testing.T) {
 	}
 }
 
+func TestDemoSeedsWithCore(t *testing.T) {
+	s, h := apiServerCore(t, "http://127.0.0.1:1")
+	done := make(chan error, 1)
+	go func() { done <- s.seedDemo(context.Background()) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("seeding with Core configured hangs (a query inside a transaction?)")
+	}
+	var n int
+	_ = s.store.DB.QueryRow(`SELECT COUNT(1) FROM pocket_outbox`).Scan(&n)
+	if n < 10 {
+		t.Fatalf("core events queued: %d", n)
+	}
+	_ = h
+}
+
 func TestDemoSeeds(t *testing.T) {
 	s, h := apiServer(t)
 	if err := s.seedDemo(context.Background()); err != nil {
@@ -461,5 +487,4 @@ func TestDemoSeeds(t *testing.T) {
 	if list.Total < 10 {
 		t.Fatalf("issues: %d", list.Total)
 	}
-	_ = time.Now
 }

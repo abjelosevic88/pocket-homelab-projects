@@ -29,6 +29,10 @@ import (
 // Version is injected at build time.
 var Version = "dev"
 
+// extraRoutes lets a feature file add authenticated /api/v1 routes from its
+// own init() without touching the router here.
+var extraRoutes []func(s *Server, r chi.Router)
+
 // Server holds dependencies.
 type Server struct {
 	cfg   *config.Config
@@ -162,6 +166,9 @@ func (s *Server) Router() http.Handler {
 			s.aiRoutes(r)
 			s.integrationRoutes(r)
 			s.importRoutes(r)
+			for _, add := range extraRoutes {
+				add(s, r)
+			}
 
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)

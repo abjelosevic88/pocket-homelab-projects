@@ -137,14 +137,14 @@ func prefixCols(p, cols string) string {
 
 // TeamPreset seeds a new team's workflow and labels.
 type TeamPreset struct {
-	ID          string
-	Name        string
-	Description string
-	States      []State
-	Labels      []Label
-	Cycles      bool
-	Estimates   string
-	Triage      bool
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	States      []State `json:"states"`
+	Labels      []Label `json:"labels"`
+	Cycles      bool    `json:"cycles"`
+	Estimates   string  `json:"estimates"`
+	Triage      bool    `json:"triage"`
 }
 
 // TeamPresets are the starting points offered when a team is created.
