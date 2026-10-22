@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"github.com/abjelosevic88/pocket-homelab-projects/internal/store"
 )
 
@@ -378,7 +379,29 @@ func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	is, err := s.createIssue(r.Context(), s.accessOf(r), s.actorOf(r), in)
+	a := s.accessOf(r)
+	// A retried request with the same Idempotency-Key (Pocket AI's tools send one) answers the issue it made.
+	op, err := core.NewOperation(fmt.Sprintf("%d:%s:issues:create", a.uid, s.linkApp(r)), r.Header.Get("Idempotency-Key"), in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var receipt struct {
+		ID int64 `json:"id"`
+	}
+	if done, err := op.Replay(r.Context(), s.store.DB, &receipt); err != nil {
+		writeErr(w, http.StatusConflict, err.Error())
+		return
+	} else if done {
+		is, err := s.loadIssue(r, a, strconv.FormatInt(receipt.ID, 10), needRead)
+		if err != nil {
+			s.fail(w, err, "issue")
+			return
+		}
+		writeJSON(w, http.StatusOK, is)
+		return
+	}
+	is, err := s.createIssue(r.Context(), a, s.actorOf(r), in, opHook(r.Context(), op))
 	if err != nil {
 		s.fail(w, err, "create issue")
 		return
@@ -386,8 +409,20 @@ func (s *Server) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, is)
 }
 
+// opHook saves an idempotency receipt {"id"} in the creating transaction.
+func opHook(ctx context.Context, op *core.Operation) func(id int64) store.TxHook {
+	return func(id int64) store.TxHook {
+		return func(tx *sql.Tx) error {
+			if op == nil {
+				return nil
+			}
+			return op.Save(ctx, tx, map[string]int64{"id": id})
+		}
+	}
+}
+
 // createIssue validates and saves a new issue, then tells everyone concerned.
-func (s *Server) createIssue(ctx context.Context, a *access, who actor, in issueInput) (*store.Issue, error) {
+func (s *Server) createIssue(ctx context.Context, a *access, who actor, in issueInput, receipt ...func(id int64) store.TxHook) (*store.Issue, error) {
 	var tmpl *store.Template
 	var td store.TemplateData
 	if in.TemplateID > 0 {
@@ -453,7 +488,11 @@ func (s *Server) createIssue(ctx context.Context, a *access, who actor, in issue
 	if is.StateID == 0 {
 		is.StateID = s.defaultState(ctx, team, who, a)
 	}
-	if err := s.store.CreateIssue(ctx, is, who.id, who.app, s.lazyEvent(ctx, "projects.issue_created", is, who, nil)); err != nil {
+	hooks := []store.TxHook{s.lazyEvent(ctx, "projects.issue_created", is, who, nil)}
+	for _, rc := range receipt {
+		hooks = append(hooks, func(tx *sql.Tx) error { return rc(is.ID)(tx) })
+	}
+	if err := s.store.CreateIssue(ctx, is, who.id, who.app, hooks...); err != nil {
 		return nil, err
 	}
 	if in.Subscribe != nil && !*in.Subscribe && who.id > 0 {
@@ -1415,7 +1454,27 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
-	c, err := s.addComment(r.Context(), s.actorOf(r), is, in.Body, in.ParentID)
+	op, err := core.NewOperation(fmt.Sprintf("%d:%s:issues:%d:comment", a.uid, s.linkApp(r), is.ID), r.Header.Get("Idempotency-Key"), in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var receipt struct {
+		ID int64 `json:"id"`
+	}
+	if done, err := op.Replay(r.Context(), s.store.DB, &receipt); err != nil {
+		writeErr(w, http.StatusConflict, err.Error())
+		return
+	} else if done {
+		c, err := s.store.GetComment(r.Context(), receipt.ID)
+		if err != nil {
+			s.fail(w, err, "comment")
+			return
+		}
+		writeJSON(w, http.StatusOK, c)
+		return
+	}
+	c, err := s.addComment(r.Context(), s.actorOf(r), is, in.Body, in.ParentID, opHook(r.Context(), op))
 	if err != nil {
 		s.fail(w, err, "comment")
 		return
@@ -1424,7 +1483,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 }
 
 // addComment saves a comment on an issue and notifies followers and the people mentioned.
-func (s *Server) addComment(ctx context.Context, who actor, is *store.Issue, body string, parentID int64) (*store.Comment, error) {
+func (s *Server) addComment(ctx context.Context, who actor, is *store.Issue, body string, parentID int64, receipt ...func(id int64) store.TxHook) (*store.Comment, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, badRequest("the comment is empty")
@@ -1445,7 +1504,11 @@ func (s *Server) addComment(ctx context.Context, who actor, is *store.Issue, bod
 	if who.id > 0 {
 		payload["user_email"] = s.userEmail(ctx, who.id)
 	}
-	if err := s.store.SaveComment(ctx, c, s.coreEvent(ctx, "projects.comment_added", "issue:"+strconv.FormatInt(is.ID, 10), payload)); err != nil {
+	hooks := []store.TxHook{s.coreEvent(ctx, "projects.comment_added", "issue:"+strconv.FormatInt(is.ID, 10), payload)}
+	for _, rc := range receipt {
+		hooks = append(hooks, func(tx *sql.Tx) error { return rc(c.ID)(tx) })
+	}
+	if err := s.store.SaveComment(ctx, c, hooks...); err != nil {
 		return nil, err
 	}
 	link := who.base + "/issue/" + is.Identifier

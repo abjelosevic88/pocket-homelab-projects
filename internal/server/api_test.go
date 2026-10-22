@@ -488,3 +488,37 @@ func TestDemoSeeds(t *testing.T) {
 		t.Fatalf("issues: %d", list.Total)
 	}
 }
+
+func TestIdempotentCreate(t *testing.T) {
+	s, h := apiServer(t)
+	alex := person(t, s, h, "alex@example.com", "Alex", "admin")
+	alex.do("POST", "/api/v1/teams", map[string]any{"name": "Web", "key": "WEB"}, 201, nil)
+	post := func(path string, body any) (int, []byte) {
+		b, _ := json.Marshal(body)
+		req := httptest.NewRequest("POST", path, bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+alex.token)
+		req.Header.Set("Idempotency-Key", "mcp-same-request-123456")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Code, w.Body.Bytes()
+	}
+	c1, b1 := post("/api/v1/issues", map[string]any{"team": "WEB", "title": "Once"})
+	c2, b2 := post("/api/v1/issues", map[string]any{"team": "WEB", "title": "Once"})
+	var i1, i2 store.Issue
+	_ = json.Unmarshal(b1, &i1)
+	_ = json.Unmarshal(b2, &i2)
+	if c1 != 201 || c2 != 200 || i1.ID != i2.ID {
+		t.Fatalf("retry made another issue: %d %d %d %d", c1, c2, i1.ID, i2.ID)
+	}
+	if c, _ := post("/api/v1/issues", map[string]any{"team": "WEB", "title": "Different"}); c != 409 {
+		t.Fatalf("changed request under the same key: %d", c)
+	}
+	c3, _ := post("/api/v1/issues/WEB-1/comments", map[string]any{"body": "hi"})
+	c4, _ := post("/api/v1/issues/WEB-1/comments", map[string]any{"body": "hi"})
+	var cs []store.Comment
+	alex.do("GET", "/api/v1/issues/WEB-1/comments", nil, 200, &cs)
+	if c3 != 201 || c4 != 200 || len(cs) != 1 {
+		t.Fatalf("comment retry: %d %d %d", c3, c4, len(cs))
+	}
+}

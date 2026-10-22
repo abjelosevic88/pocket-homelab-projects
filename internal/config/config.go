@@ -48,7 +48,7 @@ type Config struct {
 	CoreRegistrationKey string
 	CoreAppURL          string
 
-	// Notifications: birthday reminders (each person can set their own route).
+	// Notifications: assignments, mentions, due dates (each person can set their own route).
 	NotifyURL  string // Apprise route, ntfy topic URL or webhook
 	NotifyKind string // apprise | ntfy | webhook
 

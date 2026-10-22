@@ -1,10 +1,10 @@
 {
-  "name": "Pocket Tasks",
-  "short_name": "Tasks",
+  "name": "Pocket Projects",
+  "short_name": "Projects",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f6f5f1",
-  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "theme_color": "#5e6ad2",
   "icons": [
     { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },

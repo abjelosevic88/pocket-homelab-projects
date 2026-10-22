@@ -33,7 +33,7 @@ USER app
 WORKDIR /data
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD curl -fsS http://localhost:8080/healthz || exit 1
 LABEL org.opencontainers.image.title="Pocket Projects" \
-      org.opencontainers.image.description="Self-hosted contacts for a household: shared address books, a CardDAV server for iPhone, Mac and Android, import from vCard, CSV, iCloud, Google and Nextcloud, duplicates merged, birthday reminders, and links to the other Pocket apps." \
+      org.opencontainers.image.description="Linear-style project tracking for a household or a small team: teams with their own workflow, issues, a kanban board, projects with milestones and updates, cycles, a roadmap, an inbox, insights and time tracking, connected to the other Pocket apps." \
       org.opencontainers.image.source="https://github.com/abjelosevic88/pocket-homelab-projects" \
       org.opencontainers.image.licenses="MIT"
 ENTRYPOINT ["pocket-projects"]

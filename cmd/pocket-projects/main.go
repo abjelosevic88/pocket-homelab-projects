@@ -1,6 +1,6 @@
-// Command pocket-projects is a self-hosted contacts server: shared address
-// books, a CardDAV server, imports, duplicates, birthdays, Nextcloud sync.
-// One binary, one SQLite file, one volume.
+// Command pocket-projects is a self-hosted, Linear-style project tracker:
+// teams, issues, a kanban board, projects, cycles, a roadmap and an inbox,
+// connected to the other Pocket apps. One binary, one SQLite file, one volume.
 package main
 
 import (
@@ -40,7 +40,7 @@ func main() {
 			runResetPassword(os.Args[2:])
 			return
 		case "help", "--help", "-h":
-			fmt.Println(`pocket-projects — self-hosted contacts server with CardDAV
+			fmt.Println(`pocket-projects — Linear-style projects, issues and kanban for a household or a small team
 
 Usage:
   pocket-projects                     start the server (default)
