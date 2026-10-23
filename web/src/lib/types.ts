@@ -151,7 +151,7 @@ export interface TeamPreset { id: string; name: string; description: string; cyc
 export interface Bootstrap {
   user: User; settings: Settings; teams: Team[]; projects: Project[]; milestones: Milestone[]; cycles: Cycle[]
   views: View[]; favorites: Favorite[]; people: Person[]; templates: Template[]; unread: number; today: string; version: string
-  timer: TimeEntry | null; presets: TeamPreset[]; core: boolean
+  timer: TimeEntry | null; presets: TeamPreset[]; core: boolean; core_connected?: boolean
 }
 
 export interface CalendarItem {

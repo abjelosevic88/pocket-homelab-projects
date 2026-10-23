@@ -19,35 +19,47 @@ const META: Record<string, { icon: string; color: string; what: string }> = {
 interface AIStatus { ready: boolean; detail: string; model: string }
 interface AIModels { models: { id: string; name: string; description?: string }[]; default_model: string; default_name: string }
 
+// NeedsCore explains a Pocket Core choice that is greyed out because this box
+// is not connected to a Pocket Core.
+export function NeedsCore({ what = 'This' }: { what?: string }) {
+  return (
+    <span className="muted small">
+      {what} needs Pocket Core. Pocket Core connects your Pocket apps to each other and to your services: one sign-in for everyone, each person’s own accounts, nothing to copy or paste. Set <code>CORE_URL</code> to connect this app. <a href="https://github.com/abjelosevic88/pocket-homelab-core" target="_blank" rel="noreferrer">Learn more</a>
+    </span>
+  )
+}
+
 export function AppsTab() {
   const { boot } = useApp()
   const list = useAsync(() => api.get<Integration[]>(`${V1}/integrations`), [])
+  const connected = !!boot?.core_connected
   return (
     <div className="stack loose">
       <div className="callout info">
         <Icon name="layers" size={16} />
         <div>
           <b>Pocket Core is the default and needs no setup.</b> Each app is reached as you through a Pocket Core app link, so you only ever see your own events, contacts, to-dos and notes here.
-          <div className="small mt-s">Pocket Core: {boot?.core ? <span className="ok-text">configured on this box</span> : <span className="danger-text">not configured on this box — use Direct, or ask the box owner</span>}</div>
+          <div className="small mt-s">Pocket Core: {connected ? <span className="ok-text">connected on this box</span> : <span className="danger-text">{boot?.core ? 'configured but not reachable' : 'not connected on this box'} — use Direct, or ask the box owner</span>}</div>
+          {!connected && <div className="mt-s"><NeedsCore what="The Pocket Core option" /></div>}
         </div>
       </div>
       {list.error ? <div className="callout danger"><Icon name="alert" size={15} /><span>{list.error}</span></div>
         : !list.data ? <Loading /> : (
           <div className="set-apps">
-            {list.data.map(app => <AppCard key={app.id} app={app} onList={l => list.setData(l)} />)}
+            {list.data.map(app => <AppCard key={app.id} app={app} connected={connected} onList={l => list.setData(l)} />)}
           </div>
         )}
-      <AICard />
+      <AICard connected={connected} />
     </div>
   )
 }
 
-function AppCard({ app, onList }: { app: Integration; onList: (l: Integration[]) => void }) {
+function AppCard({ app, connected, onList }: { app: Integration; connected: boolean; onList: (l: Integration[]) => void }) {
   const { toast } = useToast()
   const [url, setUrl] = useState(app.url || '')
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
-  const [advanced, setAdvanced] = useState(app.mode === 'direct')
+  const [advanced, setAdvanced] = useState(app.mode === 'direct' || !connected)
   useEffect(() => { setUrl(app.url || '') }, [app.url])
   const meta = META[app.id] || { icon: 'layers', color: '#64748b', what: '' }
 
@@ -59,13 +71,17 @@ function AppCard({ app, onList }: { app: Integration; onList: (l: Integration[])
       setToken('')
     } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
   }
-  const status: 'ok' | 'error' | 'off' = app.mode === 'off' ? 'off' : app.status === 'error' ? 'error' : 'ok'
-  const modes = advanced || app.mode === 'direct'
-    ? [{ value: 'core' as Mode, label: 'Pocket Core' }, { value: 'direct' as Mode, label: 'Direct' }, { value: 'off' as Mode, label: 'Off' }]
-    : [{ value: 'core' as Mode, label: 'Pocket Core' }, { value: 'off' as Mode, label: 'Off' }]
+  // Without a connected Core a saved "core" mode cannot work: show what
+  // actually happens (off) and grey the Pocket Core choice out.
+  const mode: Mode = app.mode === 'core' && !connected ? 'off' : app.mode
+  const status: 'ok' | 'error' | 'off' = mode === 'off' ? 'off' : app.status === 'error' ? 'error' : 'ok'
+  const coreOpt = { value: 'core' as Mode, label: 'Pocket Core', disabled: !connected }
+  const modes = advanced || mode === 'direct'
+    ? [coreOpt, { value: 'direct' as Mode, label: 'Direct' }, { value: 'off' as Mode, label: 'Off' }]
+    : [coreOpt, { value: 'off' as Mode, label: 'Off' }]
 
   return (
-    <section className={`set-app ${app.mode === 'off' ? 'off' : ''}`} data-pocket-ask>
+    <section className={`set-app ${mode === 'off' ? 'off' : ''}`} data-pocket-ask>
       <div className="set-app-head">
         <span className="set-app-ico" style={{ background: meta.color }}><Icon name={meta.icon} size={16} /></span>
         <div className="grow">
@@ -79,11 +95,12 @@ function AppCard({ app, onList }: { app: Integration; onList: (l: Integration[])
       </div>
       {status === 'error' && app.detail && <div className="callout danger small"><Icon name="alert" size={14} /><span>{app.detail.charAt(0).toUpperCase() + app.detail.slice(1)}</span></div>}
       <div className="set-app-controls">
-        <Segmented size="sm" label={`${app.name} connection`} value={app.mode} onChange={m => put({ mode: m })} options={modes} />
-        {!advanced && app.mode !== 'direct' && <button type="button" className="link-btn small" onClick={() => setAdvanced(true)}>Advanced</button>}
+        <Segmented size="sm" label={`${app.name} connection`} value={mode} onChange={m => put({ mode: m })} options={modes} />
+        {!advanced && mode !== 'direct' && <button type="button" className="link-btn small" onClick={() => setAdvanced(true)}>Advanced</button>}
         {app.scopes?.length ? <span className="faint xsmall">{app.scopes.join(' · ')}</span> : null}
       </div>
-      {app.mode === 'direct' && (
+      {!connected && app.mode === 'core' && <NeedsCore what={`Pocket Core for ${app.name}`} />}
+      {mode === 'direct' && (
         <div className="set-app-direct">
           <div className="two-col">
             <Field label={`${app.name} address`}><input value={url} onChange={e => setUrl(e.target.value)} placeholder={`https://${app.id}.example.com`} inputMode="url" spellCheck={false} /></Field>
@@ -106,7 +123,7 @@ const AI_DOES = [
   ['sparkles', 'Pocket Ask (the header button) and Pocket Core’s MCP tools let any Pocket AI chat read and change your issues and projects.'],
 ]
 
-function AICard() {
+function AICard({ connected }: { connected: boolean }) {
   const { settings } = useApp()
   const save = useSaveSettings()
   const status = useAsync(() => api.get<AIStatus>(`${V1}/ai/status`), [])
@@ -137,7 +154,8 @@ function AICard() {
           <span className="small">{status.loading ? 'Checking…' : ready ? 'Ready' : 'Not available'}</span>
         </span>
       </div>
-      {!status.loading && !ready && (status.data?.detail || status.error) && <div className="callout warn small"><Icon name="info" size={14} /><span>{(status.data?.detail || status.error).replace(/^./, c => c.toUpperCase())}</span></div>}
+      {!connected && <NeedsCore what="Pocket AI here" />}
+      {connected && !status.loading && !ready && (status.data?.detail || status.error) && <div className="callout warn small"><Icon name="info" size={14} /><span>{(status.data?.detail || status.error).replace(/^./, c => c.toUpperCase())}</span></div>}
       <Field label="Model" group help={ready ? 'Used for everything AI does in Projects. Leave it on the default unless you have a favourite.' : 'Choose a model once Pocket AI is available.'}>
         <div className="ui-ctl-w wide">
           <Select value={current} options={opts} onChange={v => save({ ai_model: v }, 'Model saved')} label="AI model" disabled={!ready || (!models && !modelErr)} placeholder="Pocket AI’s default" />

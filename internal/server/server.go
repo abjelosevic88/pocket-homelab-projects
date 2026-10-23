@@ -385,6 +385,14 @@ func (s *Server) coreStatus() map[string]any {
 	return map[string]any{"configured": s.core.Configured(), "url": s.cfg.CoreURL, "registered": s.coreOK, "error": s.coreErr}
 }
 
+// coreConnected reports whether Pocket Core is configured and this app is
+// registered with it, i.e. whether Core-only choices can work right now.
+func (s *Server) coreConnected() bool {
+	s.coreMu.Lock()
+	defer s.coreMu.Unlock()
+	return s.core.Configured() && s.coreOK
+}
+
 // handleClientError writes a crash of the web app into the server's log.
 func (s *Server) handleClientError(w http.ResponseWriter, r *http.Request) {
 	var in struct {

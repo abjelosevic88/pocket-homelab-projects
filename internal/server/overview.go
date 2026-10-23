@@ -43,6 +43,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) {
 		"views": views, "favorites": favorites, "people": people, "templates": templates,
 		"unread": s.store.UnreadCount(ctx, u.ID), "today": s.today(ctx, u.ID), "version": Version,
 		"timer": s.store.RunningTimer(ctx, u.ID), "presets": store.TeamPresets, "core": s.core.Configured(),
+		"core_connected": s.coreConnected(),
 	})
 }
 
