@@ -111,12 +111,17 @@ export interface IssueFilter {
   due?: 'overdue' | 'today' | 'week' | 'month' | 'none' | 'any'; due_from?: string; due_to?: string; created_since?: string; updated_since?: string
   show_completed?: 'all' | 'none' | 'day' | 'week' | 'month'; subscribed_by?: number; blocked?: boolean; archived?: '' | 'include' | 'only'
   q?: string; sort?: SortKey
+  ids?: number[]; snoozed?: '' | 'include'; trash?: boolean
 }
 export type SortKey = 'manual' | 'priority' | 'updated' | 'created' | 'due' | 'title' | 'estimate' | 'identifier'
 export type GroupKey = 'none' | 'state' | 'assignee' | 'priority' | 'project' | 'cycle' | 'label' | 'milestone' | 'team'
 export interface Display {
   layout?: 'list' | 'board'; group?: GroupKey; sub_group?: GroupKey; sort?: SortKey; show_sub_issues?: boolean
   show_empty_groups?: boolean; properties?: string[]
+  /** Completed issues shown (overrides the page's filter). */
+  show_completed?: 'all' | 'none' | 'day' | 'week' | 'month'
+  /** List: show sub-issues under their parent. */
+  nest_sub_issues?: boolean
 }
 
 export interface View {

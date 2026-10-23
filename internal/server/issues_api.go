@@ -1229,8 +1229,15 @@ func (s *Server) handleBulkIssues(w http.ResponseWriter, r *http.Request) {
 				err = s.trashIssue(ctx, who, is)
 			}
 		case "restore":
+			// loadIssue refuses trashed issues outside /restore; load directly.
 			var is *store.Issue
-			if is, err = s.loadIssue(r, a, ref, needWrite); err == nil {
+			var id int64
+			if id, err = s.issueID(ctx, ref); err == nil {
+				if is, err = s.store.GetIssue(ctx, id, a.uid); err == nil {
+					err = a.check(is.TeamID, needWrite)
+				}
+			}
+			if err == nil {
 				err = s.store.RestoreIssue(ctx, is.ID, who.id)
 				s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}, ActorID: who.id})
 			}

@@ -130,7 +130,7 @@ export default function Layout() {
   )
 }
 
-const TITLES: Record<string, string> = { inbox: 'Inbox', 'my-issues': 'My issues', projects: 'Projects', roadmap: 'Roadmap', views: 'Views', insights: 'Insights', calendar: 'Calendar', time: 'Time', search: 'Search', trash: 'Trash', teams: 'Teams' }
+const TITLES: Record<string, string> = { inbox: 'Inbox', 'my-issues': 'My issues', projects: 'Projects', roadmap: 'Roadmap', views: 'Views', insights: 'Insights', calendar: 'Calendar', time: 'Time', search: 'Search', trash: 'Trash', teams: 'Teams', doc: 'Document' }
 const TEAM_TABS: Record<string, string> = { issues: 'Issues', active: 'Active', backlog: 'Backlog', triage: 'Triage', cycles: 'Cycles', projects: 'Projects', settings: 'Settings' }
 
 function TopBar({ onMenu, onPalette, mobile, compact, sidebarOpen }: { onMenu: () => void; onPalette: () => void; mobile: boolean; compact: boolean; sidebarOpen: boolean }) {

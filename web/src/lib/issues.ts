@@ -35,8 +35,8 @@ export const GROUP_LABEL: Record<GroupKey, string> = { none: 'No grouping', stat
 export const SORT_LABEL: Record<SortKey, string> = { manual: 'Manual', priority: 'Priority', updated: 'Last updated', created: 'Created', due: 'Due date', title: 'Title', estimate: 'Estimate', identifier: 'ID' }
 export const ALL_PROPERTIES = ['priority', 'id', 'status', 'labels', 'project', 'milestone', 'cycle', 'estimate', 'due', 'assignee', 'created', 'updated', 'sub_issues', 'comments']
 export const DEFAULT_PROPERTIES = ['priority', 'id', 'status', 'labels', 'project', 'due', 'assignee', 'sub_issues']
-export const DEFAULT_DISPLAY: Required<Pick<Display, 'layout' | 'group' | 'sub_group' | 'sort' | 'show_sub_issues' | 'show_empty_groups' | 'properties'>> = {
-  layout: 'list', group: 'state', sub_group: 'none', sort: 'manual', show_sub_issues: true, show_empty_groups: false, properties: DEFAULT_PROPERTIES,
+export const DEFAULT_DISPLAY: Required<Pick<Display, 'layout' | 'group' | 'sub_group' | 'sort' | 'show_sub_issues' | 'show_empty_groups' | 'properties' | 'nest_sub_issues'>> & Pick<Display, 'show_completed'> = {
+  layout: 'list', group: 'state', sub_group: 'none', sort: 'manual', show_sub_issues: true, show_empty_groups: false, properties: DEFAULT_PROPERTIES, nest_sub_issues: false,
 }
 export function displayOf(d?: Display): typeof DEFAULT_DISPLAY { return { ...DEFAULT_DISPLAY, ...(d || {}) } }
 
@@ -69,6 +69,10 @@ export interface Lookups {
   milestone: (id?: number | null) => { id: number; name: string; target_date: string } | undefined
   label: (id?: number | null) => { id: number; name: string; color: string; parent_id: number | null } | undefined
   team: (id?: number | null) => Team | undefined
+  /** Optional lists so empty groups can be shown (projects, cycles, milestones). */
+  projects?: { id: number; name: string; color: string; icon: string; team_ids: number[]; status: string }[]
+  cycles?: { id: number; team_id: number; number: number; name: string; starts_on: string; status: string }[]
+  milestones?: { id: number; project_id: number; name: string; target_date: string }[]
 }
 
 /** Group issues by a key. For "state" the groups follow the workflows of the teams shown. */
@@ -86,6 +90,33 @@ export function groupIssues(list: Issue[], by: GroupKey, L: Lookups, opts: { tea
     if (teams.length === 1) for (const s of teams[0].states || []) add('s' + s.id, () => ({ label: s.name, color: s.color, value: s.id, state: s }))
   }
   if (by === 'priority' && opts.showEmpty) for (const p of [1, 2, 3, 4, 0]) add('p' + p, () => ({ label: priorityLabel(p), value: p }))
+  if (opts.showEmpty && by !== 'state' && by !== 'priority') {
+    const teams = opts.teamIds?.length ? L.teams.filter(t => opts.teamIds!.includes(t.id)) : L.teams
+    const tids = new Set(teams.map(t => t.id))
+    switch (by) {
+      case 'assignee': {
+        const seen = new Set<number>()
+        for (const t of teams) for (const m of t.members || []) if (!seen.has(m.id)) { seen.add(m.id); add('a' + m.id, () => ({ label: m.name || m.email, color: m.color, value: m.id, person: m })) }
+        add('a0', () => ({ label: 'Unassigned', value: null }))
+        break
+      }
+      case 'label':
+        for (const t of teams) for (const l of t.labels || []) if (!l.is_group) add('l' + l.id, () => ({ label: l.name, color: l.color, value: l.id }))
+        add('l0', () => ({ label: 'No label', value: null }))
+        break
+      case 'project':
+        for (const p of L.projects || []) if (p.status !== 'canceled' && p.status !== 'completed' && p.team_ids.some(id => tids.has(id))) add('pr' + p.id, () => ({ label: p.name, color: p.color, value: p.id }))
+        add('pr0', () => ({ label: 'No project', value: null }))
+        break
+      case 'cycle':
+        for (const c of L.cycles || []) if (tids.has(c.team_id) && c.status !== 'past') add('c' + c.id, () => ({ label: c.name || `Cycle ${c.number}`, value: c.id }))
+        add('c0', () => ({ label: 'No cycle', value: null }))
+        break
+      case 'team':
+        for (const t of teams) add('tm' + t.id, () => ({ label: t.name, color: t.color, value: t.id }))
+        break
+    }
+  }
   for (const is of list) {
     switch (by) {
       case 'state': {
@@ -162,4 +193,94 @@ export function dueState(due: string, today: string, done: boolean): '' | 'overd
   if (due === today) return 'today'
   const d = (new Date(due).getTime() - new Date(today).getTime()) / 86400000
   return d <= 3 ? 'soon' : ''
+}
+
+// ---------- view helpers (filters, groups, optimistic patches) ----------
+
+const ARRAY_KEYS = ['team_ids', 'state_ids', 'state_types', 'assignee_ids', 'creator_ids', 'priorities', 'label_ids', 'not_label_ids', 'project_ids', 'milestone_ids', 'cycle_ids', 'ids'] as const
+
+/** The page's filter with the person's filter on top: lists both set are intersected. */
+export function mergeFilters(base: IssueFilter, user: IssueFilter): IssueFilter {
+  const out: Record<string, unknown> = { ...base }
+  for (const [k, v] of Object.entries(user)) {
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) continue
+    const b = (base as Record<string, unknown>)[k]
+    if ((ARRAY_KEYS as readonly string[]).includes(k) && Array.isArray(b) && b.length) {
+      const both = (v as unknown[]).filter(x => (b as unknown[]).includes(x))
+      out[k] = both.length ? both : [-1]
+    } else out[k] = v
+  }
+  return out as IssueFilter
+}
+
+/** Is a filter empty (no conditions the person set)? */
+export function filterIsEmpty(f: IssueFilter): boolean {
+  return !Object.entries(f).some(([, v]) => v !== undefined && v !== null && v !== '' && v !== false && !(Array.isArray(v) && !v.length))
+}
+
+/** Defaults for "New issue" from a group header (the group's value prefilled). */
+export function defaultsForGroup(by: GroupKey, value: number | string | null, L: Lookups): Record<string, unknown> {
+  switch (by) {
+    case 'state': {
+      if (typeof value === 'number') { const s = L.state(value); return s ? { state_id: s.id, team_id: s.team_id } : {} }
+      return {}
+    }
+    case 'assignee': return { assignee_id: value || null }
+    case 'priority': return { priority: value || 0 }
+    case 'project': return { project_id: value || null }
+    case 'cycle': { const c = L.cycles?.find(x => x.id === value); return value ? { cycle_id: value, ...(c ? { team_id: c.team_id } : {}) } : {} }
+    case 'milestone': return value ? { milestone_id: value, project_id: L.milestones?.find(m => m.id === value)?.project_id } : {}
+    case 'label': return value ? { label_ids: [value] } : {}
+    case 'team': return value ? { team_id: value } : {}
+  }
+  return {}
+}
+
+/** Apply a patch to a local copy (optimistic updates before the server answers). */
+export function applyPatchLocally(is: Issue, patch: Record<string, unknown>, L: Pick<Lookups, 'state' | 'teams'>): Issue {
+  const n = { ...is } as Issue & Record<string, unknown>
+  for (const [k, v] of Object.entries(patch)) {
+    switch (k) {
+      case 'state_id': { n.state_id = v as number; const s = L.state(v as number); if (s) n.state_type = s.type; break }
+      case 'state': {
+        const t = L.teams.find(x => x.id === is.team_id)
+        const s = t?.states?.find(x => x.type === v || x.name.toLowerCase() === String(v).toLowerCase())
+        if (s) { n.state_id = s.id; n.state_type = s.type }
+        break
+      }
+      case 'assignee_id': case 'project_id': case 'cycle_id': case 'milestone_id': n[k] = (v as number) || null; break
+      case 'add_label_ids': n.label_ids = [...new Set([...n.label_ids, ...(v as number[])])]; break
+      case 'remove_label_ids': n.label_ids = n.label_ids.filter(id => !(v as number[]).includes(id)); break
+      default: n[k] = v
+    }
+  }
+  return n
+}
+
+/** The patch moving an issue from one group value to another (labels swap). */
+export function moveBetweenGroups(by: GroupKey, from: number | string | null, to: number | string | null, issue: Issue): Record<string, unknown> | null {
+  if (by === 'none' || from === to) return null
+  if (by === 'label') {
+    const p: Record<string, unknown> = {}
+    if (to) p.add_label_ids = [to]
+    if (from) p.remove_label_ids = [from]
+    if (!to) p.remove_label_ids = [...issue.label_ids]
+    return p
+  }
+  return patchForGroup(by, to, issue)
+}
+
+export const SHOW_COMPLETED_LABEL: Record<string, string> = { all: 'All', none: 'None', day: 'Past day', week: 'Past week', month: 'Past month' }
+export const PROPERTY_LABEL: Record<string, string> = { priority: 'Priority', id: 'ID', status: 'Status', labels: 'Labels', project: 'Project', milestone: 'Milestone', cycle: 'Cycle', estimate: 'Estimate', due: 'Due date', assignee: 'Assignee', created: 'Created', updated: 'Updated', sub_issues: 'Sub-issues', comments: 'Comments' }
+
+/** "1h30m", "90", "1.5h", "45m" → minutes (0 when unreadable). Mirrors the server. */
+export function parseMinutes(s: string): number {
+  const v = s.trim().toLowerCase().replace(/\s+/g, '')
+  if (!v) return 0
+  if (/^\d+$/.test(v)) return Number(v)
+  const hm = /^(?:(\d+(?:[.,]\d+)?)h)?(?:(\d+)m(?:in)?)?$/.exec(v)
+  if (hm && (hm[1] || hm[2])) return Math.round(Number((hm[1] || '0').replace(',', '.')) * 60 + Number(hm[2] || 0))
+  const colon = /^(\d+):(\d{2})$/.exec(v)
+  if (colon) return Number(colon[1]) * 60 + Number(colon[2])
+  return 0
 }

@@ -86,9 +86,11 @@ export function useIssueActions(issue: Issue, onUpdated?: (is: Issue) => void) {
   return { ui, openMenu: (a: Anchor) => setMenu(a), openProp, patch: (p: Record<string, unknown>) => patch(issue, p), canEdit }
 }
 
-export function IssueRow({ issue, properties, selected, focused, onToggleSelect, onUpdated, onOpen, showTeam, depth = 0, dragHandle }: {
+export function IssueRow({ issue, properties, selected, focused, onToggleSelect, onUpdated, onOpen, showTeam, depth = 0, dragHandle, extra, className = '' }: {
   issue: Issue; properties: string[]; selected?: boolean; focused?: boolean; onToggleSelect?: (e: React.MouseEvent) => void
   onUpdated?: (is: Issue) => void; onOpen?: (is: Issue) => void; showTeam?: boolean; depth?: number; dragHandle?: React.HTMLAttributes<HTMLElement>
+  /** Trailing controls (triage actions, restore…). */
+  extra?: React.ReactNode; className?: string
 }) {
   const app = useApp()
   const navigate = useNavigate()
@@ -102,7 +104,7 @@ export function IssueRow({ issue, properties, selected, focused, onToggleSelect,
   const click = (p: Prop) => (e: React.MouseEvent) => { e.stopPropagation(); if (act.canEdit) act.openProp(p, rectOf(e.currentTarget)) }
   const open = () => (onOpen ? onOpen(issue) : navigate(`/issue/${issue.identifier}`))
   return (
-    <div className={`issue-row ${selected ? 'selected' : ''} ${focused ? 'focused' : ''} ${done ? 'done' : ''}`} style={depth ? { paddingLeft: 12 + depth * 22 } : undefined}
+    <div className={`issue-row ${selected ? 'selected' : ''} ${focused ? 'focused' : ''} ${done ? 'done' : ''} ${className}`} style={depth ? { paddingLeft: 12 + depth * 22 } : undefined}
       data-issue-id={issue.id} data-pocket-ask role="row" tabIndex={-1}
       onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); onToggleSelect?.(e) } else open() }}
       onContextMenu={e => { e.preventDefault(); act.openMenu({ x: e.clientX, y: e.clientY, w: 0, h: 0 }) }} {...dragHandle}>
@@ -129,6 +131,7 @@ export function IssueRow({ issue, properties, selected, focused, onToggleSelect,
         {has('updated') && <span className="date-meta" title={issue.updated_at}>{ago(issue.updated_at)}</span>}
         {has('assignee') && <button type="button" className="cell-btn" onClick={click('assignee')}><PersonAvatar person={app.person(issue.assignee_id)} size={20} /></button>}
       </span>
+      {extra && <span className="row-extra" onClick={e => e.stopPropagation()}>{extra}</span>}
       {act.ui}
     </div>
   )
