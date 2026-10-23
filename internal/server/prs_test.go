@@ -121,3 +121,24 @@ func tokenLeaks(c *apiClient) bool {
 	_, b := c.raw("GET", "/api/v1/teams/WEB/git-token", "", nil)
 	return strings.Contains(string(b), "secret")
 }
+
+// A pull request address pasted with Attachments → Link is tracked like a linked PR;
+// other addresses stay plain links.
+func TestPastedPRLinkIsTracked(t *testing.T) {
+	s, h := apiServer(t)
+	alex := person(t, s, h, "alex@example.com", "Alex", "admin")
+	var team store.Team
+	alex.do("POST", "/api/v1/teams", map[string]any{"name": "Web", "key": "web", "preset": "software"}, 201, &team)
+	var is store.Issue
+	alex.do("POST", "/api/v1/issues", map[string]any{"team_id": team.ID, "title": "Fix login"}, 201, &is)
+
+	var att store.Attachment
+	alex.do("POST", "/api/v1/issues/WEB-1/attachments", map[string]any{"url": "https://github.com/acme/web/pull/7"}, 201, &att)
+	if att.Kind != "pull_request" || att.State != "open" || att.ExtApp != "git" {
+		t.Fatalf("pasted PR: %+v", att)
+	}
+	alex.do("POST", "/api/v1/issues/WEB-1/attachments", map[string]any{"url": "https://example.com/spec"}, 201, &att)
+	if att.Kind != "link" {
+		t.Fatalf("plain link: %+v", att)
+	}
+}

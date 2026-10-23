@@ -121,6 +121,15 @@ func (s *Server) handleAddAttachment(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "a link needs an http(s) address")
 			return
 		}
+		// a pull request address becomes a tracked pull request (people who may edit the issue)
+		if in.Kind == "" {
+			if _, ok := parsePRURL(u.String()); ok {
+				if wis, err := s.loadIssue(r, a, chi.URLParam(r, "ref"), needWrite); err == nil {
+					s.linkPR(w, r, wis, u.String(), in.Title, "", "", 0)
+					return
+				}
+			}
+		}
 		att.Kind, att.URL, att.Title, att.Subtitle, att.Meta = "link", u.String(), strings.TrimSpace(in.Title), in.Subtitle, in.Meta
 		if in.Kind == "note" || in.Kind == "review" || in.Kind == "document" || in.Kind == "file_link" {
 			att.Kind = in.Kind

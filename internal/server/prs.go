@@ -57,7 +57,6 @@ func (s *Server) prRoutes(r chi.Router) {
 // handleLinkPR attaches a pull request to an issue (open, linked explicitly:
 // merging it completes the issue) and moves the issue to review.
 func (s *Server) handleLinkPR(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
 	var in struct {
 		URL    string `json:"url"`
 		Title  string `json:"title"`
@@ -79,6 +78,18 @@ func (s *Server) handleLinkPR(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
+	s.linkPR(w, r, is, in.URL, in.Title, in.Branch, in.Repo, in.Number)
+}
+
+// linkPR attaches a pull request to an issue as the git webhook would (and
+// reads its status now when the team has a token). Also used when a PR
+// address is pasted with Attachments → Link.
+func (s *Server) linkPR(w http.ResponseWriter, r *http.Request, is *store.Issue, prURL, title, branch, repo string, number int) {
+	ctx := r.Context()
+	in := struct {
+		URL, Title, Branch, Repo string
+		Number                   int
+	}{prURL, title, branch, repo, number}
 	ref, ok := parsePRURL(in.URL)
 	if ok {
 		if in.Number == 0 {
@@ -88,13 +99,13 @@ func (s *Server) handleLinkPR(w http.ResponseWriter, r *http.Request) {
 			in.Repo = ref.fullName()
 		}
 	}
-	title := firstNonEmpty(strings.TrimSpace(in.Title), fmt.Sprintf("%s #%d", firstNonEmpty(in.Repo, "Pull request"), in.Number))
+	name := firstNonEmpty(strings.TrimSpace(in.Title), fmt.Sprintf("%s #%d", firstNonEmpty(in.Repo, "Pull request"), in.Number))
 	sub := firstNonEmpty(in.Repo, "Pull request")
 	if in.Number > 0 {
 		sub += " #" + strconv.Itoa(in.Number)
 	}
 	meta, _ := json.Marshal(map[string]any{"number": in.Number, "branch": in.Branch, "repo": in.Repo, "linked": true})
-	att := &store.Attachment{Kind: "pull_request", Title: title, Subtitle: sub + " · open", URL: in.URL, ExtApp: "git", ExtID: in.URL,
+	att := &store.Attachment{Kind: "pull_request", Title: name, Subtitle: sub + " · open", URL: in.URL, ExtApp: "git", ExtID: in.URL,
 		State: "open", Meta: meta, CreatedBy: ptr(me(r))}
 	if old, err := s.store.FindAttachment(ctx, is.ID, "git", in.URL); err == nil && old.State != "" && old.State != "open" {
 		att.State, att.Subtitle = old.State, sub+" · "+old.State // already known as merged / closed / draft
