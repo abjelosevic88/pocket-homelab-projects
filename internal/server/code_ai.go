@@ -340,6 +340,7 @@ type codeIssue struct {
 	Comments                                                               []string // "Name (date): body"
 	Git                                                                    []string // "commit abc123 on branch x: title"
 	Team, Cwd                                                              string
+	ID                                                                     int64
 }
 
 func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
@@ -447,7 +448,7 @@ func shortCwd(p string) string {
 // codeIssueOf gathers the issue's context the person can see.
 func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, cwd string) codeIssue {
 	ctx := r.Context()
-	ci := codeIssue{Identifier: is.Identifier, Title: is.Title, URL: s.issueURL(r, is.Identifier), Priority: priorityName(is.Priority),
+	ci := codeIssue{ID: is.ID, Identifier: is.Identifier, Title: is.Title, URL: s.issueURL(r, is.Identifier), Priority: priorityName(is.Priority),
 		Description: is.Description, Branch: s.branchName(ctx, a.uid, is), Team: team, Cwd: cwd}
 	if st, err := s.store.GetState(ctx, is.StateID); err == nil {
 		ci.Status = st.Name
@@ -569,7 +570,7 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (titl
 
 	var sys strings.Builder
 	fmt.Fprintf(&sys, "This conversation is about issue %s (%q) in Pocket Projects (%s), team %s, working in %s.\n", ci.Identifier, ci.Title, ci.URL, ci.Team, ci.Cwd)
-	sys.WriteString("Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue (use the identifier), pocket_projects_comment and pocket_projects_update_issue; writes wait for the person's approval. ")
+	fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %d; writes wait for the person's approval. ", ci.ID)
 	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + "): one short factual line, never secrets or credentials.\n")
 	if ins := strings.TrimSpace(tai.Instructions); ins != "" {
 		sys.WriteString("\n## Team instructions\n" + ins + "\n")

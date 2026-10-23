@@ -125,7 +125,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 			t.Fatalf("text misses %q:\n%s", want, text)
 		}
 	}
-	for _, want := range []string{"issue WEB-1", "~/Projects/web", "Use pnpm, never npm.", "Team memory", "- Tests run with `make test` in CI (", "by Alex)", "pocket_projects_remember (team WEB)"} {
+	for _, want := range []string{"issue WEB-1", "with id 1;", "~/Projects/web", "Use pnpm, never npm.", "Team memory", "- Tests run with `make test` in CI (", "by Alex)", "pocket_projects_remember (team WEB)"} {
 		if !strings.Contains(system, want) {
 			t.Fatalf("system misses %q:\n%s", want, system)
 		}
