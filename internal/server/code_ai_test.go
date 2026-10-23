@@ -182,8 +182,18 @@ func TestCodeWithPocketAI(t *testing.T) {
 		t.Fatalf("team send_now not passed on: %+v", started)
 	}
 	d = ai.drafts[1]
-	if d["mode"] != "default" || d["cwd"] != "/srv/relaunch" || !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["text"].(string), "WEB-1 in the commit message") {
-		t.Fatalf("fix draft: %+v", d)
+	// link_refs off (the default): nothing about Pocket Projects goes into the repository
+	if d["mode"] != "default" || d["cwd"] != "/srv/relaunch" || strings.Contains(d["text"].(string), "web-1-fix-login") ||
+		!strings.Contains(d["system"].(string), "Keep Pocket Projects out of the repository") || strings.Contains(d["system"].(string), "Resolves WEB-1") {
+		t.Fatalf("fix draft (refs off): %+v", d)
+	}
+	// link_refs on: issue branch, identifier in commits, "Resolves WEB-1 (url)" in PRs
+	alex.do("PUT", "/api/v1/teams/WEB/ai", map[string]any{"cwd": "~/Projects/web", "provider": "claude", "model": "opus", "effort": "high", "mode": "default",
+		"instructions": "Use pnpm, never npm.", "send_now": true, "link_refs": true}, 200, &tai)
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "fix"}, 201, nil)
+	d = ai.drafts[2]
+	if !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["system"].(string), "Resolves WEB-1 (") || strings.Contains(d["system"].(string), "Keep Pocket Projects out") {
+		t.Fatalf("fix draft (refs on): %+v", d)
 	}
 
 	// the conversation is attached and its state follows Pocket AI

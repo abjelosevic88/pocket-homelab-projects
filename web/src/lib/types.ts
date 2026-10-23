@@ -183,7 +183,7 @@ export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'commen
 /** A team's Pocket AI code conversation settings (instructions = hidden system prompt). */
 export interface TeamAI {
   team_id: number; cwd: string; provider: '' | 'claude' | 'codex'; account_id: number | null; model: string; effort: string; mode: string
-  instructions: string; memory: string; send_now: boolean; updated_at: string
+  instructions: string; memory: string; send_now: boolean; link_refs: boolean; updated_at: string
 }
 
 export type AgentChoice = string | { id: string; name?: string; label?: string }

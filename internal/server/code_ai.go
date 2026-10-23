@@ -157,6 +157,7 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 		Mode         string `json:"mode"`
 		Instructions string `json:"instructions"`
 		SendNow      bool   `json:"send_now"`
+		LinkRefs     bool   `json:"link_refs"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -195,7 +196,7 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ai.Cwd, ai.Provider, ai.AccountID, ai.Model, ai.Effort, ai.Mode = cwd, in.Provider, in.AccountID, strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort), strings.TrimSpace(in.Mode)
-	ai.Instructions, ai.SendNow = strings.TrimSpace(in.Instructions), in.SendNow
+	ai.Instructions, ai.SendNow, ai.LinkRefs = strings.TrimSpace(in.Instructions), in.SendNow, in.LinkRefs
 	if err := s.store.SaveTeamAI(r.Context(), ai); err != nil {
 		s.fail(w, err, "team ai")
 		return
@@ -566,7 +567,11 @@ var codeAsk = map[string]string{
 	"investigate": `Investigate this issue in the code. Find the code that is relevant to it, explain how it works today and what causes the problem (or what is missing), and propose a concrete plan with the files to change. Do not edit any files yet.
 When you are done, offer to post a short summary as a comment on %[1]s.`,
 	"fix": `Fix this issue. First switch to a branch for it (create it if needed): %[2]s
-Implement the change, run the project's tests or build, and commit with %[1]s in the commit message so Pocket Projects links the commit to the issue. Do not push unless I ask.
+Implement the change, run the project's tests or build, and commit. Do not push unless I ask.
+Finish with a short summary of what changed and offer to post it as a comment on %[1]s.`,
+	// fix, when the team keeps Pocket Projects out of the repository
+	"fix-plain": `Fix this issue. First switch to a new branch with a short descriptive name.
+Implement the change, run the project's tests or build, and commit. Do not push unless I ask.
 Finish with a short summary of what changed and offer to post it as a comment on %[1]s.`,
 	"chat": `Let's talk about this issue. Read the relevant code when it helps, but do not change anything unless I ask.`,
 }
@@ -579,7 +584,11 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (titl
 		title = string(r[:79]) + "…"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, codeAsk[action], ci.Identifier, ci.Branch)
+	ask := codeAsk[action]
+	if action == "fix" && !tai.LinkRefs {
+		ask = codeAsk["fix-plain"]
+	}
+	fmt.Fprintf(&b, ask, ci.Identifier, ci.Branch)
 	b.WriteString("\n\n")
 	if n := strings.TrimSpace(note); n != "" {
 		b.WriteString(n + "\n\n")
@@ -614,6 +623,11 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (titl
 	fmt.Fprintf(&sys, "This conversation is about issue %s (%q) in Pocket Projects (%s), team %s, working in %s.\n", ci.Identifier, ci.Title, ci.URL, ci.Team, ci.Cwd)
 	fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %d; writes wait for the person's approval. ", ci.ID)
 	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + "): one short factual line, never secrets or credentials.\n")
+	if tai.LinkRefs {
+		fmt.Fprintf(&sys, "\n## Commits and pull requests\nPut %[1]s in commit messages so Pocket Projects links them to the issue. End pull request descriptions with \"Resolves %[1]s (%[2]s)\".\n", ci.Identifier, ci.URL)
+	} else {
+		fmt.Fprintf(&sys, "\n## Commits and pull requests\nKeep Pocket Projects out of the repository: do not mention %s, its URL, Pocket Projects, any internal id or who asked in branch names, commit messages, pull request titles or descriptions, or code comments. Write them for a reviewer who has never seen the ticket.\n", ci.Identifier)
+	}
 	if ins := strings.TrimSpace(tai.Instructions); ins != "" {
 		sys.WriteString("\n## Team instructions\n" + ins + "\n")
 	}
