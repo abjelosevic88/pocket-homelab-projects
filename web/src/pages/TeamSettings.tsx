@@ -1,5 +1,5 @@
 // A team's settings: general, members, workflow, labels, cycles, templates,
-// integrations and import/export. Team admins edit; everyone else reads.
+// integrations, Pocket AI and import/export. Team admins edit; everyone else reads.
 import { useEffect } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
@@ -14,10 +14,11 @@ import { CyclesTab } from './team-settings/Cycles'
 import { TemplatesTab } from './team-settings/Templates'
 import { IntegrationsTab } from './team-settings/Integrations'
 import { ImportExportTab } from './team-settings/ImportExport'
+import { PocketAITab } from './team-settings/PocketAI'
 import { ROLE_LABEL } from './team-settings/common'
 import '../styles/settings-ui.css'
 
-type TabId = 'general' | 'members' | 'workflow' | 'labels' | 'cycles' | 'templates' | 'integrations' | 'import'
+type TabId = 'general' | 'members' | 'workflow' | 'labels' | 'cycles' | 'templates' | 'integrations' | 'ai' | 'import'
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'settings' },
   { id: 'members', label: 'Members', icon: 'users' },
@@ -26,6 +27,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'cycles', label: 'Cycles', icon: 'cycle' },
   { id: 'templates', label: 'Templates', icon: 'file-text' },
   { id: 'integrations', label: 'Integrations', icon: 'git-branch' },
+  { id: 'ai', label: 'Pocket AI', icon: 'sparkles' },
   { id: 'import', label: 'Import / export', icon: 'upload' },
 ]
 
@@ -68,6 +70,7 @@ export default function TeamSettings() {
           {tab === 'cycles' && <CyclesTab {...props} />}
           {tab === 'templates' && <TemplatesTab {...props} />}
           {tab === 'integrations' && <IntegrationsTab {...props} />}
+          {tab === 'ai' && <PocketAITab {...props} />}
           {tab === 'import' && <ImportExportTab {...props} />}
         </div>
       </div>

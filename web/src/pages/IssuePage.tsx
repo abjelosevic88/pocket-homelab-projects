@@ -1,6 +1,6 @@
 // One issue: /issue/:ref (identifier or id). Title, description, sub-issues,
 // relations, attachments, contacts and activity on the left; properties, time,
-// Pocket integrations and copy actions on the right (chips above the
+// Pocket integrations (Code with Pocket AI too) and copy actions on the right (chips above the
 // description on phones).
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -22,6 +22,7 @@ import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyTex
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
+import { CodeButton, CodeSide } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
 type SideProp = Prop | 'parent'
@@ -138,6 +139,7 @@ export default function IssuePage() {
             {d.parent && <><Icon name="chevron-right" size={13} className="faint" /><Link to={`/issue/${d.parent.identifier}`} title={d.parent.title}><StatusIcon state={app.state(d.parent.state_id)} size={13} /><span className="ident">{d.parent.identifier}</span><span className="ellipsis hide-mobile" style={{ maxWidth: 240 }}>{d.parent.title}</span></Link></>}
             <Icon name="chevron-right" size={13} className="faint" /><span className="ident">{d.identifier}</span>
             <span className="spacer" style={{ flex: 1 }} />
+            {!d.deleted_at && <CodeButton issue={d} onStarted={load} />}
             <button type="button" className={`btn ghost icon-only sm star-btn ${fav ? 'on' : ''}`} onClick={toggleFav} aria-label={fav ? 'Remove from favorites' : 'Add to favorites'} title="Favorite"><Icon name="star" size={15} fill={!!fav} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={() => copy(d.identifier, d.identifier)} aria-label="Copy ID" title="Copy ID (⌘.)"><Icon name="copy" size={15} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={e => setMenu(rectOf(e.currentTarget))} aria-label="Issue menu" title="More"><Icon name="more" size={16} /></button>
@@ -331,6 +333,7 @@ function SideExtras({ issue, canEdit, onChanged, onSchedule, onTask, copy }: { i
         <button type="button" className="side-btn" onClick={e => setTaskMenu(rectOf(e.currentTarget))}><Icon name="check-circle" size={15} />Add to my Tasks</button>
         <button type="button" className="side-btn" onClick={onSchedule}><Icon name="calendar-plus" size={15} />Schedule…</button>
       </div>
+      {!issue.deleted_at && <CodeSide issue={issue} onStarted={onChanged} />}
       <div className="ip-side-sec ip-side-actions">
         <h4><Icon name="copy" size={13} />Copy</h4>
         <button type="button" className="side-btn" onClick={() => copy(issue.identifier, issue.identifier)}><Icon name="hash" size={15} />ID<span className="hint">⌘.</span></button>

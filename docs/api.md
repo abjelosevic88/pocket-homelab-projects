@@ -34,6 +34,9 @@ including former identifiers after a move or a key change). Shapes are in `web/s
 | `GET/POST /teams/{…}/templates` · `PATCH/DELETE /templates/{id}` | `{name, title, description, data: {state_id, priority, estimate, assignee_id, project_id, label_ids, due_in_days, sub_issues[]}, recur: ''\|daily\|weekdays\|weekly\|monthly\|yearly, recur_interval, next_at}` |
 | `GET/POST /teams/{…}/webhooks` · `PATCH/DELETE /webhooks/{id}` · `POST /webhooks/{id}/test` | outgoing webhooks |
 | `GET /teams/{…}/git` · `POST /teams/{…}/git/rotate` | the incoming Forgejo/GitHub webhook address |
+| `GET /teams/{…}/ai` · `PUT /teams/{…}/ai` | Pocket AI code conversations (admin): `{cwd, provider: ''\|claude\|codex, account_id, model, effort, mode, instructions}` |
+| `GET /teams/{…}/memory` · `PUT` (admin, `{memory}`) · `POST` (members, `{text}`) | the team's AI memory; POST appends `- text (date, by name)`, 32 KB cap |
+| `GET /ai/agent-options` | what Pocket AI can run for you (agents, models, efforts, modes, logins, workspaces) |
 | `GET/POST /teams/{…}/cycles` | |
 | `POST /teams/{…}/import` | CSV (multipart `file` or `{csv}`), `?dry_run=1` for a preview |
 | `GET /teams/{…}/export.json` | the whole team |
@@ -64,6 +67,7 @@ an identifier), `sort` (manual/priority/updated/created/due/title/estimate/ident
 | `GET/POST /issues/{ref}/time` `{minutes\|duration "1h30m", spent_on, note}` · `POST /issues/{ref}/timer` · `GET /timer` · `POST /timer/stop` · `PATCH/DELETE /time/{id}` · `GET /time?from&to[&user=all][&team_id][&project_id][&format=csv]` | time tracking |
 | `POST /issues/{ref}/task {title?, due?, when?: today\|tomorrow}` | a to-do in Pocket Tasks |
 | `POST /issues/{ref}/event {title?, start, duration_min, all_day?, location, conference, description, user_ids, emails}` | an event in Pocket Calendar |
+| `POST /issues/{ref}/code {action: investigate\|fix\|chat, note?}` · `GET /issues/{ref}/code` | a Pocket AI draft in the team's code folder → `{url, draft_id}`; the issue's conversations with their state |
 | `GET /export/issues.csv?<filters>` | |
 
 ## Projects
@@ -73,6 +77,7 @@ an identifier), `sort` (manual/priority/updated/created/due/title/estimate/ident
 | `GET /projects?team_id&status&lead=me&member=me&q&url&trash=1&milestones=1` · `POST /projects` | `{name, summary, content, icon, color, status, priority, lead_id, member_ids, team_ids, start_date, target_date, update_cadence_days, milestones: [{name, target_date}]}` |
 | `GET /projects/{id}` | ProjectDetail: the project with progress, milestones, docs, links, contacts, updates, history, can_edit, update_due |
 | `PATCH /projects/{id}` · `DELETE` · `POST /projects/{id}/restore` · `GET /projects/{id}/history` | |
+| `GET /projects/{id}/ai` · `PUT /projects/{id}/ai {cwd}` | the project's own code folder for Code with Pocket AI ("" = the team's) |
 | `GET/POST /projects/{id}/milestones` · `GET/PATCH/DELETE /milestones/{id}` · `POST /milestones/{id}/event` | |
 | `GET/POST /projects/{id}/updates {health, body}` · `PATCH/DELETE /updates/{id}` · `GET/POST /updates/{id}/comments` | the project's health follows its latest update |
 | `GET/POST /projects/{id}/docs` · `GET/PATCH/DELETE /docs/{id}` | Markdown documents |

@@ -164,6 +164,7 @@ func (s *Server) Router() http.Handler {
 			s.viewRoutes(r)
 			s.timeRoutes(r)
 			s.aiRoutes(r)
+			s.codeRoutes(r)
 			s.integrationRoutes(r)
 			s.importRoutes(r)
 			for _, add := range extraRoutes {

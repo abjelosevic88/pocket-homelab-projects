@@ -135,8 +135,8 @@ export function Relations({ issue, canEdit, onChanged, addRef }: { issue: IssueD
 
 // ---------- attachments ----------
 
-const ATT_ICON: Record<string, string> = { file: 'file', link: 'link', commit: 'git-commit', pull_request: 'git-pr', event: 'calendar', task: 'check-circle', note: 'note', review: 'review', document: 'file-text', file_link: 'file' }
-const ATT_KIND: Record<string, string> = { commit: 'Commit', pull_request: 'Pull request', event: 'Pocket Calendar', task: 'Pocket Tasks', note: 'Pocket Notes', review: 'Review', document: 'Document' }
+const ATT_ICON: Record<string, string> = { file: 'file', link: 'link', commit: 'git-commit', pull_request: 'git-pr', event: 'calendar', task: 'check-circle', note: 'note', review: 'review', document: 'file-text', file_link: 'file', ai_thread: 'sparkles' }
+const ATT_KIND: Record<string, string> = { commit: 'Commit', pull_request: 'Pull request', event: 'Pocket Calendar', task: 'Pocket Tasks', note: 'Pocket Notes', review: 'Review', document: 'Document', ai_thread: 'Pocket AI' }
 
 export function useUploader(issue: IssueDetail, onChanged: () => void) {
   const { toast } = useToast()

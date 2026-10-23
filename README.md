@@ -67,6 +67,9 @@
 - **Pocket AI**: write a description, break an issue into sub-issues, summarise a long thread, draft the weekly
   project update, suggest how to file an issue, turn meeting notes into issues — and every Pocket AI chat can read
   and change issues and projects through Core's tools (writes wait for your approval).
+- **Code with Pocket AI**: from an issue, open a Claude Code or Codex conversation in the team's code folder
+  (Investigate read-only, Fix it on the issue's branch, or Chat). Each team sets the folder, agent, model, effort,
+  its own instructions (a system prompt) and a memory the agent adds to with your approval.
 - **Forgejo / GitHub**: commits and pull requests that mention `WEB-12` appear on the issue; `fixes WEB-12` closes it.
 - Outgoing webhooks (n8n…), a calendar feed for any calendar app, CSV import from Linear, Jira and GitHub, CSV and
   JSON export.

@@ -365,3 +365,16 @@ button.ic-chip:hover { background: var(--hover); }
   .selecting .issue-row { padding-left: 28px; }
   .ip-box .issue-row { height: auto; padding: 7px 10px; }
 }
+
+/* Code with Pocket AI */
+.code-btn { gap: 5px; }
+.side-btn.code-thread { text-decoration: none; }
+.side-btn.code-thread .set-status { margin: 0 3px; }
+.side-btn.code-thread .hint { margin-left: auto; flex-shrink: 0; }
+.code-actions { display: grid; gap: 6px; }
+.code-action { display: flex; align-items: flex-start; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px; background: none; font: inherit; text-align: left; cursor: pointer; color: var(--text-2); }
+.code-action:hover { background: var(--hover); }
+.code-action.on { border-color: var(--accent); background: var(--accent-soft, var(--hover)); color: var(--text); }
+.code-action .icon { margin-top: 2px; }
+.code-action b { display: block; font-weight: 600; font-size: 13px; }
+.code-action small { color: var(--muted); font-size: 12px; }

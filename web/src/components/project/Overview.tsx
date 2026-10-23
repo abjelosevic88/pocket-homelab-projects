@@ -11,7 +11,8 @@ import { Icon } from '../icons'
 import { HealthBadge, PersonAvatar, PriorityIcon, ProjectStatusIcon, PROJECT_STATUS_LABEL } from '../issue-bits'
 import { MarkdownEditor } from '../MarkdownEditor'
 import { DateMenu, PickerMenu, TeamMark, useItems } from '../pickers'
-import { type Anchor, rectOf, useIsMobile } from '../ui'
+import { type Anchor, errMsg, Prompt, rectOf, useIsMobile, useToast } from '../ui'
+import { api, V1 } from '../../lib/api'
 import { CADENCES, cadenceLabel, peopleItems, ProjectPicker, useTeamPeople } from './common'
 import { Milestones } from './Milestones'
 import { Related, Resources, Stakeholders } from './Resources'
@@ -145,6 +146,7 @@ function Properties({ p, save }: { p: ProjectDetail; save: Save }) {
       <Row label="Target" kind="target"><Icon name="target" size={14} className="muted" />{p.target_date ? <span className={!['completed', 'canceled'].includes(p.status) && p.target_date < (app.boot?.today || '') ? 'danger-text' : ''}>{shortDate(p.target_date)}</span> : <span className="faint">Not set</span>}</Row>
       <MiniTimeline p={p} today={app.boot?.today || ''} />
       {!brief && <Row label="Updates" kind="cadence"><Icon name={p.update_cadence_days ? 'bell' : 'bell-off'} size={14} className="muted" />{cadenceLabel(p.update_cadence_days)}</Row>}
+      {!brief && <CodeFolder p={p} />}
       {mobile && <button type="button" className="btn ghost sm props-more" onClick={() => setAll(a => !a)}><Icon name={all ? 'chevron-up' : 'chevron-down'} size={14} />{all ? 'Fewer properties' : 'All properties'}</button>}
 
       {open && (open.kind === 'status' || open.kind === 'priority' || open.kind === 'lead') && <ProjectPicker kind={open.kind} project={p} anchor={open.anchor} onPatch={save} onClose={close} />}
@@ -153,6 +155,30 @@ function Properties({ p, save }: { p: ProjectDetail; save: Save }) {
       {open?.kind === 'start' && <DateMenu anchor={open.anchor} value={p.start_date} title="Start date" onPick={v => save({ start_date: v })} onClose={close} />}
       {open?.kind === 'target' && <DateMenu anchor={open.anchor} value={p.target_date} title="Target date" onPick={v => save({ target_date: v })} onClose={close} />}
       {open?.kind === 'cadence' && <PickerMenu anchor={open.anchor} items={CADENCES.map(c => ({ value: c.value, label: c.label, icon: <Icon name={c.value ? 'bell' : 'bell-off'} size={14} /> }))} selected={p.update_cadence_days} onPick={v => save({ update_cadence_days: v })} onClose={close} placeholder="Remind the lead…" />}
+    </div>
+  )
+}
+
+/** The project's own code folder for "Code with Pocket AI" (else the team's). */
+function CodeFolder({ p }: { p: ProjectDetail }) {
+  const { toast } = useToast()
+  const [cwd, setCwd] = useState<string | null>(null)
+  const [edit, setEdit] = useState(false)
+  useEffect(() => { api.get<{ cwd: string }>(`${V1}/projects/${p.id}/ai`).then(r => setCwd(r.cwd)).catch(() => setCwd('')) }, [p.id])
+  const save = async (v: string) => {
+    setEdit(false)
+    try { const r = await api.put<{ cwd: string }>(`${V1}/projects/${p.id}/ai`, { cwd: v }); setCwd(r.cwd); toast(r.cwd ? 'Code folder saved' : 'Uses the team’s code folder') } catch (e) { toast(errMsg(e), 'err') }
+  }
+  if (cwd === null) return null
+  const val = <><Icon name="code" size={14} className="muted" />{cwd ? <span className="ellipsis mono" title={cwd}>{cwd}</span> : <span className="faint">Team’s folder</span>}</>
+  return (
+    <div className="prop-row">
+      <span className="prop-label">Code</span>
+      {p.can_edit ? <button type="button" className="prop-val" onClick={() => setEdit(true)} title="Folder for Code with Pocket AI">{val}</button> : <span className="prop-val static">{val}</span>}
+      {edit && <Prompt title="Code folder" value={cwd} placeholder="~/Projects/app" onDone={save} onClose={() => setEdit(false)}>
+        <p className="muted xsmall">Where “Code with Pocket AI” opens for this project’s issues. Empty = the team’s folder (Team settings → Pocket AI).</p>
+        {cwd && <button type="button" className="btn ghost sm" onClick={() => save('')}>Use the team’s folder</button>}
+      </Prompt>}
     </div>
   )
 }

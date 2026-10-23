@@ -229,3 +229,7 @@ button.ui-nt-pick:hover { background: var(--hover); }
 }
 .ui-hook-meta > .row { display: block; overflow-wrap: anywhere; }
 .ui-hook-meta .set-status { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+
+/* Pocket AI tab */
+.ui-ai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 14px; }
+.ui-ai-grid .select-trigger { width: 100%; }

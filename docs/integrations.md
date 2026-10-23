@@ -22,15 +22,35 @@ Codex connected to Core), using the person's own permissions; writes pause for a
 `pocket_projects_summary`, `pocket_projects_teams`, `pocket_projects_issues`, `pocket_projects_get_issue`,
 `pocket_projects_create_issue`, `pocket_projects_update_issue`, `pocket_projects_comment`, `pocket_projects_projects`,
 `pocket_projects_get_project`, `pocket_projects_create_project`, `pocket_projects_post_update`,
-`pocket_projects_cycles`, `pocket_projects_calendar`, `pocket_projects_search`, `pocket_projects_inbox`.
+`pocket_projects_cycles`, `pocket_projects_calendar`, `pocket_projects_search`, `pocket_projects_inbox`,
+`pocket_projects_remember` (adds one line to a team's AI memory).
 
 The **Ask** button in the header opens Pocket Ask about the page; rows and cards carry `data-pocket-ask` so the
 target picker can point at a single issue.
 
+### Code with Pocket AI
+
+Projects uses Pocket AI's `threads:write` link (new links start switched off: an admin turns it on in Pocket Core →
+Links). **Team settings → Pocket AI** holds the code folder (a project can override it in its properties), the agent
+(Claude Code or Codex), login, model, effort and mode, the team's **instructions** and its **memory**.
+
+On an issue, **Code** (header) or **Pocket AI → Code with Pocket AI…** (side panel) offers:
+
+- **Investigate**: read-only (the provider's read-only mode): find the code, explain, propose a plan.
+- **Fix it**: switch to the issue's branch, change, test, commit with the identifier (the git hook links it).
+- **Chat about it**, optionally with a note.
+
+Projects calls `POST /api/v1/link/drafts` on Pocket AI with the issue written out as the first message (description,
+status, labels, sub-issues, linked commits and pull requests, the last ten comments) and the team context as a
+hidden system prompt: instructions, memory, and how to use `pocket_projects_get_issue/comment/update_issue/remember`.
+Pocket AI opens the draft in a new tab; nothing runs until the person presses send. The conversation is attached to
+the issue (kind `ai_thread`) and its state (draft, working, waiting, done) follows `GET /api/v1/link/threads`.
+
 ### What Projects offers
 
 `projects:read` — teams, issues, projects, milestones, cycles, `GET /calendar`, `GET /related?url=`, search, the
-dashboard. `projects:write` — create issues and comments, post project updates, change the issues that app created.
+dashboard. `projects:write` — create issues and comments, post project updates, add a line to a team's AI memory
+(`POST /teams/{KEY}/memory`), change the issues that app created.
 Every other route answers 403 to a link token.
 
 ## Events (Pocket Core)

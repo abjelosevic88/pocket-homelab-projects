@@ -52,6 +52,9 @@ var pocketApps = []PocketApp{
 	{ID: "notes", Name: "Pocket Notes", Slug: "notes", Scopes: []string{"notes:read"},
 		Reason:      "Show the notes that link to a project and link notes as project resources",
 		Description: "Notes that mention a project appear on its page; \"New note\" opens Pocket Notes with the project linked."},
+	{ID: "ai", Name: "Pocket AI", Slug: "ai", Scopes: []string{"threads:write"},
+		Reason:      "Prepare Claude Code / Codex conversations about issues in the team's code folder",
+		Description: "\"Code with Pocket AI\" on an issue opens Pocket AI with the issue, the team's instructions and memory ready; you read the prompt and press send."},
 }
 
 func pocketApp(id string) (PocketApp, bool) {
@@ -89,7 +92,7 @@ func linkReason(app, reason string) string {
 	case "off_person":
 		return "you switched the Projects → " + app + " link off in Pocket Core (Settings → Apps acting for me)"
 	case "off_admin":
-		return "the Projects → " + app + " link is switched off in Pocket Core (Links)"
+		return "the Projects → " + app + " link is switched off in Pocket Core (Links); new links start switched off until an admin turns them on"
 	case "target_missing":
 		return app + " is not installed on this box"
 	case "not_offered":

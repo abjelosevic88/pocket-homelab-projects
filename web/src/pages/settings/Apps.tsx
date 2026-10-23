@@ -14,6 +14,7 @@ const META: Record<string, { icon: string; color: string; what: string }> = {
   contacts: { icon: 'users', color: '#0891b2', what: 'Stakeholders of a project and contacts on an issue (client, requester), picked from your contacts.' },
   tasks: { icon: 'check-circle', color: '#16a34a', what: '“Add to my Tasks”: a personal to-do linked to the issue; completing the issue completes the to-do.' },
   notes: { icon: 'note', color: '#ca8a04', what: 'Notes that link to a project on its page, and “New note” prefilled with the project’s link.' },
+  ai: { icon: 'sparkles', color: '#7c3aed', what: '“Code with Pocket AI” on an issue: a Claude Code or Codex conversation in the team’s code folder, ready for you to send.' },
 }
 
 interface AIStatus { ready: boolean; detail: string; model: string }

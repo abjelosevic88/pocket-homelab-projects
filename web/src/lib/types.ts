@@ -81,7 +81,7 @@ export interface Comment {
 }
 export interface Attachment {
   id: number; issue_id: number | null; project_id: number | null
-  kind: 'file' | 'link' | 'commit' | 'pull_request' | 'event' | 'task' | 'note' | 'review' | 'document' | 'file_link'
+  kind: 'file' | 'link' | 'commit' | 'pull_request' | 'event' | 'task' | 'note' | 'review' | 'document' | 'file_link' | 'ai_thread'
   title: string; subtitle: string; url: string; file_name: string; mime: string; size: number; ext_app: string; ext_id: string; state: string
   meta: Record<string, unknown>; created_by: number | null; created_at: string; updated_at: string
 }
@@ -179,3 +179,22 @@ export interface SearchResult { issues: Issue[]; projects: Project[]; docs: Sear
 
 /** What the live stream says changed. */
 export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'comment' | 'notification' | 'view' | 'favorite' | 'timer'; team_ids?: number[]; ids?: number[]; actor_id?: number }
+
+/** A team's Pocket AI code conversation settings (instructions = hidden system prompt). */
+export interface TeamAI {
+  team_id: number; cwd: string; provider: '' | 'claude' | 'codex'; account_id: number | null; model: string; effort: string; mode: string
+  instructions: string; memory: string; updated_at: string
+}
+
+export type AgentChoice = string | { id: string; name?: string; label?: string }
+/** What Pocket AI can run for the person (GET /ai/agent-options). */
+export interface AgentOptions {
+  providers: { id: 'claude' | 'codex'; name: string; available: boolean; error?: string; models?: AgentChoice[]; efforts?: AgentChoice[]; modes?: AgentChoice[]
+    readonly_mode?: string; default_model?: string; default_effort?: string; default_mode?: string }[]
+  accounts?: { id: number; provider: string; label: string; signed_in: boolean }[]
+  workspaces?: { name: string; path: string }[]
+  default_provider?: string; home?: string
+}
+
+/** One Pocket AI conversation about an issue. */
+export interface CodeThread { draft_id: string; thread_id: string; title: string; status: string; url: string; created_at: string; updated_at: string }
