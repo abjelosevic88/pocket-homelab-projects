@@ -1,6 +1,7 @@
 // A server folder path with completion: typing lists the sub-folders of what
 // is typed so far, read through Pocket AI (Projects itself cannot see them).
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api, V1 } from '../lib/api'
 import { Icon } from './icons'
 import { errMsg } from './ui'
@@ -94,8 +95,8 @@ export function FolderInput({ value, onChange, placeholder = '~/Projects/app', d
         role="combobox" aria-expanded={!!shown} aria-autocomplete="list"
         onChange={e => { onChange(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} onKeyDown={onKey}
         onBlur={() => { setTimeout(() => setOpen(false), 120); tidy() }} />
-      {shown && (
-        <div className="menu folder-menu" role="listbox" style={{ top: rect.bottom + 4, left: rect.left, width: rect.width }} onMouseDown={e => e.preventDefault()}>
+      {shown && createPortal(
+        <div className="menu folder-menu" role="listbox" style={rect.bottom + 290 > window.innerHeight && rect.top > 300 ? { bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width } : { top: rect.bottom + 4, left: rect.left, width: rect.width }} onMouseDown={e => e.preventDefault()}>
           {error ? <div className="menu-item" aria-disabled><span className="menu-ico"><Icon name="alert" size={14} /></span><span className="muted small">{error}</span></div>
             : items.map((h, i) => (
               <button key={h.value} type="button" role="option" aria-selected={i === hi} className={`menu-item ${i === hi ? 'hi' : ''}`} onMouseEnter={() => setHi(i)} onClick={() => pick(h)}>
@@ -105,7 +106,8 @@ export function FolderInput({ value, onChange, placeholder = '~/Projects/app', d
                 {(h.hint || h.git) && <span className="menu-hint">{h.hint || 'git'}</span>}
               </button>
             ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
