@@ -2,7 +2,7 @@
 // relations, attachments, contacts and activity on the left; properties, time,
 // Pocket integrations (Code with Pocket AI too) and copy actions on the right (chips above the
 // description on phones).
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, V1 } from '../lib/api'
 import { emitChange, useApp, useLive } from '../lib/app-context'
@@ -22,7 +22,7 @@ import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyTex
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
-import { CodeButton, CodeSide } from '../components/issue/CodeWithAI'
+import { CodeButton, CodeDock, type CodePanel, CodePanelContext, CodeSide } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
 type SideProp = Prop | 'parent'
@@ -40,6 +40,11 @@ export default function IssuePage() {
       .catch(e => setErr({ status: (e as ApiError).status || 0, msg: (e as Error).message }))
   }, [ref])
   useEffect(() => { setD(null); load() }, [load])
+  // Pocket AI docked beside the issue (replaces the properties while open)
+  const [dock, setDock] = useState<{ url: string; title: string; key: number } | null>(null)
+  const [dockVersion, setDockVersion] = useState(0)
+  useEffect(() => setDock(null), [ref])
+  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title) => setDock({ url, title, key: Date.now() }), version: dockVersion }), [dockVersion])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,6 +130,7 @@ export default function IssuePage() {
   ]
 
   return (
+    <CodePanelContext.Provider value={codePanel}>
     <div className="ip-wrap"
       onDragOver={e => { if (canEdit && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true) } }}
       onDragLeave={e => { if (e.currentTarget === e.target || !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropping(false) }}
@@ -155,7 +161,8 @@ export default function IssuePage() {
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
-      {!mobile && <aside className="ip-side" aria-label="Properties">
+      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} mobile={mobile} onClose={() => setDock(null)} onMoved={() => setDockVersion(v => v + 1)} />}
+      {!mobile && !dock && <aside className="ip-side" aria-label="Properties">
         <Properties issue={d} canEdit={canEdit} onOpen={openProp} />
         <div className="ip-side-sec ip-side-actions">
           <button type="button" className={`side-btn ${d.subscribed ? 'on' : ''}`} onClick={toggleSub}><Icon name="bell" size={15} />{d.subscribed ? 'Subscribed' : 'Subscribe'}<span className="hint">{d.subscriber_ids.length} following</span></button>
@@ -170,6 +177,7 @@ export default function IssuePage() {
       {moveTeam && <TeamMove issue={d} anchor={moveTeam} onClose={() => setMoveTeam(null)} onMoved={fresh => { toast(`Moved to ${app.team(fresh.team_id)?.name} as ${fresh.identifier}`); navigate(`/issue/${fresh.identifier}`, { replace: true }) }} />}
       {schedule && <ScheduleDialog issue={d} onClose={() => setSchedule(false)} onDone={() => { setSchedule(false); load() }} />}
     </div>
+    </CodePanelContext.Provider>
   )
 }
 

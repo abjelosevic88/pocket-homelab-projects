@@ -378,3 +378,14 @@ button.ic-chip:hover { background: var(--hover); }
 .code-action .icon { margin-top: 2px; }
 .code-action b { display: block; font-weight: 600; font-size: 13px; }
 .code-action small { color: var(--muted); font-size: 12px; }
+
+/* Pocket AI docked beside the issue */
+.ai-dock { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--bg); animation: pop-in .14s var(--ease); }
+.ai-dock iframe { flex: 1; width: 100%; border: 0; min-height: 0; background: var(--bg); }
+.ai-dock.dragging iframe { pointer-events: none; }
+.ai-dock.dragging { user-select: none; }
+.ai-dock-grip { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 2; }
+.ai-dock-grip:hover, .ai-dock.dragging .ai-dock-grip { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.ai-dock-head { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; }
+.ai-dock-ico { color: #7c3aed; flex-shrink: 0; }
+.ai-dock.sheet { position: fixed; inset: 0; z-index: 280; border-left: 0; }
