@@ -24,6 +24,11 @@ export function openCreateIssue(defaults: IssueDefaults = {}) { window.dispatchE
 
 const DRAFT = 'pp-issue-draft'
 
+const LAST_PROJECT = 'pp-last-project' // {"<team id>": project id, 0 = none}
+function lastProjects(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(LAST_PROJECT) || '{}') || {} } catch { return {} }
+}
+
 export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefaults; onClose: () => void }) {
   const app = useApp()
   const navigate = useNavigate()
@@ -53,6 +58,15 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
   useEffect(() => {
     if (!assigneeTouched.current) setD(x => ({ ...x, assignee_id: teamDefaultAssignee() }))
   }, [teamId, team?.default_assignee]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The project picked last time in this team (unless opened from a project, or picked here already)
+  const projectTouched = useRef(defaults.project_id !== undefined)
+  useEffect(() => {
+    if (projectTouched.current) return
+    const remembered = lastProjects()[String(teamId)]
+    const p = remembered ? app.project(remembered) : undefined
+    const usable = !!p && !p.deleted_at && !p.completed_at && !p.canceled_at && p.team_ids.includes(teamId)
+    setD(x => ({ ...x, project_id: usable ? p!.id : null, milestone_id: null }))
+  }, [teamId]) // eslint-disable-line react-hooks/exhaustive-deps
   const [templateId, setTemplateId] = useState(0)
   const [more, setMore] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -87,6 +101,8 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
       if (templateId) body.template_id = templateId
       const is = await api.post<Issue>(`${V1}/issues`, body)
       localStorage.removeItem(DRAFT)
+      // remember the project (or none) for this team's next issue
+      localStorage.setItem(LAST_PROJECT, JSON.stringify({ ...lastProjects(), [String(teamId)]: d.project_id || 0 }))
       emitChange({ kind: 'issue', team_ids: [is.team_id], ids: [is.id] })
       toast(<>Created <b>{is.identifier}</b></>, 'ok', { label: 'Open', run: () => navigate(`/issue/${is.identifier}`) })
       if (more) { setD(x => ({ ...x, title: '', description: '' })); setTemplateId(0); titleRef.current?.focus() } else onClose()
@@ -155,7 +171,7 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
           if ('assignee_id' in p) assigneeTouched.current = true
           const n = { ...x, ...p } as typeof x & Record<string, unknown>
           for (const k of ['assignee_id', 'project_id', 'milestone_id', 'cycle_id'] as const) if (n[k] === 0) (n as Record<string, unknown>)[k] = null
-          if ('project_id' in p) n.milestone_id = null
+          if ('project_id' in p) { n.milestone_id = null; projectTouched.current = true }
           return n
         })} />}
     </Modal>
