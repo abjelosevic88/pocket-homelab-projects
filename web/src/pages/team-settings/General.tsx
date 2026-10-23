@@ -52,6 +52,11 @@ export function GeneralTab({ team, admin }: TabProps) {
     try { await api.post(`${V1}/teams/${team.key}/leave`); await app.reload(); toast(`You left ${team.name}`); navigate('/teams') } catch (e) { toast(errMsg(e), 'err') }
   }
   const scaleOpts: Option<EstimateScale>[] = SCALES.map(s => ({ value: s.value, label: s.label, hint: s.value === 'none' ? undefined : estimateOptions(s.value).map(o => o.label.replace(/ points?$/, '')).join(' · ') }))
+  const assigneeOpts: Option<string>[] = [
+    { value: 'creator', label: 'The person creating the issue' },
+    { value: 'none', label: 'No one' },
+    ...(team.members || []).filter(m => m.role !== 'guest').map(m => ({ value: String(m.id), label: m.name || m.email })),
+  ]
   const stateOpts: Option<number>[] = [
     { value: 0, label: 'Automatic', description: 'The first Todo state, else the first Backlog state' },
     ...states.filter(s => s.type === 'backlog' || s.type === 'unstarted' || s.type === 'started').map(s => ({ value: s.id, label: s.name, icon: <StatusIcon state={s} /> })),
@@ -85,6 +90,9 @@ export function GeneralTab({ team, admin }: TabProps) {
       <Section title="Issues">
         <SettingRow title="Estimates" help="How work is sized. The values appear in the estimate picker.">
           <div className="ui-ctl-w"><Select value={team.estimate_scale} options={scaleOpts} onChange={v => patch({ estimate_scale: v }, 'Estimates saved')} disabled={!admin} label="Estimate scale" /></div>
+        </SettingRow>
+        <SettingRow title="Default assignee" help="Who a new issue is assigned to when nobody is picked. It can still be changed or cleared while creating the issue.">
+          <div className="ui-ctl-w"><Select value={team.default_assignee || 'creator'} options={assigneeOpts} onChange={v => patch({ default_assignee: v }, 'Default assignee saved')} disabled={!admin} label="Default assignee" /></div>
         </SettingRow>
         <SettingRow title="Default status" help="Where new issues start.">
           <div className="ui-ctl-w"><Select value={team.default_state_id || 0} options={stateOpts} onChange={v => patch({ default_state_id: v }, 'Default status saved')} disabled={!admin} label="Default status" /></div>

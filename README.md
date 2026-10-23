@@ -69,8 +69,12 @@
   and change issues and projects through Core's tools (writes wait for your approval).
 - **Code with Pocket AI**: from an issue, open a Claude Code or Codex conversation in the team's code folder
   (Investigate read-only, Fix it on the issue's branch, or Chat). Each team sets the folder, agent, model, effort,
-  its own instructions (a system prompt) and a memory the agent adds to with your approval.
+  its own instructions (a system prompt) and a memory the agent adds to with your approval. After opening a pull
+  request the agent links it to the issue, comments what changed and files follow-ups as sub-issues; lists and
+  boards show a live mark while a conversation works, and each team has a "With AI" view.
 - **Forgejo / GitHub**: commits and pull requests that mention `WEB-12` appear on the issue; `fixes WEB-12` closes it.
+  With a team GitHub token, linked pull requests are checked every 5 minutes and a merge completes the issue.
+- **Default assignee** per team: new issues go to the person creating them (or no one, or a chosen member).
 - Outgoing webhooks (n8n…), a calendar feed for any calendar app, CSV import from Linear, Jira and GitHub, CSV and
   JSON export.
 

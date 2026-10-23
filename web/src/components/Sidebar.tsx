@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
+import { useAIActiveList } from '../lib/ai-active'
 import type { Favorite, Team } from '../lib/types'
 import { Icon } from './icons'
 import { ProjectMark, StatusIcon } from './issue-bits'
@@ -14,6 +15,19 @@ export function useFold(key: string, def = true) {
   const [open, setOpen] = useState(() => { const v = localStorage.getItem(key); return v === null ? def : v === '1' })
   useEffect(() => { localStorage.setItem(key, open ? '1' : '0') }, [key, open])
   return [open, setOpen] as const
+}
+
+/** "With AI": the team's issues a Pocket AI conversation is working on or waiting
+ *  about right now; the count twinkles like the marks in lists (amber: all waiting). */
+function WithAIItem({ to, teamKey, onNavigate }: { to: string; teamKey: string; onNavigate: () => void }) {
+  const mine = useAIActiveList().filter(a => a.ref.toUpperCase().startsWith(teamKey.toUpperCase() + '-'))
+  const waiting = mine.length > 0 && mine.every(a => a.status === 'waiting')
+  return (
+    <NavLink to={to} onClick={onNavigate} className={({ isActive }) => `sb-nav-item ${isActive ? 'active' : ''}`}>
+      <span className="sb-ico"><Icon name="sparkles" size={15} /></span><span className="ellipsis">With AI</span>
+      {mine.length > 0 && <span className={`sb-ai-count ${waiting ? 'waiting' : 'running'}`} title={waiting ? 'Waiting for you' : 'Pocket AI is working'}>{mine.length}</span>}
+    </NavLink>
+  )
 }
 
 function Item({ to, icon, label, count, warn, onNavigate, end }: { to: string; icon: React.ReactNode; label: string; count?: number; warn?: boolean; onNavigate: () => void; end?: boolean }) {
@@ -124,6 +138,7 @@ function TeamGroup({ team, onNavigate }: { team: Team; onNavigate: () => void })
         {team.triage_enabled && <Item to={`${base}/triage`} icon={<Icon name="inbox" size={15} />} label="Triage" count={team.counts?.triage} warn onNavigate={onNavigate} />}
         <Item to={`${base}/issues`} icon={<Icon name="layers" size={15} />} label="Issues" onNavigate={onNavigate} />
         <Item to={`${base}/active`} icon={<Icon name="zap" size={15} />} label="Active" count={team.counts?.started} onNavigate={onNavigate} />
+        <WithAIItem to={`${base}/ai`} teamKey={team.key} onNavigate={onNavigate} />
         <Item to={`${base}/backlog`} icon={<StatusIcon type="backlog" size={15} />} label="Backlog" onNavigate={onNavigate} />
         {team.cycles_enabled && <Item to={`${base}/cycles`} icon={<Icon name="cycle" size={15} />} label="Cycles" onNavigate={onNavigate} />}
         <Item to={`${base}/projects`} icon={<Icon name="briefcase" size={15} />} label="Projects" onNavigate={onNavigate} />

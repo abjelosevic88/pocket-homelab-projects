@@ -184,6 +184,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
               <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
               <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
+              {a.kind === 'pull_request' && (a.meta as { status_error?: string } | null)?.status_error && <span className="att-warn" title={`Status not updated: ${(a.meta as { status_error?: string }).status_error}`}><Icon name="alert-triangle" size={13} /></span>}
               {canEdit && <button type="button" className="btn ghost icon-only xs x-btn" aria-label="Remove the attachment" title="Remove" onClick={() => remove(a)}><Icon name="x" size={13} /></button>}
             </div>
           )

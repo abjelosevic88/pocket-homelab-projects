@@ -7,6 +7,7 @@ import { api, V1 } from './api'
 export type AIActive = { ref: string; status: 'running' | 'waiting'; thread_id: string; url: string }
 
 let byRef = new Map<string, AIActive>()
+let asList: AIActive[] = [] // stable between changes, for useSyncExternalStore
 let connected = true
 let timer = 0
 const subs = new Set<() => void>()
@@ -21,7 +22,7 @@ async function poll() {
       const next = new Map(r.active.map(a => [a.ref, a]))
       const same = next.size === byRef.size && [...next].every(([k, v]) => byRef.get(k)?.status === v.status)
       byRef = next
-      if (!same) subs.forEach(f => f())
+      if (!same) { asList = [...next.values()]; subs.forEach(f => f()) }
     } catch { /* keep the last answer */ }
   }
   // busy: every 5 s; quiet: every 20 s; Pocket AI not connected: rarely
@@ -47,4 +48,9 @@ export function refreshAIActive() { if (subs.size) poll() }
 /** The live Pocket AI state of one issue, by identifier. */
 export function useAIActive(ref: string): AIActive | undefined {
   return useSyncExternalStore(subscribe, () => byRef.get(ref))
+}
+
+/** Every issue with a working or waiting conversation (all teams). */
+export function useAIActiveList(): AIActive[] {
+  return useSyncExternalStore(subscribe, () => asList)
 }

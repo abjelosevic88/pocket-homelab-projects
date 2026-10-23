@@ -53,6 +53,7 @@ type Team struct {
 	EstimateScale      string  `json:"estimate_scale"`
 	AutoArchiveMonths  int     `json:"auto_archive_months"`
 	DefaultStateID     *int64  `json:"default_state_id"`
+	DefaultAssignee    string  `json:"default_assignee"` // creator | none | a member's user id
 	GitSecret          string  `json:"-"`
 	CreatedBy          *int64  `json:"created_by"`
 	CreatedAt          string  `json:"created_at"`

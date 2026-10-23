@@ -435,6 +435,9 @@ func TestLinkRoutes(t *testing.T) {
 		{"POST", "/api/v1/issues", read, false},
 		{"POST", "/api/v1/issues", []string{"projects:write"}, true},
 		{"DELETE", "/api/v1/issues/3", []string{"projects:write"}, false},
+		{"POST", "/api/v1/issues/3/pull-requests", []string{"projects:write"}, true},
+		{"POST", "/api/v1/issues/3/pull-requests", read, false},
+		{"PUT", "/api/v1/teams/WEB/git-token", []string{"projects:write"}, false},
 		{"GET", "/api/v1/tokens", read, false},
 		{"GET", "/api/v1/settings", read, false},
 	} {

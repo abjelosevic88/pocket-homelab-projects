@@ -421,6 +421,29 @@ func opHook(ctx context.Context, op *core.Operation) func(id int64) store.TxHook
 	}
 }
 
+// defaultAssignee is who a team's new issue goes to when nobody was named:
+// the person creating it (a team member, not git or the system), nobody, or a
+// chosen member while they are still on the team.
+func (s *Server) defaultAssignee(ctx context.Context, team *store.Team, who actor) *int64 {
+	switch v := team.DefaultAssignee; v {
+	case "none":
+		return nil
+	case "", "creator":
+		if who.id > 0 && who.app != "git" && who.app != "system" {
+			if role := s.store.TeamRole(ctx, team.ID, who.id); role != "" && role != "guest" {
+				return ptr(who.id)
+			}
+		}
+		return nil
+	default:
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err == nil && id > 0 && s.store.TeamRole(ctx, team.ID, id) != "" {
+			return ptr(id)
+		}
+		return nil
+	}
+}
+
 // createIssue validates and saves a new issue, then tells everyone concerned.
 func (s *Server) createIssue(ctx context.Context, a *access, who actor, in issueInput, receipt ...func(id int64) store.TxHook) (*store.Issue, error) {
 	var tmpl *store.Template
@@ -481,6 +504,11 @@ func (s *Server) createIssue(ctx context.Context, a *access, who actor, in issue
 	}
 	if _, err := s.applyIssueInput(ctx, a, who, team, is, in, true); err != nil {
 		return nil, err
+	}
+	// Nobody named (field absent or null) and no template's choice: the team's default
+	// assignee. An explicit 0 / "none" from the client stays unassigned.
+	if in.AssigneeID == nil && in.Assignee == "" && is.AssigneeID == nil {
+		is.AssigneeID = s.defaultAssignee(ctx, team, who)
 	}
 	if strings.TrimSpace(is.Title) == "" {
 		return nil, badRequest("an issue needs a title")

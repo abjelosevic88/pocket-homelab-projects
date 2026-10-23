@@ -16,12 +16,16 @@ import (
 func (s *Server) jobs(ctx context.Context) {
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
-	var lastCycles, lastHourly time.Time
+	var lastCycles, lastHourly, lastPRs time.Time
 	for {
 		now := time.Now()
 		if now.Sub(lastCycles) >= 10*time.Minute {
 			s.cycleJob(ctx)
 			lastCycles = now
+		}
+		if now.Sub(lastPRs) >= 5*time.Minute {
+			s.prJob(ctx)
+			lastPRs = now
 		}
 		s.recurringJob(ctx)
 		s.dueJob(ctx, now)

@@ -41,6 +41,18 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
     label_ids: defaults.label_ids || [], project_id: defaults.project_id ?? null, milestone_id: defaults.milestone_id ?? null,
     cycle_id: defaults.cycle_id ?? null, due_date: defaults.due_date || '', estimate: defaults.estimate ?? null,
   })
+  // The team's default assignee (Team settings → General) fills an untouched assignee
+  const teamDefaultAssignee = (): number | null => {
+    const v = team?.default_assignee || 'creator'
+    if (v === 'none') return null
+    if (v === 'creator') return team?.role && team.role !== 'guest' ? app.user?.id ?? null : null
+    const id = Number(v)
+    return id > 0 && (!team?.members || team.members.some(m => m.id === id)) ? id : null
+  }
+  const assigneeTouched = useRef(defaults.assignee_id !== undefined)
+  useEffect(() => {
+    if (!assigneeTouched.current) setD(x => ({ ...x, assignee_id: teamDefaultAssignee() }))
+  }, [teamId, team?.default_assignee]) // eslint-disable-line react-hooks/exhaustive-deps
   const [templateId, setTemplateId] = useState(0)
   const [more, setMore] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -59,6 +71,7 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
   const templates = (app.boot?.templates || []).filter(t => t.team_id === teamId)
   const applyTemplate = (t: Template) => {
     setTemplateId(t.id)
+    if (t.data.assignee_id != null) assigneeTouched.current = true
     setD(x => ({ ...x, title: x.title || t.title, description: x.description || t.description, state_id: t.data.state_id || x.state_id, priority: t.data.priority ?? x.priority,
       assignee_id: t.data.assignee_id ?? x.assignee_id, project_id: t.data.project_id ?? x.project_id, label_ids: t.data.label_ids?.length ? t.data.label_ids : x.label_ids, estimate: t.data.estimate ?? x.estimate }))
   }
@@ -139,6 +152,7 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
         onPick={v => { const t = templates.find(x => x.id === v); if (t) applyTemplate(t) }} onClose={() => setProp(null)} />}
       {prop && prop.p !== 'team' && prop.p !== 'template' && <PropertyPicker prop={prop.p} issue={draftIssue} anchor={prop.at} onClose={() => setProp(null)}
         onPatch={p => setD(x => {
+          if ('assignee_id' in p) assigneeTouched.current = true
           const n = { ...x, ...p } as typeof x & Record<string, unknown>
           for (const k of ['assignee_id', 'project_id', 'milestone_id', 'cycle_id'] as const) if (n[k] === 0) (n as Record<string, unknown>)[k] = null
           if ('project_id' in p) n.milestone_id = null

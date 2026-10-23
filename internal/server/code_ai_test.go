@@ -195,6 +195,14 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["system"].(string), "Resolves WEB-1 (") || strings.Contains(d["system"].(string), "Keep Pocket Projects out") {
 		t.Fatalf("fix draft (refs on): %+v", d)
 	}
+	// after a pull request: link it, comment, follow-ups — with the issue's numeric id, either way
+	for _, i := range []int{1, 2} {
+		sys := ai.drafts[i]["system"].(string)
+		if !strings.Contains(sys, "After you open a pull request") || !strings.Contains(sys, "pocket_projects_link_pr with id "+strconv.FormatInt(is.ID, 10)) ||
+			!strings.Contains(sys, "parent_id "+strconv.FormatInt(is.ID, 10)) {
+			t.Fatalf("after-PR steps missing (draft %d): %s", i, sys)
+		}
+	}
 
 	// the conversation is attached and its state follows Pocket AI
 	alex.do("GET", "/api/v1/issues/WEB-1/code", nil, 200, &codes)

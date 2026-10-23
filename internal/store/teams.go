@@ -13,7 +13,7 @@ var ErrForbidden = errors.New("forbidden")
 
 const teamCols = `id, key, name, description, color, icon, issue_seq, triage_enabled, cycles_enabled, cycle_weeks, cycle_start_day,
 	cycle_cooldown_weeks, cycle_upcoming, cycle_rollover, estimate_scale, auto_archive_months, default_state_id, git_secret,
-	created_by, created_at, updated_at, archived_at`
+	created_by, created_at, updated_at, archived_at, default_assignee`
 
 func scanTeam(row interface{ Scan(...any) error }) (*Team, error) {
 	var t Team
@@ -21,7 +21,7 @@ func scanTeam(row interface{ Scan(...any) error }) (*Team, error) {
 	var archived sql.NullString
 	if err := row.Scan(&t.ID, &t.Key, &t.Name, &t.Description, &t.Color, &t.Icon, &t.IssueSeq, &t.TriageEnabled, &t.CyclesEnabled,
 		&t.CycleWeeks, &t.CycleStartDay, &t.CycleCooldownWeeks, &t.CycleUpcoming, &t.CycleRollover, &t.EstimateScale,
-		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived); err != nil {
+		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, &t.DefaultAssignee); err != nil {
 		return nil, notFound(err)
 	}
 	t.DefaultStateID, t.CreatedBy, t.ArchivedAt = nullI64(def), nullI64(by), nullStr(archived)
@@ -102,7 +102,7 @@ func scanTeamRole(rows *sql.Rows, role *string) (*Team, error) {
 	var archived sql.NullString
 	if err := rows.Scan(&t.ID, &t.Key, &t.Name, &t.Description, &t.Color, &t.Icon, &t.IssueSeq, &t.TriageEnabled, &t.CyclesEnabled,
 		&t.CycleWeeks, &t.CycleStartDay, &t.CycleCooldownWeeks, &t.CycleUpcoming, &t.CycleRollover, &t.EstimateScale,
-		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, role); err != nil {
+		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, &t.DefaultAssignee, role); err != nil {
 		return nil, err
 	}
 	t.DefaultStateID, t.CreatedBy, t.ArchivedAt = nullI64(def), nullI64(by), nullStr(archived)
@@ -196,6 +196,9 @@ func Preset(id string) TeamPreset {
 
 // CreateTeam makes a team with the preset's workflow and labels; the creator becomes its admin.
 func (s *Store) CreateTeam(ctx context.Context, t *Team, preset TeamPreset, creatorID int64) error {
+	if t.DefaultAssignee == "" {
+		t.DefaultAssignee = "creator"
+	}
 	t.Key = strings.ToUpper(strings.TrimSpace(t.Key))
 	if !TeamKeyRe.MatchString(t.Key) {
 		return errors.New("the key is 1–7 letters or digits and starts with a letter")
@@ -290,10 +293,10 @@ func (s *Store) UpdateTeam(ctx context.Context, t *Team) error {
 	}
 	_, err := s.DB.ExecContext(ctx, `UPDATE teams SET key = ?, name = ?, description = ?, color = ?, icon = ?, triage_enabled = ?, cycles_enabled = ?,
 		cycle_weeks = ?, cycle_start_day = ?, cycle_cooldown_weeks = ?, cycle_upcoming = ?, cycle_rollover = ?, estimate_scale = ?,
-		auto_archive_months = ?, default_state_id = ?, archived_at = ?, updated_at = ? WHERE id = ?`,
+		auto_archive_months = ?, default_state_id = ?, default_assignee = ?, archived_at = ?, updated_at = ? WHERE id = ?`,
 		t.Key, t.Name, t.Description, t.Color, t.Icon, t.TriageEnabled, t.CyclesEnabled, t.CycleWeeks, t.CycleStartDay,
 		t.CycleCooldownWeeks, t.CycleUpcoming, t.CycleRollover, t.EstimateScale, t.AutoArchiveMonths, ptrArg(t.DefaultStateID),
-		t.ArchivedAt, Now(), t.ID)
+		firstNonEmptyStr(t.DefaultAssignee, "creator"), t.ArchivedAt, Now(), t.ID)
 	return conflict(err)
 }
 
@@ -617,4 +620,11 @@ func (s *Store) TeamCounts(ctx context.Context, teamID int64) map[string]int {
 		}
 	}
 	return out
+}
+
+func firstNonEmptyStr(v, def string) string {
+	if strings.TrimSpace(v) == "" {
+		return def
+	}
+	return v
 }

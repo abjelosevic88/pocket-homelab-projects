@@ -628,6 +628,11 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (titl
 	} else {
 		fmt.Fprintf(&sys, "\n## Commits and pull requests\nKeep Pocket Projects out of the repository: do not mention %s, its URL, Pocket Projects, any internal id or who asked in branch names, commit messages, pull request titles or descriptions, or code comments. Write them for a reviewer who has never seen the ticket.\n", ci.Identifier)
 	}
+	// About the ticket, not the repository: always, whatever link_refs says
+	fmt.Fprintf(&sys, "\n## After you open a pull request\nUpdate the ticket with the Pocket Projects tools, each write small (they wait for the person's approval):\n"+
+		"1. Link it: pocket_projects_link_pr with id %[1]d and the pull request's url (plus title, branch, repo, number). Pocket Projects then follows it and completes the issue when it is merged.\n"+
+		"2. Post one comment with pocket_projects_comment (id %[1]d): what changed, how it was tested, and what is NOT done.\n"+
+		"3. Turn concrete follow-ups into sub-issues with pocket_projects_create_issue (parent_id %[1]d, team %[2]s); for small items append a \"- [ ] …\" checklist to the description with pocket_projects_update_issue instead (if that is refused, put the checklist in the comment).\n", ci.ID, teamKeyOf(ci.Identifier))
 	if ins := strings.TrimSpace(tai.Instructions); ins != "" {
 		sys.WriteString("\n## Team instructions\n" + ins + "\n")
 	}

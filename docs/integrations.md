@@ -83,6 +83,21 @@ push and pull request events). Then:
 
 Only the team's own identifiers are touched. Rotate the address if it leaks.
 
+### Pull request status without webhooks
+
+When Pocket Projects is reachable only privately, GitHub cannot deliver webhooks. Team settings → Integrations →
+**Pull request status** takes a GitHub token (fine-grained, *Pull requests: Read-only* on the team's repositories,
+or a classic token with `repo`); it is stored for the team and only its last four characters are shown again.
+Every 5 minutes (or **Check now**) open and draft GitHub pull requests attached to the team's issues are read from
+the GitHub API and their state updated (draft, open, merged, closed). A merged pull request completes the issue
+when it was linked explicitly (`POST /issues/{ref}/pull-requests`, the `pocket_projects_link_pr` tool) or when
+its branch carries the identifier. A token GitHub refuses marks the pull request with a warning instead of
+failing the job.
+
+`POST /api/v1/issues/{ref}/pull-requests {url, title?, number?, branch?, repo?}` attaches a pull request (GitHub
+`/pull/N` or Forgejo/Gitea `/pulls/N` addresses), the same row a webhook would update, and moves the issue to
+review. Pocket apps may call it with the `projects:write` link.
+
 ## Calendar feed
 
 Settings → Calendar feed: a secret `webcal://` address with your issues' due dates, and the milestones and target

@@ -17,7 +17,7 @@ import (
 
 var linkOffers = []core.Offer{
 	{Scope: "projects:read", Name: "See your projects and issues", Description: "Read your teams, issues, projects, milestones and cycles, the dates for a calendar, and what links to a contact or a note (Pocket Calendar's \"Project deadlines\", Pocket Contacts' projects of a person, Pocket Day)."},
-	{Scope: "projects:write", Name: "Create issues", Description: "Create issues and comments, post project updates and add facts to a team's AI memory; change only the issues that app created itself."},
+	{Scope: "projects:write", Name: "Create issues", Description: "Create issues and comments, post project updates, link pull requests to issues and add facts to a team's AI memory; change only the issues that app created itself."},
 }
 
 type linkRoute struct {
@@ -35,6 +35,7 @@ var linkRoutes = []linkRoute{
 	{"POST", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+/comments$`), "projects:write"},
 	{"POST", regexp.MustCompile(`^/api/v1/projects/[0-9]+/updates$`), "projects:write"},
 	{"POST", regexp.MustCompile(`^/api/v1/teams/[A-Za-z0-9-]+/memory$`), "projects:write"},
+	{"POST", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+/pull-requests$`), "projects:write"},
 }
 
 var errLinkScope = errors.New("outside the link's scope")

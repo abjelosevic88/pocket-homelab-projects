@@ -19,6 +19,7 @@ export function IntegrationsTab({ team, admin }: TabProps) {
     <div className="stack loose">
       <Webhooks teamKey={team.key} />
       <GitHook teamKey={team.key} />
+      <PRStatus teamKey={team.key} />
     </div>
   )
 }
@@ -178,6 +179,40 @@ function GitHook({ teamKey }: { teamKey: string }) {
       )}
       {rotate && <Confirm title="Make a new address?" confirmLabel="Make new address" danger={false} message="The current address stops working. Update it in every repository that uses it."
         onCancel={() => setRotate(false)} onConfirm={async () => { setRotate(false); try { git.setData(await api.post<{ url: string; help: string }>(`${V1}/teams/${teamKey}/git/rotate`)); toast('New address made') } catch (e) { toast(errMsg(e), 'err') } }} />}
+    </Section>
+  )
+}
+
+/** GitHub cannot reach Pocket Projects (private address), so pull request status is read with a token. */
+function PRStatus({ teamKey }: { teamKey: string }) {
+  const { toast } = useToast()
+  const tok = useAsync(() => api.get<{ has_token: boolean; last4: string }>(`${V1}/teams/${teamKey}/git-token`), [teamKey])
+  const [value, setValue] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async (v: string) => {
+    setBusy(true)
+    try { await api.put(`${V1}/teams/${teamKey}/git-token`, { github_token: v }); setValue(''); tok.reload(); toast(v ? 'GitHub token saved' : 'GitHub token removed') }
+    catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
+  }
+  const check = async () => {
+    setBusy(true)
+    try { const r = await api.post<{ checked: number; changed: number }>(`${V1}/teams/${teamKey}/pr-status/refresh`); toast(r.checked ? `Checked ${r.checked} pull request${r.checked === 1 ? '' : 's'}, ${r.changed} changed` : 'No open GitHub pull requests to check') }
+    catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Section title="Pull request status" sub="Pocket Projects checks linked GitHub pull requests every 5 minutes: open, draft, merged or closed. A merged pull request completes the issue it was linked to."
+      actions={tok.data?.has_token ? <button className="btn sm" disabled={busy} onClick={check}><Icon name="refresh" size={14} />Check now</button> : undefined}>
+      {tok.error ? <div className="callout danger"><Icon name="alert" size={15} /><span>{tok.error}</span></div> : !tok.data ? <Loading /> : (
+        <div className="stack">
+          {tok.data.has_token && <div className="row small"><StatusDot status="ok" /><span>Token saved, ending in <code>{tok.data.last4}</code></span><span className="spacer" style={{ flex: 1 }} /><button className="btn ghost sm" disabled={busy} onClick={() => save('')}>Remove</button></div>}
+          <Field label={tok.data.has_token ? 'Replace the GitHub token' : 'GitHub token'} help={<>A fine-grained personal access token with <b>Pull requests: Read-only</b> on the team’s repositories (or a classic token with <code>repo</code>). It is only used to read pull request status and is never shown again.</>}>
+            <div className="row">
+              <input type="password" value={value} onChange={e => setValue(e.target.value)} placeholder="github_pat_…" autoComplete="off" spellCheck={false} style={{ flex: 1 }} />
+              <button className="btn primary" disabled={busy || !value.trim()} onClick={() => save(value.trim())}>Save</button>
+            </div>
+          </Field>
+        </div>
+      )}
     </Section>
   )
 }

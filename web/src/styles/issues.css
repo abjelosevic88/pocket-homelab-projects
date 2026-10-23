@@ -428,3 +428,17 @@ button.ic-chip:hover { background: var(--hover); }
    so the issue and the Pocket AI panel meet at one clean line */
 .ip-wrap { scrollbar-width: thin; scrollbar-color: transparent transparent; }
 .ip-main:hover, .ip-side:hover { scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent; }
+.att-warn { color: var(--warning, #d97706); display: inline-grid; place-items: center; }
+.att-state.draft { background: var(--surface-3); color: var(--muted); }
+
+/* "With AI" in the sidebar and its page */
+.sb-ai-count { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; color: #7c3aed; background: color-mix(in srgb, #7c3aed 14%, transparent); }
+.sb-ai-count.running { animation: ai-glow 1.6s ease-in-out infinite; }
+.sb-ai-count.waiting { color: #b45309; background: color-mix(in srgb, #d97706 15%, transparent); }
+@media (prefers-reduced-motion: reduce) { .sb-ai-count { animation: none !important; } }
+.team-ai-sub { display: inline-flex; align-items: center; gap: 6px; color: #7c3aed; font-size: 13px; font-weight: 600; }
+.team-ai-list { padding: 4px 0; }
+.team-ai-row { display: flex; align-items: center; }
+.team-ai-row > :first-child { flex: 1; min-width: 0; }
+.team-ai-state { flex-shrink: 0; padding: 0 16px 0 8px; font-size: 12px; font-weight: 600; color: #7c3aed; }
+.team-ai-state.waiting { color: #b45309; }

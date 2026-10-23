@@ -102,6 +102,7 @@ type teamInput struct {
 	EstimateScale      *string `json:"estimate_scale"`
 	AutoArchiveMonths  *int    `json:"auto_archive_months"`
 	DefaultStateID     *int64  `json:"default_state_id"`
+	DefaultAssignee    *string `json:"default_assignee"` // creator | none | a member's user id
 	Archived           *bool   `json:"archived"`
 	Members            []struct {
 		UserID int64  `json:"user_id"`
@@ -307,6 +308,19 @@ func (s *Server) handlePatchTeam(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "unknown state")
 			return
 		}
+	}
+	if in.DefaultAssignee != nil {
+		v := strings.TrimSpace(*in.DefaultAssignee)
+		switch v {
+		case "creator", "none":
+		default:
+			id, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || id <= 0 || s.store.TeamRole(ctx, t.ID, id) == "" {
+				writeErr(w, http.StatusBadRequest, "the default assignee is creator, none or a member of the team")
+				return
+			}
+		}
+		t.DefaultAssignee = v
 	}
 	if err := s.store.UpdateTeam(ctx, t); err != nil {
 		if err == store.ErrConflict {
