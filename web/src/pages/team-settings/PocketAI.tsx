@@ -61,7 +61,7 @@ export function PocketAITab({ team, admin }: TabProps) {
       {!admin && <ReadOnly what="the Pocket AI settings" />}
       {options.error && <div className="callout"><Icon name="info" size={15} /><span>{options.error}. You can still save a folder and instructions; the agent lists appear once Pocket AI is connected (Settings → Pocket apps).</span></div>}
 
-      <Section title="Code conversations" sub={<>“Code with Pocket AI” on an issue opens Pocket AI in this folder with the issue written out as the first message. You read it and press send; <b>Investigate</b> always starts read-only.</>}>
+      <Section title="Code conversations" sub={<>“Code with Pocket AI” on an issue starts a Pocket AI conversation in this folder, in a panel beside the issue, with the issue written out as the first message; <b>Investigate</b> always starts read-only.</>}>
         <div className="stack">
           <Field label="Code folder" help={<>Start typing a path on the server (<code>~/</code> works) and pick from the folders listed. A project can use its own folder (project properties).</>}>
             <FolderInput value={f.cwd} onChange={cwd => set({ cwd })} disabled={!admin} suggestions={(o?.workspaces || []).map(w => ({ value: w.path, hint: w.name }))} />

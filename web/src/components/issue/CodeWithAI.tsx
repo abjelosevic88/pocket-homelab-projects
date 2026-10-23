@@ -135,7 +135,7 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
           ))}
         </div>
         <textarea autoFocus value={text} onChange={e => setText(e.target.value)} rows={4} placeholder="Anything to add, e.g. “start with the session cookie”" />
-        <p className="muted xsmall">Pocket AI opens with the issue written out; you can still edit it before sending.</p>
+        <p className="muted xsmall">The conversation starts right away in a panel beside the issue, with the issue written out as the first message.</p>
       </div>
     </Modal>
   )
