@@ -241,7 +241,7 @@ func (s *Server) dayWork(ctx context.Context, r *http.Request, uid int64, teams 
 		return nil, err
 	}
 	type gitRow struct {
-		iid                       int64
+		iid                         int64
 		kind, title, sub, u, st, at string
 	}
 	var git []gitRow
