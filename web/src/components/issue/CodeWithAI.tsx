@@ -25,7 +25,19 @@ const STATUS: Record<string, { dot: 'ok' | 'warn' | 'error' | 'off'; label: stri
 
 /** The docked Pocket AI panel of the issue page: open(url) shows a conversation in it;
  *  version changes whenever the panel saw the conversation move on. */
-export type CodePanel = { open: (url: string, title: string) => void; version: number }
+export type CodePanel = { open: (url: string, title: string, send?: boolean) => void; version: number }
+
+/** "Send right away": the prepared prompt is sent as the panel opens (else it waits for you). */
+const SEND_NOW = 'pp-ai-send-now'
+function useSendNow(): [boolean, (v: boolean) => void] {
+  const [v, setV] = useState(() => localStorage.getItem(SEND_NOW) === '1')
+  useEffect(() => {
+    const h = () => setV(localStorage.getItem(SEND_NOW) === '1')
+    window.addEventListener('pp-ai-send-now', h)
+    return () => window.removeEventListener('pp-ai-send-now', h)
+  }, [])
+  return [v, (on: boolean) => { localStorage.setItem(SEND_NOW, on ? '1' : '0'); window.dispatchEvent(new Event('pp-ai-send-now')) }]
+}
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
 /** Starts a conversation in the panel, else a new tab (opened on the click for popup blockers). */
@@ -34,12 +46,13 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   const navigate = useNavigate()
   const panel = useContext(CodePanelContext)
   const [busy, setBusy] = useState(false)
-  const start = async (action: Action, note = '') => {
+  const [sendNow] = useSendNow()
+  const start = async (action: Action, note = '', send = sendNow) => {
     const tab = panel ? null : window.open('about:blank', '_blank')
     setBusy(true)
     try {
       const r = await api.post<{ url: string }>(`${V1}/issues/${issue.id}/code`, { action, note })
-      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}`)
+      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}`, send)
       else if (tab) { tab.opener = null; tab.location.href = r.url } else window.open(r.url, '_blank', 'noopener')
       onStarted()
     } catch (e) {
@@ -52,11 +65,13 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
 }
 
 function useMenu(start: (a: Action) => void, withNote: () => void): MenuItem[] {
+  const [sendNow, setSendNow] = useSendNow()
   return [
     { heading: 'Code with Pocket AI' },
     ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, hint: a.id === 'investigate' ? 'read-only' : undefined, onSelect: () => start(a.id) })),
     'sep',
     { label: 'With a note…', icon: 'edit', onSelect: withNote },
+    { label: 'Send right away', icon: 'zap', checked: sendNow, hint: sendNow ? undefined : 'you press send', onSelect: () => setSendNow(!sendNow) },
   ]
 }
 
@@ -72,7 +87,7 @@ export function CodeButton({ issue, onStarted }: { issue: IssueDetail; onStarted
         <Icon name="sparkles" size={14} /><span className="hide-mobile">Code</span>
       </button>
       {at && <Menu anchor={at} items={items} width={240} align="right" onClose={() => setAt(null)} />}
-      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n) => { setNote(false); start(a, n) }} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, send) => { setNote(false); start(a, n, send) }} />}
     </>
   )
 }
@@ -113,18 +128,19 @@ export function CodeSide({ issue, onStarted }: { issue: IssueDetail; onStarted: 
         )
       })}
       {at && <Menu anchor={at} items={items} width={240} onClose={() => setAt(null)} />}
-      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n) => { setNote(false); start(a, n) }} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, send) => { setNote(false); start(a, n, send) }} />}
     </div>
   )
 }
 
-function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Action, note: string) => void }) {
+function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Action, note: string, send: boolean) => void }) {
   const [action, setAction] = useState<Action>('investigate')
   const [text, setText] = useState('')
+  const [sendNow, setSendNow] = useSendNow()
   return (
     <Modal title="Code with Pocket AI" onClose={onClose} size="sm" footer={<>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn primary" onClick={() => onStart(action, text.trim())}><Icon name="sparkles" size={14} />Open in Pocket AI</button>
+      <button type="button" className="btn primary" onClick={() => onStart(action, text.trim(), sendNow)}><Icon name="sparkles" size={14} />Open in Pocket AI</button>
     </>}>
       <div className="stack">
         <div className="code-actions" role="radiogroup" aria-label="What to do">
@@ -135,7 +151,7 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
           ))}
         </div>
         <textarea autoFocus value={text} onChange={e => setText(e.target.value)} rows={4} placeholder="Anything to add, e.g. “start with the session cookie”" />
-        <p className="muted xsmall">The conversation starts right away in a panel beside the issue, with the issue written out as the first message.</p>
+        <label className="code-send"><input type="checkbox" checked={sendNow} onChange={e => setSendNow(e.target.checked)} />Send right away<span className="muted xsmall">{sendNow ? 'the conversation starts as the panel opens' : 'the prompt waits in the panel for you to add to and send'}</span></label>
       </div>
     </Modal>
   )
@@ -144,15 +160,16 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
 const DOCK_W = 'pp-ai-dock-w'
 const clampW = (w: number) => Math.round(Math.max(360, Math.min(w, window.innerWidth - 420, 1100)))
 
-function embedURL(u: string) {
+function embedURL(u: string, send: boolean) {
   const x = new URL(u, location.href)
   x.searchParams.set('embed', '1')
+  if (send && x.searchParams.has('draft')) x.searchParams.set('send', '1')
   return x.href
 }
 
 /** Pocket AI docked beside the issue: the conversation runs in Pocket AI, shown here. */
-export function CodeDock({ url, title, mobile, onClose, onMoved }: { url: string; title: string; mobile: boolean; onClose: () => void; onMoved: () => void }) {
-  const [src] = useState(() => embedURL(url)) // set once: changing it would reload the frame
+export function CodeDock({ url, title, send = false, mobile, onClose, onMoved }: { url: string; title: string; send?: boolean; mobile: boolean; onClose: () => void; onMoved: () => void }) {
+  const [src] = useState(() => embedURL(url, send)) // set once: changing it would reload the frame
   const [out, setOut] = useState(url)
   const [w, setW] = useState(() => clampW(Number(localStorage.getItem(DOCK_W)) || 520))
   const [drag, setDrag] = useState(false)

@@ -41,10 +41,10 @@ export default function IssuePage() {
   }, [ref])
   useEffect(() => { setD(null); load() }, [load])
   // Pocket AI docked beside the issue (replaces the properties while open)
-  const [dock, setDock] = useState<{ url: string; title: string; key: number } | null>(null)
+  const [dock, setDock] = useState<{ url: string; title: string; send: boolean; key: number } | null>(null)
   const [dockVersion, setDockVersion] = useState(0)
   useEffect(() => setDock(null), [ref])
-  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title) => setDock({ url, title, key: Date.now() }), version: dockVersion }), [dockVersion])
+  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => setDock({ url, title, send, key: Date.now() }), version: dockVersion }), [dockVersion])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -161,7 +161,7 @@ export default function IssuePage() {
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
-      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} mobile={mobile} onClose={() => setDock(null)} onMoved={() => setDockVersion(v => v + 1)} />}
+      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={() => setDockVersion(v => v + 1)} />}
       {!mobile && !dock && <aside className="ip-side" aria-label="Properties">
         <Properties issue={d} canEdit={canEdit} onOpen={openProp} />
         <div className="ip-side-sec ip-side-actions">
