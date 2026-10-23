@@ -164,7 +164,7 @@ export default function IssuePage() {
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
-      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={() => setDockVersion(v => v + 1)} />}
+      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={(tid, status) => { code.patch(tid, status); setDockVersion(v => v + 1) }} />}
       {!mobile && !dock && <aside className="ip-side" aria-label="Properties">
         <Properties issue={d} canEdit={canEdit} onOpen={openProp} />
         <div className="ip-side-sec ip-side-actions">

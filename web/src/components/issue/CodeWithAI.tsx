@@ -31,7 +31,7 @@ export type CodePanel = { open: (url: string, title: string, send?: boolean) => 
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
 /** The issue's conversations, live: polled every few seconds while one is working or waiting. */
-export type IssueCode = { list: CodeThread[]; detail: string; reload: () => void }
+export type IssueCode = { list: CodeThread[]; detail: string; reload: () => void; patch: (threadId: string, status: string) => void }
 export function useIssueCode(issue: IssueDetail | null, version: number): IssueCode {
   const [list, setList] = useState<CodeThread[]>([])
   const [detail, setDetail] = useState('')
@@ -45,10 +45,14 @@ export function useIssueCode(issue: IssueDetail | null, version: number): IssueC
   useEffect(() => { reload() }, [reload, version, issue?.updated_at])
   const live = list.some(t => t.status === 'running' || t.status === 'waiting')
   useEffect(() => {
-    const t = window.setInterval(reload, live ? 4000 : 30000)
+    const t = window.setInterval(reload, live ? 4000 : 15000)
     return () => window.clearInterval(t)
   }, [live, reload])
-  return { list, detail, reload }
+  // the panel's word is newer than the last poll: show it at once
+  const patch = useCallback((threadId: string, status: string) => {
+    setList(l => l.map(t => t.thread_id === threadId && status && t.status !== status ? { ...t, status } : t))
+  }, [])
+  return { list, detail, reload, patch }
 }
 
 /** What the header and the section show: sent conversations, plus the newest unsent draft. */
@@ -200,7 +204,7 @@ function embedURL(u: string, send: boolean) {
 }
 
 /** Pocket AI docked beside the issue: the conversation runs in Pocket AI, shown here. */
-export function CodeDock({ url, title, send = false, mobile, onClose, onMoved }: { url: string; title: string; send?: boolean; mobile: boolean; onClose: () => void; onMoved: () => void }) {
+export function CodeDock({ url, title, send = false, mobile, onClose, onMoved }: { url: string; title: string; send?: boolean; mobile: boolean; onClose: () => void; onMoved: (threadId: string, status: string) => void }) {
   const [src] = useState(() => embedURL(url, send)) // set once: changing it would reload the frame
   const [out, setOut] = useState(url)
   const [w, setW] = useState(() => clampW(Number(localStorage.getItem(DOCK_W)) || 520))
@@ -214,7 +218,7 @@ export function CodeDock({ url, title, send = false, mobile, onClose, onMoved }:
     const h = (e: MessageEvent) => {
       if (e.origin !== origin || e.data?.type !== 'pocket-ai') return
       if (e.data.thread_id) setOut(`${origin}/t/${e.data.thread_id}`)
-      moved.current()
+      moved.current(e.data.thread_id || '', e.data.status || '')
       refreshAIActive()
     }
     window.addEventListener('message', h)
