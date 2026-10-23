@@ -391,3 +391,22 @@ button.ic-chip:hover { background: var(--hover); }
 .ai-dock.sheet { position: fixed; inset: 0; z-index: 280; border-left: 0; }
 .code-send { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; cursor: pointer; flex-wrap: wrap; }
 .code-send input { margin: 0; align-self: center; }
+
+/* Pocket AI conversations on the issue + live state */
+.code-convs { padding: 2px; }
+.code-conv { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 13.5px; min-width: 0; }
+.code-conv:hover { background: var(--hover); }
+.code-conv.on { background: var(--accent-soft, var(--hover)); }
+.code-conv .set-status { margin: 0 3px; flex-shrink: 0; }
+.code-conv-action { font-weight: 600; flex-shrink: 0; }
+.code-conv-state { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.code-conv-state.running { color: #7c3aed; font-weight: 600; }
+.code-conv-state.waiting { color: #b45309; font-weight: 600; }
+.code-pulse { width: 8px; height: 8px; border-radius: 50%; background: #7c3aed; flex-shrink: 0; margin: 0 3px; box-shadow: 0 0 0 0 rgba(124, 58, 237, .5); animation: code-pulse 1.4s ease-out infinite; }
+.code-pulse.waiting, .code-live.waiting .code-pulse { background: #d97706; box-shadow: 0 0 0 0 rgba(217, 119, 6, .5); animation-duration: 2.2s; }
+@keyframes code-pulse { 0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, .45); } 80%, 100% { box-shadow: 0 0 0 7px rgba(124, 58, 237, 0); } }
+@media (prefers-reduced-motion: reduce) { .code-pulse { animation: none; } }
+.code-live { gap: 7px; font-weight: 600; }
+.code-live.running { color: #7c3aed; }
+.code-live.waiting { color: #b45309; }
+.ai-thinking { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); }

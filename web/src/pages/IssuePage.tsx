@@ -22,7 +22,7 @@ import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyTex
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
-import { CodeButton, CodeDock, type CodePanel, CodePanelContext, CodeSide } from '../components/issue/CodeWithAI'
+import { CodeButton, CodeConversations, CodeDock, type CodePanel, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
 type SideProp = Prop | 'parent'
@@ -44,6 +44,8 @@ export default function IssuePage() {
   const [dock, setDock] = useState<{ url: string; title: string; send: boolean; key: number } | null>(null)
   const [dockVersion, setDockVersion] = useState(0)
   useEffect(() => setDock(null), [ref])
+  const code = useIssueCode(d, dockVersion)
+  const breakdownRef = useRef<(() => void) | null>(null)
   const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => setDock({ url, title, send, key: Date.now() }), version: dockVersion }), [dockVersion])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
@@ -145,7 +147,7 @@ export default function IssuePage() {
             {d.parent && <><Icon name="chevron-right" size={13} className="faint" /><Link to={`/issue/${d.parent.identifier}`} title={d.parent.title}><StatusIcon state={app.state(d.parent.state_id)} size={13} /><span className="ident">{d.parent.identifier}</span><span className="ellipsis hide-mobile" style={{ maxWidth: 240 }}>{d.parent.title}</span></Link></>}
             <Icon name="chevron-right" size={13} className="faint" /><span className="ident">{d.identifier}</span>
             <span className="spacer" style={{ flex: 1 }} />
-            {!d.deleted_at && <CodeButton issue={d} onStarted={load} />}
+            {!d.deleted_at && <CodeButton issue={d} code={code} onStarted={() => { load(); code.reload() }} breakdown={canEdit ? () => breakdownRef.current?.() : undefined} />}
             <button type="button" className={`btn ghost icon-only sm star-btn ${fav ? 'on' : ''}`} onClick={toggleFav} aria-label={fav ? 'Remove from favorites' : 'Add to favorites'} title="Favorite"><Icon name="star" size={15} fill={!!fav} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={() => copy(d.identifier, d.identifier)} aria-label="Copy ID" title="Copy ID (⌘.)"><Icon name="copy" size={15} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={e => setMenu(rectOf(e.currentTarget))} aria-label="Issue menu" title="More"><Icon name="more" size={16} /></button>
@@ -153,11 +155,12 @@ export default function IssuePage() {
           <TitleEditor issue={d} canEdit={canEdit} onSave={async t => { const f = await patchIssue(d.id, { title: t }).catch(e => { toast((e as Error).message, 'err'); return null }); if (f) { merge(f); emitChange({ kind: 'issue', team_ids: [d.team_id], ids: [d.id] }) } }} />
           {mobile && <MobileChips issue={d} onOpen={openProp} canEdit={canEdit} />}
           <Description issue={d} canEdit={canEdit} onSaved={merge} />
-          <SubIssues issue={d} canEdit={canEdit} onChanged={load} />
+          <CodeConversations issue={d} code={code} openUrl={dock?.url} />
+          <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
-          {mobile && <div className="ip-sec"><SideExtras issue={d} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
+          {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
@@ -169,7 +172,7 @@ export default function IssuePage() {
           {canEdit && <button type="button" className="side-btn" onClick={e => relAdd.current?.(rectOf(e.currentTarget))}><Icon name="link" size={15} />Add a relation</button>}
           {canEdit && <button type="button" className="side-btn" onClick={e => contactAdd.current?.(rectOf(e.currentTarget))}><Icon name="users" size={15} />Add a contact</button>}
         </div>
-        <SideExtras issue={d} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} />
+        <SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} />
       </aside>}
       {pick && pick.prop !== 'parent' && <PropertyPicker prop={pick.prop} issue={d} anchor={pick.at} onClose={() => setPick(null)} onPatch={p => patchUndo(d, p)} />}
       {pick?.prop === 'parent' && <IssueSearchPicker anchor={pick.at} title="Parent issue" exclude={[d.id, ...d.sub_issues.map(s => s.id)]} teamId={d.team_id} onClose={() => setPick(null)} onPick={p => patchUndo(d, { parent_id: p.id })} />}
@@ -297,7 +300,7 @@ function MobileChips({ issue, canEdit, onOpen }: { issue: IssueDetail; canEdit: 
 
 // ---------- time, integrations, copy ----------
 
-function SideExtras({ issue, canEdit, onChanged, onSchedule, onTask, copy }: { issue: IssueDetail; canEdit: boolean; onChanged: () => void; onSchedule: () => void; onTask: (when: string) => void; copy: (t: string, w: string) => void }) {
+function SideExtras({ issue, code, canEdit, onChanged, onSchedule, onTask, copy }: { issue: IssueDetail; code: IssueCode; canEdit: boolean; onChanged: () => void; onSchedule: () => void; onTask: (when: string) => void; copy: (t: string, w: string) => void }) {
   const app = useApp()
   const { toast } = useToast()
   const [dur, setDur] = useState('')
@@ -341,7 +344,7 @@ function SideExtras({ issue, canEdit, onChanged, onSchedule, onTask, copy }: { i
         <button type="button" className="side-btn" onClick={e => setTaskMenu(rectOf(e.currentTarget))}><Icon name="check-circle" size={15} />Add to my Tasks</button>
         <button type="button" className="side-btn" onClick={onSchedule}><Icon name="calendar-plus" size={15} />Schedule…</button>
       </div>
-      {!issue.deleted_at && <CodeSide issue={issue} onStarted={onChanged} />}
+      {!issue.deleted_at && <CodeSide issue={issue} code={code} onStarted={() => { onChanged(); code.reload() }} />}
       <div className="ip-side-sec ip-side-actions">
         <h4><Icon name="copy" size={13} />Copy</h4>
         <button type="button" className="side-btn" onClick={() => copy(issue.identifier, issue.identifier)}><Icon name="hash" size={15} />ID<span className="hint">⌘.</span></button>

@@ -197,4 +197,4 @@ export interface AgentOptions {
 }
 
 /** One Pocket AI conversation about an issue. */
-export interface CodeThread { draft_id: string; thread_id: string; title: string; status: string; url: string; created_at: string; updated_at: string }
+export interface CodeThread { draft_id: string; thread_id: string; title: string; status: string; action?: string; url: string; created_at: string; updated_at: string }

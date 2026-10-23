@@ -303,6 +303,7 @@ type codeThread struct {
 	ThreadID  string `json:"thread_id"`
 	Title     string `json:"title"`
 	Status    string `json:"status"`
+	Action    string `json:"action"` // Investigate, Fix it, Chat (from the issue's attachment)
 	URL       string `json:"url"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -334,8 +335,13 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 		list = []codeThread{}
 	}
 	// keep the attachments' state and address in step
-	for _, t := range list {
-		if att, err := s.store.FindAttachment(ctx, is.ID, "ai", t.DraftID); err == nil && (att.State != t.Status || (t.URL != "" && att.URL != t.URL)) {
+	for i, t := range list {
+		att, err := s.store.FindAttachment(ctx, is.ID, "ai", t.DraftID)
+		if err != nil {
+			continue
+		}
+		list[i].Action = strings.TrimPrefix(att.Title, "Pocket AI · ")
+		if att.State != t.Status || (t.URL != "" && att.URL != t.URL) {
 			att.State = t.Status
 			if t.URL != "" {
 				att.URL = t.URL

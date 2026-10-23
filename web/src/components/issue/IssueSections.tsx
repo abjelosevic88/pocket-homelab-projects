@@ -16,7 +16,7 @@ const changed = (is: IssueDetail) => emitChange({ kind: 'issue', team_ids: [is.t
 
 // ---------- sub-issues ----------
 
-export function SubIssues({ issue, canEdit, onChanged }: { issue: IssueDetail; canEdit: boolean; onChanged: () => void }) {
+export function SubIssues({ issue, canEdit, onChanged, breakdownRef }: { issue: IssueDetail; canEdit: boolean; onChanged: () => void; breakdownRef?: React.MutableRefObject<(() => void) | null> }) {
   const { toast } = useToast()
   const [title, setTitle] = useState('')
   const [adding, setAdding] = useState(false)
@@ -34,14 +34,17 @@ export function SubIssues({ issue, canEdit, onChanged }: { issue: IssueDetail; c
       requestAnimationFrame(() => input.current?.focus())
     } catch (e) { toast((e as Error).message, 'err') }
   }
+  const section = useRef<HTMLElement>(null)
   const breakdown = async () => {
     setAiBusy(true)
+    section.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     try {
       const r = await api.post<{ sub_issues: { title: string; description: string }[] }>(`${V1}/ai/breakdown`, { issue: issue.identifier, count: 5 })
       if (!r.sub_issues?.length) toast('Pocket AI had no suggestions')
       setAi((r.sub_issues || []).map(s => ({ ...s, on: true })))
     } catch (e) { toast((e as Error).message, 'err') } finally { setAiBusy(false) }
   }
+  if (breakdownRef) breakdownRef.current = canEdit ? breakdown : null
   const createAi = async () => {
     if (!ai) return
     setCreating(true)
@@ -54,12 +57,11 @@ export function SubIssues({ issue, canEdit, onChanged }: { issue: IssueDetail; c
   }
   if (!subs.length && !canEdit) return null
   return (
-    <section className="ip-sec">
+    <section className="ip-sec" ref={section}>
       <div className="ip-sec-head">
         <h3>Sub-issues {subs.length > 0 && <span className="ip-sub-progress"><ProgressRing percent={(done / subs.length) * 100} size={14} />{done}/{subs.length}</span>}</h3>
         <span className="spacer" />
         {canEdit && <>
-          <button type="button" className="btn ghost sm" onClick={breakdown} disabled={aiBusy} title="Pocket AI suggests sub-issues"><Icon name="sparkles" size={14} />{aiBusy ? 'Thinking…' : 'Break down'}</button>
           <button type="button" className="btn ghost icon-only sm" aria-label="New sub-issue with all fields" title="New sub-issue…" onClick={() => openCreateIssue({ team_id: issue.team_id, parent_id: issue.id, parent_identifier: issue.identifier, project_id: issue.project_id, cycle_id: issue.cycle_id })}><Icon name="plus" size={15} /></button>
         </>}
       </div>
@@ -72,6 +74,7 @@ export function SubIssues({ issue, canEdit, onChanged }: { issue: IssueDetail; c
         </div>}
       </div>}
       {canEdit && !adding && <button type="button" className="btn ghost sm" style={{ marginTop: subs.length ? 6 : 0, color: 'var(--muted)' }} onClick={() => setAdding(true)}><Icon name="plus" size={14} />Add sub-issue</button>}
+      {aiBusy && <div className="ai-suggest ai-thinking"><span className="code-pulse" />Pocket AI is breaking this down into sub-issues…</div>}
       {ai && ai.length > 0 && <div className="ai-suggest">
         <div className="row small" style={{ fontWeight: 600, marginBottom: 4 }}><Icon name="sparkles" size={14} />Suggested sub-issues</div>
         {ai.map((s, i) => <label key={i} className="ai-suggest-item"><input type="checkbox" checked={s.on} onChange={e => setAi(ai.map((x, j) => (j === i ? { ...x, on: e.target.checked } : x)))} />
@@ -157,7 +160,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const { toast } = useToast()
   const file = useRef<HTMLInputElement>(null)
   const [link, setLink] = useState(false)
-  const list = issue.attachment_list
+  const list = issue.attachment_list.filter(a => a.kind !== 'ai_thread') // conversations are listed on their own
   const remove = async (a: Attachment) => { try { await api.del(`${V1}/attachments/${a.id}`); changed(issue); onChanged() } catch (e) { toast((e as Error).message, 'err') } }
   const addLink = async (url: string) => {
     setLink(false)

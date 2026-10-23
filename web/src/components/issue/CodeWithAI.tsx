@@ -40,6 +40,34 @@ function useSendNow(): [boolean, (v: boolean) => void] {
 }
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
+/** The issue's conversations, live: polled every few seconds while one is working or waiting. */
+export type IssueCode = { list: CodeThread[]; detail: string; reload: () => void }
+export function useIssueCode(issue: IssueDetail | null, version: number): IssueCode {
+  const [list, setList] = useState<CodeThread[]>([])
+  const [detail, setDetail] = useState('')
+  const id = issue?.id
+  const reload = useCallback(() => {
+    if (!id) return
+    api.get<{ threads: CodeThread[]; connected: boolean; detail: string }>(`${V1}/issues/${id}/code`)
+      .then(r => { setList(r.threads || []); setDetail(r.connected ? '' : r.detail) }).catch(() => {})
+  }, [id])
+  useEffect(() => { setList([]); setDetail('') }, [id])
+  useEffect(() => { reload() }, [reload, version, issue?.updated_at])
+  const live = list.some(t => t.status === 'running' || t.status === 'waiting')
+  useEffect(() => {
+    const t = window.setInterval(reload, live ? 4000 : 30000)
+    return () => window.clearInterval(t)
+  }, [live, reload])
+  return { list, detail, reload }
+}
+
+/** What the header and the section show: sent conversations, plus the newest unsent draft. */
+function visible(list: CodeThread[]) {
+  const sent = list.filter(t => t.status !== 'draft' && t.status !== 'deleted')
+  const newest = list[0]
+  return newest && newest.status === 'draft' ? [newest, ...sent] : sent
+}
+
 /** Starts a conversation in the panel, else a new tab (opened on the click for popup blockers). */
 function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   const { toast } = useToast()
@@ -64,27 +92,40 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   return { start, busy }
 }
 
-function useMenu(start: (a: Action) => void, withNote: () => void): MenuItem[] {
+function useMenu(start: (a: Action) => void, withNote: () => void, breakdown?: () => void): MenuItem[] {
   const [sendNow, setSendNow] = useSendNow()
   return [
     { heading: 'Code with Pocket AI' },
     ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, hint: a.id === 'investigate' ? 'read-only' : undefined, onSelect: () => start(a.id) })),
-    'sep',
     { label: 'With a note…', icon: 'edit', onSelect: withNote },
     { label: 'Send right away', icon: 'zap', checked: sendNow, hint: sendNow ? undefined : 'you press send', onSelect: () => setSendNow(!sendNow) },
+    ...(breakdown ? ['sep' as const, { heading: 'Plan' }, { label: 'Break down into sub-issues', icon: 'subtasks', hint: 'suggests 5', onSelect: breakdown }] : []),
   ]
 }
 
-/** The header button next to favorite / copy / more. */
-export function CodeButton({ issue, onStarted }: { issue: IssueDetail; onStarted: () => void }) {
+/** Working (pulsing) or waiting for you (amber), across the issue's conversations. */
+function liveState(list: CodeThread[]): 'running' | 'waiting' | '' {
+  return list.some(t => t.status === 'waiting') ? 'waiting' : list.some(t => t.status === 'running') ? 'running' : ''
+}
+
+/** The header button next to favorite / copy / more: shows when a conversation works or waits. */
+export function CodeButton({ issue, code, onStarted, breakdown }: { issue: IssueDetail; code: IssueCode; onStarted: () => void; breakdown?: () => void }) {
   const { start, busy } = useCodeStart(issue, onStarted)
+  const panel = useContext(CodePanelContext)
   const [at, setAt] = useState<Anchor | null>(null)
   const [note, setNote] = useState(false)
-  const items = useMenu(a => start(a), () => setNote(true))
+  const items = useMenu(a => start(a), () => setNote(true), breakdown)
+  const live = liveState(code.list)
+  const first = code.list.find(t => t.status === live)
+  const label = live === 'running' ? 'Working…' : live === 'waiting' ? 'Waiting for you' : 'Code'
   return (
     <>
+      {live && first && panel
+        ? <button type="button" className={`btn ghost sm code-live ${live}`} onClick={() => panel.open(first.url, `${issue.identifier} · ${first.action || 'Pocket AI'}`)} title="Open the conversation">
+            <span className="code-pulse" /><span className="hide-mobile">{label}</span></button>
+        : null}
       <button type="button" className="btn ghost sm code-btn" disabled={busy} onClick={e => setAt(rectOf(e.currentTarget))} aria-label="Code with Pocket AI" title="Code with Pocket AI">
-        <Icon name="sparkles" size={14} /><span className="hide-mobile">Code</span>
+        <Icon name="sparkles" size={14} /><span className="hide-mobile">{busy ? 'Opening…' : 'Code'}</span>
       </button>
       {at && <Menu anchor={at} items={items} width={240} align="right" onClose={() => setAt(null)} />}
       {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, send) => { setNote(false); start(a, n, send) }} />}
@@ -92,44 +133,50 @@ export function CodeButton({ issue, onStarted }: { issue: IssueDetail; onStarted
   )
 }
 
-/** The side panel: start one, and the issue's conversations with their state. */
-export function CodeSide({ issue, onStarted }: { issue: IssueDetail; onStarted: () => void }) {
+/** The side panel: start one (the conversations themselves are listed on the issue). */
+export function CodeSide({ issue, code, onStarted }: { issue: IssueDetail; code: IssueCode; onStarted: () => void }) {
   const { start, busy } = useCodeStart(issue, onStarted)
   const [at, setAt] = useState<Anchor | null>(null)
   const [note, setNote] = useState(false)
-  const [list, setList] = useState<CodeThread[]>([])
-  const [detail, setDetail] = useState('')
   const items = useMenu(a => start(a), () => setNote(true))
-  const panel = useContext(CodePanelContext)
-  const load = useCallback(() => {
-    api.get<{ threads: CodeThread[]; connected: boolean; detail: string }>(`${V1}/issues/${issue.id}/code`)
-      .then(r => { setList(r.threads || []); setDetail(r.connected ? '' : r.detail) }).catch(() => {})
-  }, [issue.id])
-  useEffect(() => { load() }, [load, issue.updated_at, issue.attachment_list.length, panel?.version])
-  // a conversation that is working or waiting changes on its own
-  useEffect(() => {
-    if (!list.some(t => t.status === 'running' || t.status === 'waiting' || t.status === 'draft')) return
-    const t = window.setInterval(load, 20000)
-    return () => window.clearInterval(t)
-  }, [list, load])
   return (
     <div className="ip-side-sec ip-side-actions">
       <h4><Icon name="sparkles" size={13} />Pocket AI</h4>
-      <button type="button" className="side-btn" disabled={busy} onClick={e => setAt(rectOf(e.currentTarget))} title={detail || undefined}>
+      <button type="button" className="side-btn" disabled={busy} onClick={e => setAt(rectOf(e.currentTarget))} title={code.detail || undefined}>
         <Icon name="code" size={15} />Code with Pocket AI…</button>
-      {list.map(t => {
-        const st = STATUS[t.status] || { dot: 'off' as const, label: t.status }
-        return (
-          <a key={t.draft_id} className="side-btn code-thread" href={t.url} target="_blank" rel="noreferrer" title={st.label}
-            onClick={e => { if (panel && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); panel.open(t.url, t.title || issue.identifier) } }}>
-            <StatusDot status={st.dot} title={st.label} /><span className="ellipsis">{t.title.replace(`${issue.identifier} · `, '') || issue.identifier}</span>
-            <span className="hint">{t.status === 'draft' ? 'draft' : ago(t.updated_at || t.created_at)}</span>
-          </a>
-        )
-      })}
       {at && <Menu anchor={at} items={items} width={240} onClose={() => setAt(null)} />}
       {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, send) => { setNote(false); start(a, n, send) }} />}
     </div>
+  )
+}
+
+/** The issue's conversations, on the issue itself: one click opens it in the panel. */
+export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail; code: IssueCode; openUrl?: string }) {
+  const panel = useContext(CodePanelContext)
+  const list = visible(code.list)
+  if (!list.length) return null
+  const shown = (u: string) => !!openUrl && (openUrl === u || openUrl.split('?')[0] === u.split('?')[0])
+  return (
+    <section className="ip-sec">
+      <div className="ip-sec-head"><h3>Conversations <span className="count">{list.length}</span></h3></div>
+      <div className="ip-box code-convs">
+        {list.map(t => {
+          const st = STATUS[t.status] || { dot: 'off' as const, label: t.status }
+          const name = t.title.replace(`${issue.identifier} · `, '') || issue.identifier
+          return (
+            <a key={t.draft_id} className={`code-conv ${t.status} ${shown(t.url) ? 'on' : ''}`} href={t.url} target="_blank" rel="noreferrer"
+              onClick={e => { if (panel && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); panel.open(t.url, `${issue.identifier} · ${t.action || name}`) } }}>
+              {t.status === 'running' || t.status === 'waiting' ? <span className={`code-pulse ${t.status}`} /> : <StatusDot status={st.dot} title={st.label} />}
+              <span className="code-conv-action">{t.action || 'Pocket AI'}</span>
+              <span className="ellipsis muted">{name}</span>
+              <span className="spacer" style={{ flex: 1 }} />
+              <span className={`code-conv-state ${t.status}`}>{t.status === 'draft' ? 'Not sent' : st.label}</span>
+              <span className="faint xsmall">{ago(t.updated_at || t.created_at)}</span>
+            </a>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
