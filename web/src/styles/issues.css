@@ -423,3 +423,8 @@ button.ic-chip:hover { background: var(--hover); }
 @keyframes ai-twinkle { 0%, 100% { transform: scale(1) rotate(0); opacity: 1; } 50% { transform: scale(.82) rotate(18deg); opacity: .7; } }
 @keyframes ai-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); } 50% { box-shadow: 0 0 0 3px rgba(124, 58, 237, .18); } }
 @media (prefers-reduced-motion: reduce) { .ai-mark, .ai-mark svg { animation: none !important; } }
+
+/* Quiet scrollbars on the issue page: thin, invisible until the pane is hovered,
+   so the issue and the Pocket AI panel meet at one clean line */
+.ip-wrap { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.ip-main:hover, .ip-side:hover { scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent; }
