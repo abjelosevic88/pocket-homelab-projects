@@ -24,6 +24,7 @@ import (
 func (s *Server) codeRoutes(r chi.Router) {
 	r.Get("/ai/agent-options", s.handleAgentOptions)
 	r.Get("/ai/dirs", s.handleAIDirs)
+	r.Get("/ai/active", s.handleAIActive)
 	r.Get("/teams/{ref}/ai", s.handleGetTeamAI)
 	r.Put("/teams/{ref}/ai", s.handlePutTeamAI)
 	r.Get("/teams/{ref}/memory", s.handleGetTeamMemory)
@@ -80,6 +81,23 @@ func (s *Server) handleAgentOptions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, raw)
+}
+
+// handleAIActive lists the person's Pocket AI conversations that are working
+// or waiting, by issue identifier, for the live marks in lists and boards.
+// Quiet when Pocket AI is not connected: lists simply show no marks.
+func (s *Server) handleAIActive(w http.ResponseWriter, r *http.Request) {
+	out := []json.RawMessage{}
+	sb, err := s.aiSibling(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"active": out, "connected": false})
+		return
+	}
+	if err := sb.call(r.Context(), http.MethodGet, "/api/v1/link/active?source=projects", nil, &out); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"active": []json.RawMessage{}, "connected": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"active": out, "connected": true})
 }
 
 // handleAIDirs lists server folders through Pocket AI (Projects itself runs

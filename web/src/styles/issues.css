@@ -410,3 +410,14 @@ button.ic-chip:hover { background: var(--hover); }
 .code-live.running { color: #7c3aed; }
 .code-live.waiting { color: #b45309; }
 .ai-thinking { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--muted); }
+
+/* Live Pocket AI mark on rows and board cards */
+.ai-mark { display: inline-grid; place-items: center; flex-shrink: 0; width: 20px; height: 20px; margin-left: 6px; border-radius: 6px; color: #7c3aed; background: color-mix(in srgb, #7c3aed 12%, transparent); vertical-align: middle; }
+.ai-mark svg { animation: ai-twinkle 1.6s ease-in-out infinite; }
+.ai-mark.running { animation: ai-glow 1.6s ease-in-out infinite; }
+.ai-mark.waiting { color: #b45309; background: color-mix(in srgb, #d97706 14%, transparent); }
+.ai-mark.waiting svg { animation: none; }
+.ic-top .ai-mark { margin-left: 2px; }
+@keyframes ai-twinkle { 0%, 100% { transform: scale(1) rotate(0); opacity: 1; } 50% { transform: scale(.82) rotate(18deg); opacity: .7; } }
+@keyframes ai-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); } 50% { box-shadow: 0 0 0 3px rgba(124, 58, 237, .18); } }
+@media (prefers-reduced-motion: reduce) { .ai-mark, .ai-mark svg { animation: none !important; } }

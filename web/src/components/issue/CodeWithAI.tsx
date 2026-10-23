@@ -5,6 +5,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../../lib/api'
+import { refreshAIActive } from '../../lib/ai-active'
 import { ago } from '../../lib/format'
 import type { CodeThread, IssueDetail } from '../../lib/types'
 import { StatusDot } from '../../pages/settings/common'
@@ -230,6 +231,7 @@ export function CodeDock({ url, title, send = false, mobile, onClose, onMoved }:
       if (e.origin !== origin || e.data?.type !== 'pocket-ai') return
       if (e.data.thread_id) setOut(`${origin}/t/${e.data.thread_id}`)
       moved.current()
+      refreshAIActive()
     }
     window.addEventListener('message', h)
     return () => window.removeEventListener('message', h)

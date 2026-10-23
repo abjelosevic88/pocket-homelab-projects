@@ -11,6 +11,7 @@ import { DueChip, PersonAvatar, PriorityIcon, ProjectMark, ProgressRing, StatusI
 import { useIssueActions } from '../IssueRow'
 import { LabelChips, type Prop } from '../pickers'
 import { rectOf } from '../ui'
+import { AIMark } from '../issue/AIMark'
 
 export function IssueCard({ issue, properties, groupBy, selected, focused, onToggleSelect, onUpdated, showTeam, dragProps, dragging }: {
   issue: Issue; properties: string[]; groupBy: GroupKey; selected?: boolean; focused?: boolean; onToggleSelect?: (e: React.MouseEvent) => void
@@ -37,6 +38,7 @@ export function IssueCard({ issue, properties, groupBy, selected, focused, onTog
         {onToggleSelect && <span className={`row-check ${selected ? 'on' : ''}`} onClick={e => { e.stopPropagation(); onToggleSelect(e) }} role="checkbox" aria-checked={!!selected} aria-label="Select">{selected && <Icon name="check" size={11} strokeWidth={3} />}</span>}
         {has('id') && <span className="ident">{issue.identifier}</span>}
         {showTeam && team && !has('id') && <span className="team-key">{team.key}</span>}
+        <AIMark identifier={issue.identifier} />
         <span className="spacer" />
         <button type="button" className="ic-more" aria-label="Issue menu" onClick={e => { e.stopPropagation(); act.openMenu(rectOf(e.currentTarget)) }}><Icon name="more" size={14} /></button>
         {has('assignee') && <button type="button" className="cell-btn" onClick={click('assignee')} title={assignee ? assignee.name : 'Assign'}><PersonAvatar person={assignee} size={20} /></button>}

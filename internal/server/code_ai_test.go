@@ -30,6 +30,8 @@ func (f *fakeAI) server(t *testing.T) *httptest.Server {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/agent-options":
 			w.Write([]byte(`{"providers":[{"id":"claude","name":"Claude Code","available":true,"models":[{"id":"opus","name":"Opus"}],"efforts":["low","high"],"modes":[{"id":"default","name":"Ask"},{"id":"plan","name":"Plan"}],"readonly_mode":"plan","default_model":"opus"},{"id":"codex","name":"Codex","available":true,"efforts":[{"id":"high","name":"High"}],"modes":[{"id":"auto","name":"Auto"},{"id":"read-only","name":"Read only"}],"readonly_mode":"read-only"}],"accounts":[],"workspaces":[{"name":"Athena","path":"/home/a/Projects/athena"}],"default_provider":"claude","home":"/home/a"}`))
+		case r.Method == "GET" && r.URL.Path == "/api/v1/link/active":
+			w.Write([]byte(`[{"ref":"WEB-1","status":"running","thread_id":"t1","url":"https://ai.example/t/t1"}]`))
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/dirs":
 			json.NewEncoder(w).Encode(map[string]any{"path": r.URL.Query().Get("path"), "dirs": []map[string]any{{"name": "athena", "path": "/home/a/Projects/athena", "git": true}}})
 		case r.Method == "POST" && r.URL.Path == "/api/v1/link/drafts":
@@ -86,6 +88,20 @@ func TestCodeWithPocketAI(t *testing.T) {
 	ai := &fakeAI{}
 	srv := ai.server(t)
 	connectAI(t, s, alex.user.ID, srv.URL)
+
+	// live marks for lists: the person's working conversations by identifier
+	var act struct {
+		Active    []struct{ Ref, Status string } `json:"active"`
+		Connected bool                           `json:"connected"`
+	}
+	alex.do("GET", "/api/v1/ai/active", nil, 200, &act)
+	if !act.Connected || len(act.Active) != 1 || act.Active[0].Ref != "WEB-1" || act.Active[0].Status != "running" {
+		t.Fatalf("active: %+v", act)
+	}
+	ben.do("GET", "/api/v1/ai/active", nil, 200, &act) // not connected: quiet, no marks
+	if act.Connected || len(act.Active) != 0 {
+		t.Fatalf("unconnected active: %+v", act)
+	}
 
 	// folder suggestions come from Pocket AI, path passed through
 	var dirs struct {
