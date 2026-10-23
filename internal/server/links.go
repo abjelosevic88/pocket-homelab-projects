@@ -16,7 +16,7 @@ import (
 // scopes. Every route not listed in linkRoutes stays closed to it.
 
 var linkOffers = []core.Offer{
-	{Scope: "projects:read", Name: "See your projects and issues", Description: "Read your teams, issues, projects, milestones and cycles, the dates for a calendar, and what links to a contact or a note (Pocket Calendar's \"Project deadlines\", Pocket Contacts' projects of a person, Pocket Day)."},
+	{Scope: "projects:read", Name: "See your projects and issues", Description: "Read your teams, issues, projects, milestones and cycles, the dates for a calendar, and what links to a contact or a note (Pocket Calendar's \"Project deadlines\", Pocket Contacts' projects of a person, Pocket Day's work on a day)."},
 	{Scope: "projects:write", Name: "Create issues", Description: "Create issues and comments, post project updates, link pull requests to issues and add facts to a team's AI memory; change only the issues that app created itself."},
 }
 
@@ -29,6 +29,7 @@ type linkRoute struct {
 var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/auth/me$`), ""},
 	{"GET", regexp.MustCompile(`^/api/v1/(teams|issues|projects|cycles|calendar|related|search|dashboard|people|bootstrap)$`), "projects:read"},
+	{"GET", regexp.MustCompile(`^/api/v1/day/[0-9]{4}-[0-9]{2}-[0-9]{2}$`), "projects:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/(teams|issues|projects|cycles|milestones)/[A-Za-z0-9-]+(/(states|labels|members|cycles|comments|history|relations|attachments|milestones|updates|docs|links|contacts|sub-issues))?$`), "projects:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/issues$`), "projects:write"},
 	{"PATCH", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+$`), "projects:write"},

@@ -50,6 +50,8 @@ func (s *Server) teamRoutes(r chi.Router) {
 	r.Delete("/webhooks/{id}", s.handleDeleteWebhook)
 	r.Post("/webhooks/{id}/test", s.handleTestWebhook)
 	r.Get("/teams/{ref}/git", s.handleTeamGit)
+	// a person's work on one day (Pocket Day): day.go
+	r.Get("/day/{date}", s.handleDay)
 	r.Post("/teams/{ref}/git/rotate", s.handleRotateGit)
 }
 
