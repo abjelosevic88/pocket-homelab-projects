@@ -156,6 +156,7 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 		Effort       string `json:"effort"`
 		Mode         string `json:"mode"`
 		Instructions string `json:"instructions"`
+		SendNow      bool   `json:"send_now"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -194,7 +195,7 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ai.Cwd, ai.Provider, ai.AccountID, ai.Model, ai.Effort, ai.Mode = cwd, in.Provider, in.AccountID, strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort), strings.TrimSpace(in.Mode)
-	ai.Instructions = strings.TrimSpace(in.Instructions)
+	ai.Instructions, ai.SendNow = strings.TrimSpace(in.Instructions), in.SendNow
 	if err := s.store.SaveTeamAI(r.Context(), ai); err != nil {
 		s.fail(w, err, "team ai")
 		return
@@ -476,7 +477,7 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 			s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}})
 		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"url": draft.URL, "draft_id": draft.ID})
+	writeJSON(w, http.StatusCreated, map[string]any{"url": draft.URL, "draft_id": draft.ID, "send": tai.SendNow})
 }
 
 func shortCwd(p string) string {

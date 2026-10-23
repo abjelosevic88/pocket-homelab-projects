@@ -28,17 +28,6 @@ const STATUS: Record<string, { dot: 'ok' | 'warn' | 'error' | 'off'; label: stri
  *  version changes whenever the panel saw the conversation move on. */
 export type CodePanel = { open: (url: string, title: string, send?: boolean) => void; version: number }
 
-/** "Send right away": the prepared prompt is sent as the panel opens (else it waits for you). */
-const SEND_NOW = 'pp-ai-send-now'
-function useSendNow(): [boolean, (v: boolean) => void] {
-  const [v, setV] = useState(() => localStorage.getItem(SEND_NOW) === '1')
-  useEffect(() => {
-    const h = () => setV(localStorage.getItem(SEND_NOW) === '1')
-    window.addEventListener('pp-ai-send-now', h)
-    return () => window.removeEventListener('pp-ai-send-now', h)
-  }, [])
-  return [v, (on: boolean) => { localStorage.setItem(SEND_NOW, on ? '1' : '0'); window.dispatchEvent(new Event('pp-ai-send-now')) }]
-}
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
 /** The issue's conversations, live: polled every few seconds while one is working or waiting. */
@@ -75,13 +64,12 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   const navigate = useNavigate()
   const panel = useContext(CodePanelContext)
   const [busy, setBusy] = useState(false)
-  const [sendNow] = useSendNow()
-  const start = async (action: Action, note = '', send = sendNow) => {
+  const start = async (action: Action, note = '') => {
     const tab = panel ? null : window.open('about:blank', '_blank')
     setBusy(true)
     try {
-      const r = await api.post<{ url: string }>(`${V1}/issues/${issue.id}/code`, { action, note })
-      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}`, send)
+      const r = await api.post<{ url: string; send: boolean }>(`${V1}/issues/${issue.id}/code`, { action, note })
+      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}`, r.send)
       else if (tab) { tab.opener = null; tab.location.href = r.url } else window.open(r.url, '_blank', 'noopener')
       onStarted()
     } catch (e) {
@@ -94,12 +82,10 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
 }
 
 function useMenu(start: (a: Action) => void, withNote: () => void, breakdown?: () => void): MenuItem[] {
-  const [sendNow, setSendNow] = useSendNow()
   return [
     { heading: 'Code with Pocket AI' },
     ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, hint: a.id === 'investigate' ? 'read-only' : undefined, onSelect: () => start(a.id) })),
     { label: 'With a note…', icon: 'edit', onSelect: withNote },
-    { label: 'Send right away', icon: 'zap', checked: sendNow, hint: sendNow ? undefined : 'you press send', onSelect: () => setSendNow(!sendNow) },
     ...(breakdown ? ['sep' as const, { heading: 'Plan' }, { label: 'Break down into sub-issues', icon: 'subtasks', hint: 'suggests 5', onSelect: breakdown }] : []),
   ]
 }
@@ -129,7 +115,7 @@ export function CodeButton({ issue, code, onStarted, breakdown }: { issue: Issue
         <Icon name="sparkles" size={14} /><span className="hide-mobile">{busy ? 'Opening…' : 'Code'}</span>
       </button>
       {at && <Menu anchor={at} items={items} width={240} align="right" onClose={() => setAt(null)} />}
-      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, send) => { setNote(false); start(a, n, send) }} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n) => { setNote(false); start(a, n) }} />}
     </>
   )
 }
@@ -146,7 +132,7 @@ export function CodeSide({ issue, code, onStarted }: { issue: IssueDetail; code:
       <button type="button" className="side-btn" disabled={busy} onClick={e => setAt(rectOf(e.currentTarget))} title={code.detail || undefined}>
         <Icon name="code" size={15} />Code with Pocket AI…</button>
       {at && <Menu anchor={at} items={items} width={240} onClose={() => setAt(null)} />}
-      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, send) => { setNote(false); start(a, n, send) }} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n) => { setNote(false); start(a, n) }} />}
     </div>
   )
 }
@@ -181,14 +167,13 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
   )
 }
 
-function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Action, note: string, send: boolean) => void }) {
+function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Action, note: string) => void }) {
   const [action, setAction] = useState<Action>('investigate')
   const [text, setText] = useState('')
-  const [sendNow, setSendNow] = useSendNow()
   return (
     <Modal title="Code with Pocket AI" onClose={onClose} size="sm" footer={<>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn primary" onClick={() => onStart(action, text.trim(), sendNow)}><Icon name="sparkles" size={14} />Open in Pocket AI</button>
+      <button type="button" className="btn primary" onClick={() => onStart(action, text.trim())}><Icon name="sparkles" size={14} />Open in Pocket AI</button>
     </>}>
       <div className="stack">
         <div className="code-actions" role="radiogroup" aria-label="What to do">
@@ -199,7 +184,6 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
           ))}
         </div>
         <textarea autoFocus value={text} onChange={e => setText(e.target.value)} rows={4} placeholder="Anything to add, e.g. “start with the session cookie”" />
-        <label className="code-send"><input type="checkbox" checked={sendNow} onChange={e => setSendNow(e.target.checked)} />Send right away<span className="muted xsmall">{sendNow ? 'the conversation starts as the panel opens' : 'the prompt waits in the panel for you to add to and send'}</span></label>
       </div>
     </Modal>
   )

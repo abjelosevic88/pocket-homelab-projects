@@ -35,7 +35,7 @@ export function PocketAITab({ team, admin }: TabProps) {
   if (saved.error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{saved.error}</span></div>
   if (!f || !saved.data) return <Loading />
   const set = (patch: Partial<TeamAI>) => setF({ ...f, ...patch })
-  const dirty = (['cwd', 'provider', 'account_id', 'model', 'effort', 'mode', 'instructions'] as const).some(k => (f[k] ?? null) !== (saved.data![k] ?? null))
+  const dirty = (['cwd', 'provider', 'account_id', 'model', 'effort', 'mode', 'instructions', 'send_now'] as const).some(k => (f[k] ?? null) !== (saved.data![k] ?? null))
   const memDirty = memory !== saved.data.memory
 
   const save = async () => {
@@ -73,6 +73,10 @@ export function PocketAITab({ team, admin }: TabProps) {
             <Field label="Effort" group><Select label="Effort" value={f.effort} options={opts(provider?.efforts, f.effort, provider?.default_effort)} disabled={!admin} onChange={v => set({ effort: v })} /></Field>
             <Field label="Mode" group help="For Fix it and Chat; Investigate uses the read-only mode."><Select label="Mode" value={f.mode} options={opts(provider?.modes, f.mode, provider?.default_mode)} disabled={!admin} onChange={v => set({ mode: v })} /></Field>
           </div>
+          <label className="ai-send-now">
+            <input type="checkbox" checked={!!f.send_now} disabled={!admin} onChange={e => set({ send_now: e.target.checked })} />
+            <span><b>Send prompts right away</b><small className="muted">{f.send_now ? 'Investigate, Fix it and Chat start working as soon as the panel opens.' : 'The prompt waits in the panel, filled in, for you to add to and send.'}</small></span>
+          </label>
           <Field label="Instructions" help="Sent as a system prompt with every conversation of this team, not shown in the message. Conventions, how to run tests, what never to touch.">
             <textarea value={f.instructions} onChange={e => set({ instructions: e.target.value })} rows={7} disabled={!admin} spellCheck={false}
               placeholder={'Use pnpm, never npm.\nRun `make test` before committing.\nNever touch the production .env files.'} />

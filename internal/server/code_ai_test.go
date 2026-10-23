@@ -138,9 +138,10 @@ func TestCodeWithPocketAI(t *testing.T) {
 	var started struct {
 		URL     string `json:"url"`
 		DraftID string `json:"draft_id"`
+		Send    bool   `json:"send"`
 	}
 	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "investigate", "note": "Look at the session cookie first."}, 201, &started)
-	if started.URL != srv.URL+"/new?draft=d1" || started.DraftID != "d1" {
+	if started.URL != srv.URL+"/new?draft=d1" || started.DraftID != "d1" || started.Send {
 		t.Fatalf("started: %+v", started)
 	}
 	d := ai.drafts[0]
@@ -173,7 +174,13 @@ func TestCodeWithPocketAI(t *testing.T) {
 	alex.do("POST", "/api/v1/projects", map[string]any{"name": "Relaunch", "team_ids": []int64{team.ID}}, 201, &proj)
 	alex.do("PUT", "/api/v1/projects/"+strconv.FormatInt(proj.ID, 10)+"/ai", map[string]any{"cwd": "/srv/relaunch"}, 200, nil)
 	alex.do("PATCH", "/api/v1/issues/WEB-1", map[string]any{"project_id": proj.ID}, 200, nil)
-	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "fix"}, 201, nil)
+	// the team sends prompts right away: the start says so
+	alex.do("PUT", "/api/v1/teams/WEB/ai", map[string]any{"cwd": "~/Projects/web", "provider": "claude", "model": "opus", "effort": "high", "mode": "default",
+		"instructions": "Use pnpm, never npm.", "send_now": true}, 200, &tai)
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "fix"}, 201, &started)
+	if !started.Send {
+		t.Fatalf("team send_now not passed on: %+v", started)
+	}
 	d = ai.drafts[1]
 	if d["mode"] != "default" || d["cwd"] != "/srv/relaunch" || !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["text"].(string), "WEB-1 in the commit message") {
 		t.Fatalf("fix draft: %+v", d)

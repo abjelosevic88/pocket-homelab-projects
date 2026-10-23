@@ -389,8 +389,10 @@ button.ic-chip:hover { background: var(--hover); }
 .ai-dock-head { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; }
 .ai-dock-ico { color: #7c3aed; flex-shrink: 0; }
 .ai-dock.sheet { position: fixed; inset: 0; z-index: 280; border-left: 0; }
-.code-send { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; cursor: pointer; flex-wrap: wrap; }
-.code-send input { margin: 0; align-self: center; }
+.ai-send-now { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13.5px; }
+.ai-send-now input { margin: 3px 0 0; flex-shrink: 0; }
+.ai-send-now span { display: flex; flex-direction: column; gap: 2px; }
+.ai-send-now small { font-size: 12.5px; }
 
 /* Pocket AI conversations on the issue + live state */
 .code-convs { padding: 2px; }
