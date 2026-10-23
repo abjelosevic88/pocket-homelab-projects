@@ -10,7 +10,7 @@ import { ago } from '../../lib/format'
 import type { CodeThread, IssueDetail } from '../../lib/types'
 import { StatusDot } from '../../pages/settings/common'
 import { Icon } from '../icons'
-import { type Anchor, errMsg, Menu, type MenuItem, Modal, rectOf, useToast } from '../ui'
+import { type Anchor, Confirm, errMsg, Menu, type MenuItem, Modal, rectOf, useToast } from '../ui'
 
 type Action = 'investigate' | 'fix' | 'chat'
 const ACTIONS: { id: Action; label: string; icon: string; hint: string }[] = [
@@ -26,7 +26,7 @@ const STATUS: Record<string, { dot: 'ok' | 'warn' | 'error' | 'off'; label: stri
 
 /** The docked Pocket AI panel of the issue page: open(url) shows a conversation in it;
  *  version changes whenever the panel saw the conversation move on. */
-export type CodePanel = { open: (url: string, title: string, send?: boolean) => void; version: number }
+export type CodePanel = { open: (url: string, title: string, send?: boolean) => void; close?: () => void; version: number }
 
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
@@ -145,8 +145,30 @@ export function CodeSide({ issue, code, onStarted }: { issue: IssueDetail; code:
 /** The issue's conversations, on the issue itself: one click opens it in the panel. */
 export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail; code: IssueCode; openUrl?: string }) {
   const panel = useContext(CodePanelContext)
+  const { toast } = useToast()
+  const [menu, setMenu] = useState<{ t: CodeThread; anchor: Anchor } | null>(null)
+  const [deleting, setDeleting] = useState<CodeThread | null>(null)
   const list = visible(code.list)
   if (!list.length) return null
+  const nameOf = (t: CodeThread) => t.title.replace(`${issue.identifier} · `, '') || issue.identifier
+  const act = async (t: CodeThread, how: 'unlink' | 'delete') => {
+    try {
+      if (how === 'unlink') await api.post(`${V1}/issues/${issue.id}/code/${encodeURIComponent(t.draft_id)}/unlink`)
+      else await api.del(`${V1}/issues/${issue.id}/code/${encodeURIComponent(t.draft_id)}`)
+      // the docked panel showing it closes with it
+      if (panel && openUrl && (openUrl === t.url || openUrl.split('?')[0] === t.url.split('?')[0])) panel.close?.()
+      toast(how === 'unlink' ? 'Removed from the issue — it stays in Pocket AI' : t.status === 'draft' ? 'Draft deleted' : 'Conversation deleted')
+      code.reload()
+    } catch (e) { toast(errMsg(e), 'err') }
+  }
+  const items = (t: CodeThread): MenuItem[] => [
+    { label: 'Open', icon: 'sparkles', onSelect: () => panel ? panel.open(t.url, `${issue.identifier} · ${t.action || nameOf(t)}`) : window.open(t.url, '_blank', 'noopener') },
+    { label: 'Open in Pocket AI', icon: 'external', onSelect: () => window.open(t.url, '_blank', 'noopener') },
+    { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard.writeText(t.url).then(() => toast('Link copied'), () => toast('Could not copy', 'err')) } },
+    'sep',
+    ...(t.status === 'draft' ? [] : [{ label: 'Remove from issue', icon: 'x', hint: 'stays in Pocket AI', onSelect: () => act(t, 'unlink') }]),
+    { label: t.status === 'draft' ? 'Delete draft' : 'Delete conversation…', icon: 'trash', danger: true, onSelect: () => t.status === 'draft' ? act(t, 'delete') : setDeleting(t) },
+  ]
   const shown = (u: string) => !!openUrl && (openUrl === u || openUrl.split('?')[0] === u.split('?')[0])
   return (
     <section className="ip-sec">
@@ -156,7 +178,8 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
           const st = STATUS[t.status] || { dot: 'off' as const, label: t.status }
           const name = t.title.replace(`${issue.identifier} · `, '') || issue.identifier
           return (
-            <a key={t.draft_id} className={`code-conv ${t.status} ${shown(t.url) ? 'on' : ''}`} href={t.url} target="_blank" rel="noreferrer"
+            <a key={t.draft_id} className={`code-conv ${t.status} ${shown(t.url) ? 'on' : ''} ${menu?.t.draft_id === t.draft_id ? 'menu-open' : ''}`} href={t.url} target="_blank" rel="noreferrer"
+              onContextMenu={e => { e.preventDefault(); setMenu({ t, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}
               onClick={e => { if (panel && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); panel.open(t.url, `${issue.identifier} · ${t.action || name}`) } }}>
               {t.status === 'running' || t.status === 'waiting' ? <span className={`code-pulse ${t.status}`} /> : <StatusDot status={st.dot} title={st.label} />}
               <span className="code-conv-action">{t.action || 'Pocket AI'}</span>
@@ -168,6 +191,10 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
           )
         })}
       </div>
+      {menu && <Menu items={items(menu.t)} anchor={menu.anchor} onClose={() => setMenu(null)} width={240} />}
+      {deleting && <Confirm title="Delete this conversation?" confirmLabel="Delete"
+        message={<>“{deleting.title}” is deleted in Pocket AI with everything said in it{deleting.status === 'running' || deleting.status === 'waiting' ? '; the agent working in it stops' : ''}. Commits and files it already changed in the code stay as they are.</>}
+        onCancel={() => setDeleting(null)} onConfirm={() => { const t = deleting; setDeleting(null); act(t, 'delete') }} />}
     </section>
   )
 }

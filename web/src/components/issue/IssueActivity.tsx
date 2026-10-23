@@ -74,6 +74,8 @@ export function historySentence(h: History, isMe: (id: number | null) => boolean
     case 'git_commit': return <>linked the commit <B>{to}</B></>
     case 'git_pull_request': return <>linked the pull request <B>{to}</B></>
     case 'ai_thread': return <>started a conversation in <B>{to}</B></>
+    case 'ai_thread_removed': return <>took the conversation <B>{from}</B> off the issue</>
+    case 'ai_thread_deleted': return <>deleted the conversation <B>{from}</B></>
     case 'deleted': return <>moved the issue to the trash</>
     case 'restored': return <>restored the issue</>
     default: return <>changed {h.field.replace(/_/g, ' ')}{to ? <> to <B>{to}</B></> : null}</>

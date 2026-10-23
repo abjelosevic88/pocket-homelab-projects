@@ -19,9 +19,10 @@ import (
 
 // fakeAI answers Pocket AI's link API and records the drafts it got.
 type fakeAI struct {
-	mu     sync.Mutex
-	drafts []map[string]any
-	auth   string
+	mu      sync.Mutex
+	drafts  []map[string]any
+	actions []string // unlink / delete calls
+	auth    string
 }
 
 func (f *fakeAI) server(t *testing.T) *httptest.Server {
@@ -45,6 +46,9 @@ func (f *fakeAI) server(t *testing.T) *httptest.Server {
 			f.drafts = append(f.drafts, body)
 			w.WriteHeader(201)
 			json.NewEncoder(w).Encode(map[string]string{"id": "d1", "url": "/new?draft=d1"})
+		case strings.HasPrefix(r.URL.Path, "/api/v1/link/threads/d"):
+			f.actions = append(f.actions, r.Method+" "+r.URL.Path)
+			w.WriteHeader(204)
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/threads":
 			if r.URL.Query().Get("ref") != "WEB-1" || r.URL.Query().Get("source") != "projects" {
 				w.Write([]byte(`[]`))
@@ -222,6 +226,12 @@ func TestCodeWithPocketAI(t *testing.T) {
 	}
 	if txt := d["text"].(string); !strings.Contains(txt, "### Attached files (sent with this message)\n- CleanShot 15.04.43@2x.png") || !strings.Contains(txt, "https://example.com/spec") {
 		t.Fatalf("prompt does not list the attachments:\n%s", txt)
+	}
+	// right-click on a conversation: remove it from the issue, or delete it in Pocket AI
+	alex.do("POST", "/api/v1/issues/WEB-1/code/d1/unlink", nil, 204, nil)
+	alex.do("DELETE", "/api/v1/issues/WEB-1/code/d1", nil, 204, nil)
+	if len(ai.actions) != 2 || ai.actions[0] != "POST /api/v1/link/threads/d1/unlink" || ai.actions[1] != "DELETE /api/v1/link/threads/d1" {
+		t.Fatalf("pocket ai calls: %v", ai.actions)
 	}
 	// after a pull request: link it, comment, follow-ups — with the issue's numeric id, either way
 	for _, i := range []int{1, 2} {

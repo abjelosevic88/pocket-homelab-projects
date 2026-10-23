@@ -397,7 +397,7 @@ button.ic-chip:hover { background: var(--hover); }
 /* Pocket AI conversations on the issue + live state */
 .code-convs { padding: 2px; }
 .code-conv { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 13.5px; min-width: 0; }
-.code-conv:hover { background: var(--hover); }
+.code-conv:hover, .code-conv.menu-open { background: var(--hover); }
 .code-conv.on { background: var(--accent-soft, var(--hover)); }
 .code-conv .set-status { margin: 0 3px; flex-shrink: 0; }
 .code-conv-action { font-weight: 600; flex-shrink: 0; }

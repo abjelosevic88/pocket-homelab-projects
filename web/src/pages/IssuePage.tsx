@@ -46,7 +46,7 @@ export default function IssuePage() {
   useEffect(() => setDock(null), [ref])
   const code = useIssueCode(d, dockVersion)
   const breakdownRef = useRef<(() => void) | null>(null)
-  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => setDock({ url, title, send, key: Date.now() }), version: dockVersion }), [dockVersion])
+  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => setDock({ url, title, send, key: Date.now() }), close: () => setDock(null), version: dockVersion }), [dockVersion])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps

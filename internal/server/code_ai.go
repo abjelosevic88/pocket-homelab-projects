@@ -38,6 +38,8 @@ func (s *Server) codeRoutes(r chi.Router) {
 	r.Put("/projects/{id}/ai", s.handlePutProjectAI)
 	r.Get("/issues/{ref}/code", s.handleIssueCode)
 	r.Post("/issues/{ref}/code", s.handleStartCode)
+	r.Post("/issues/{ref}/code/{draft}/unlink", s.handleCodeUnlink)
+	r.Delete("/issues/{ref}/code/{draft}", s.handleCodeDelete)
 }
 
 var aiApp, _ = pocketApp("ai")
@@ -739,4 +741,43 @@ func teamKeyOf(ident string) string {
 		return ident[:i]
 	}
 	return ident
+}
+
+// handleCodeUnlink takes one of the person's conversations off the issue
+// ("Remove from issue"); it stays in Pocket AI.
+func (s *Server) handleCodeUnlink(w http.ResponseWriter, r *http.Request) {
+	s.codeConversationAction(w, r, http.MethodPost, "/unlink", "ai_thread_removed")
+}
+
+// handleCodeDelete deletes one of the person's conversations in Pocket AI
+// (its agent stops if it is working).
+func (s *Server) handleCodeDelete(w http.ResponseWriter, r *http.Request) {
+	s.codeConversationAction(w, r, http.MethodDelete, "", "ai_thread_deleted")
+}
+
+func (s *Server) codeConversationAction(w http.ResponseWriter, r *http.Request, method, suffix, field string) {
+	ctx := r.Context()
+	a := s.accessOf(r)
+	is, err := s.loadIssue(r, a, chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	sb, err := s.aiSibling(ctx)
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	draft := chi.URLParam(r, "draft")
+	// Pocket AI answers only for the person's own conversations from Projects
+	if err := sb.call(ctx, method, "/api/v1/link/threads/"+url.PathEscape(draft)+suffix, nil, nil); err != nil {
+		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
+		return
+	}
+	if att, err := s.store.FindAttachment(ctx, is.ID, "ai", draft); err == nil {
+		_ = s.store.DeleteAttachment(ctx, att.ID)
+		_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: ptr(me(r)), Field: field, FromLabel: att.Title})
+	}
+	s.changed(r, "issue", []int64{is.TeamID}, is.ID)
+	w.WriteHeader(http.StatusNoContent)
 }
