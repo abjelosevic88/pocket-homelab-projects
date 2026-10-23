@@ -2,7 +2,39 @@
 <h1 align="center">Pocket Projects</h1>
 <p align="center">Self-hosted, Linear-style project tracking for a household or a small team: issues, a kanban board, projects with milestones and status updates, cycles and a roadmap — connected to your calendar, contacts, to-dos and Pocket AI.<br>One Go binary, one SQLite file, one volume.</p>
 
-<!-- screenshots -->
+<p align="center"><img src="docs/screenshots/board.png" width="900" alt="The kanban board of a team"></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/issue.png" alt="An issue with its properties, checklist and discussion"></td>
+    <td width="50%"><img src="docs/screenshots/project.png" alt="A project with progress, milestones and properties"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Issues with every property one keystroke away.</sub></td>
+    <td align="center"><sub>Projects with milestones, health and progress.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/roadmap.png" alt="The roadmap timeline"></td>
+    <td width="50%"><img src="docs/screenshots/insights.png" alt="Insights charts"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A roadmap you can drag.</sub></td>
+    <td align="center"><sub>Insights: flow, velocity, lead and cycle time.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/list.png" alt="The issue list grouped by status"></td>
+    <td width="50%"><img src="docs/screenshots/board-dark.png" alt="Dark mode"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Lists grouped and filtered any way.</sub></td>
+    <td align="center"><sub>Dark mode.</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/phone-my-issues.png" width="240" alt="My issues on a phone">&nbsp;&nbsp;
+  <img src="docs/screenshots/phone-issue.png" width="240" alt="An issue on a phone">
+</p>
 
 ## What it does
 
