@@ -85,45 +85,116 @@ func (s *Server) handleLinkPR(w http.ResponseWriter, r *http.Request) {
 // reads its status now when the team has a token). Also used when a PR
 // address is pasted with Attachments → Link.
 func (s *Server) linkPR(w http.ResponseWriter, r *http.Request, is *store.Issue, prURL, title, branch, repo string, number int) {
-	ctx := r.Context()
-	in := struct {
-		URL, Title, Branch, Repo string
-		Number                   int
-	}{prURL, title, branch, repo, number}
-	ref, ok := parsePRURL(in.URL)
-	if ok {
-		if in.Number == 0 {
-			in.Number = ref.Number
+	saved := s.attachPR(r.Context(), is, s.actorOf(r), me(r), prURL, title, branch, repo, number)
+	if saved == nil {
+		writeErr(w, http.StatusInternalServerError, "could not save the pull request")
+		return
+	}
+	writeJSON(w, http.StatusCreated, saved)
+}
+
+// attachPR saves a pull request on an issue as the git webhook would, moves
+// the issue to review while it is open and reads its real status when the
+// team has a token. Used by link_pr, pasted links and PRs found in Pocket AI
+// conversations.
+func (s *Server) attachPR(ctx context.Context, is *store.Issue, who actor, uid int64, prURL, title, branch, repo string, number int) *store.Attachment {
+	if ref, ok := parsePRURL(prURL); ok {
+		if number == 0 {
+			number = ref.Number
 		}
-		if in.Repo == "" {
-			in.Repo = ref.fullName()
+		if repo == "" {
+			repo = ref.fullName()
 		}
 	}
-	name := firstNonEmpty(strings.TrimSpace(in.Title), fmt.Sprintf("%s #%d", firstNonEmpty(in.Repo, "Pull request"), in.Number))
-	sub := firstNonEmpty(in.Repo, "Pull request")
-	if in.Number > 0 {
-		sub += " #" + strconv.Itoa(in.Number)
+	name := firstNonEmpty(strings.TrimSpace(title), fmt.Sprintf("%s #%d", firstNonEmpty(repo, "Pull request"), number))
+	sub := firstNonEmpty(repo, "Pull request")
+	if number > 0 {
+		sub += " #" + strconv.Itoa(number)
 	}
-	meta, _ := json.Marshal(map[string]any{"number": in.Number, "branch": in.Branch, "repo": in.Repo, "linked": true})
-	att := &store.Attachment{Kind: "pull_request", Title: name, Subtitle: sub + " · open", URL: in.URL, ExtApp: "git", ExtID: in.URL,
-		State: "open", Meta: meta, CreatedBy: ptr(me(r))}
-	if old, err := s.store.FindAttachment(ctx, is.ID, "git", in.URL); err == nil && old.State != "" && old.State != "open" {
+	meta, _ := json.Marshal(map[string]any{"number": number, "branch": branch, "repo": repo, "linked": true})
+	att := &store.Attachment{Kind: "pull_request", Title: name, Subtitle: sub + " · open", URL: prURL, ExtApp: "git", ExtID: prURL,
+		State: "open", Meta: meta, CreatedBy: ptr(uid)}
+	if old, err := s.store.FindAttachment(ctx, is.ID, "git", prURL); err == nil && old.State != "" && old.State != "open" {
 		att.State, att.Subtitle = old.State, sub+" · "+old.State // already known as merged / closed / draft
 	}
 	s.attachGit(ctx, is, att)
 	if att.State == "open" {
-		s.gitMove(ctx, s.actorOf(r), is, "review")
+		s.gitMove(ctx, who, is, "review")
 	}
-	// read its real status now when the team has a token
 	if s.store.TeamGitHubToken(ctx, is.TeamID) != "" {
 		s.checkPRs(ctx, 0, is.ID)
 	}
-	saved, err := s.store.FindAttachment(ctx, is.ID, "git", in.URL)
+	saved, err := s.store.FindAttachment(ctx, is.ID, "git", prURL)
 	if err != nil {
-		s.fail(w, err, "attachment")
+		return nil
+	}
+	return saved
+}
+
+// adoptAgentPRs attaches the pull requests a person's Pocket AI conversations
+// opened to their issues (the agent may never have called link_pr).
+func (s *Server) adoptAgentPRs(ctx context.Context, u *store.User) (n int) {
+	sb, err := s.siblingFor(ctx, u, aiApp)
+	if err != nil {
+		return 0
+	}
+	var prs []struct {
+		Ref string `json:"ref"`
+		URL string `json:"url"`
+	}
+	if err := sb.call(ctx, http.MethodGet, "/api/v1/link/prs?source=projects", nil, &prs); err != nil {
+		return 0
+	}
+	for _, p := range prs {
+		if s.adoptPR(ctx, u, p.Ref, p.URL) {
+			n++
+		}
+	}
+	return n
+}
+
+// adoptPR attaches one PR found in a conversation unless the issue has it already.
+func (s *Server) adoptPR(ctx context.Context, u *store.User, ident, prURL string) bool {
+	if _, ok := parsePRURL(prURL); !ok {
+		return false
+	}
+	id, err := s.store.IssueIDByIdentifier(ctx, ident)
+	if err != nil {
+		return false
+	}
+	if _, err := s.store.FindAttachment(ctx, id, "git", prURL); err == nil {
+		return false
+	}
+	is, err := s.store.GetIssue(ctx, id, u.ID)
+	if err != nil {
+		return false
+	}
+	return s.attachPR(ctx, is, actor{id: u.ID, app: "ai", name: "Pocket AI"}, u.ID, prURL, "", "", "", 0) != nil
+}
+
+// agentPRJob: every few minutes, for everyone who started a code conversation
+// in the last 30 days, attach the PRs those conversations opened.
+func (s *Server) agentPRJob(ctx context.Context) {
+	rows, err := s.store.DB.QueryContext(ctx, `SELECT DISTINCT created_by FROM attachments WHERE kind = 'ai_thread' AND created_by IS NOT NULL AND created_at > ?`,
+		time.Now().AddDate(0, 0, -30).UTC().Format(time.RFC3339))
+	if err != nil {
 		return
 	}
-	writeJSON(w, http.StatusCreated, saved)
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			ids = append(ids, id)
+		}
+	}
+	rows.Close()
+	for _, id := range ids {
+		if u, err := s.store.GetUser(ctx, id); err == nil {
+			if n := s.adoptAgentPRs(ctx, u); n > 0 {
+				s.log.Info("attached pull requests from Pocket AI conversations", "user", id, "count", n)
+			}
+		}
+	}
 }
 
 func (s *Server) handleGetGitToken(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +255,10 @@ func (s *Server) handleRefreshPRStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // prJob runs from jobs every five minutes.
-func (s *Server) prJob(ctx context.Context) { s.checkPRs(ctx, 0, 0) }
+func (s *Server) prJob(ctx context.Context) {
+	s.agentPRJob(ctx)
+	s.checkPRs(ctx, 0, 0)
+}
 
 var prCheckMu sync.Mutex
 

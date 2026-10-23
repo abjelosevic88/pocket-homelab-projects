@@ -30,6 +30,8 @@ func (f *fakeAI) server(t *testing.T) *httptest.Server {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/agent-options":
 			w.Write([]byte(`{"providers":[{"id":"claude","name":"Claude Code","available":true,"models":[{"id":"opus","name":"Opus"}],"efforts":["low","high"],"modes":[{"id":"default","name":"Ask"},{"id":"plan","name":"Plan"}],"readonly_mode":"plan","default_model":"opus"},{"id":"codex","name":"Codex","available":true,"efforts":[{"id":"high","name":"High"}],"modes":[{"id":"auto","name":"Auto"},{"id":"read-only","name":"Read only"}],"readonly_mode":"read-only"}],"accounts":[],"workspaces":[{"name":"Athena","path":"/home/a/Projects/athena"}],"default_provider":"claude","home":"/home/a"}`))
+		case r.Method == "GET" && r.URL.Path == "/api/v1/link/prs":
+			w.Write([]byte(`[{"ref":"WEB-1","url":"https://github.com/acme/web/pull/100","thread_id":"t1"},{"ref":"WEB-1","url":"https://github.com/acme/web/pull/99","thread_id":"t1"}]`))
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/active":
 			w.Write([]byte(`[{"ref":"WEB-1","status":"running","thread_id":"t1","url":"https://ai.example/t/t1"}]`))
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/dirs":
@@ -45,7 +47,7 @@ func (f *fakeAI) server(t *testing.T) *httptest.Server {
 				w.Write([]byte(`[]`))
 				return
 			}
-			w.Write([]byte(`[{"draft_id":"d1","thread_id":"t1","title":"WEB-1 · Fix login","status":"running","url":"https://ai.example/t/t1"}]`))
+			w.Write([]byte(`[{"draft_id":"d1","thread_id":"t1","title":"WEB-1 · Fix login","status":"running","url":"https://ai.example/t/t1","pull_requests":["https://github.com/acme/web/pull/99"]}]`))
 		default:
 			w.WriteHeader(404)
 		}
@@ -208,6 +210,16 @@ func TestCodeWithPocketAI(t *testing.T) {
 	alex.do("GET", "/api/v1/issues/WEB-1/code", nil, 200, &codes)
 	if !codes.Connected || len(codes.Threads) != 1 || codes.Threads[0].Status != "running" {
 		t.Fatalf("threads: %+v", codes)
+	}
+	// the PR that conversation opened was attached when the list was read
+	if pr, err := s.store.FindAttachment(context.Background(), is.ID, "git", "https://github.com/acme/web/pull/99"); err != nil || pr.Kind != "pull_request" || pr.State != "open" {
+		t.Fatalf("PR from the conversation: %+v %v", pr, err)
+	}
+	// the background sweep attaches PRs from conversations nobody is looking at (once)
+	s.agentPRJob(context.Background())
+	s.agentPRJob(context.Background())
+	if pr, err := s.store.FindAttachment(context.Background(), is.ID, "git", "https://github.com/acme/web/pull/100"); err != nil || pr.Kind != "pull_request" {
+		t.Fatalf("PR from the sweep: %+v %v", pr, err)
 	}
 	att, err := s.store.FindAttachment(context.Background(), is.ID, "ai", "d1")
 	if err != nil || att.Kind != "ai_thread" || att.State != "running" || att.URL != "https://ai.example/t/t1" {

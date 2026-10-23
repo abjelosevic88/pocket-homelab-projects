@@ -319,14 +319,16 @@ func (s *Server) handlePutProjectAI(w http.ResponseWriter, r *http.Request) {
 // ---------- conversations of an issue ----------
 
 type codeThread struct {
-	DraftID   string `json:"draft_id"`
-	ThreadID  string `json:"thread_id"`
-	Title     string `json:"title"`
-	Status    string `json:"status"`
-	Action    string `json:"action"` // Investigate, Fix it, Chat (from the issue's attachment)
-	URL       string `json:"url"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	DraftID  string `json:"draft_id"`
+	ThreadID string `json:"thread_id"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`
+	Action   string `json:"action"` // Investigate, Fix it, Chat (from the issue's attachment)
+	// PullRequests the conversation opened (reported by Pocket AI)
+	PullRequests []string `json:"pull_requests"`
+	URL          string   `json:"url"`
+	CreatedAt    string   `json:"created_at"`
+	UpdatedAt    string   `json:"updated_at"`
 }
 
 func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
@@ -367,6 +369,14 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 				att.URL = t.URL
 			}
 			_ = s.store.SaveAttachment(ctx, att)
+		}
+	}
+	// PRs the agent opened are attached right away (people who may edit the issue)
+	if _, err := s.loadIssue(r, a, chi.URLParam(r, "ref"), needWrite); err == nil {
+		for _, t := range list {
+			for _, u := range t.PullRequests {
+				s.adoptPR(ctx, userFrom(ctx), is.Identifier, u)
+			}
 		}
 	}
 	out["threads"], out["connected"] = list, true
@@ -629,8 +639,8 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (titl
 		fmt.Fprintf(&sys, "\n## Commits and pull requests\nKeep Pocket Projects out of the repository: do not mention %s, its URL, Pocket Projects, any internal id or who asked in branch names, commit messages, pull request titles or descriptions, or code comments. Write them for a reviewer who has never seen the ticket.\n", ci.Identifier)
 	}
 	// About the ticket, not the repository: always, whatever link_refs says
-	fmt.Fprintf(&sys, "\n## After you open a pull request\nUpdate the ticket with the Pocket Projects tools, each write small (they wait for the person's approval):\n"+
-		"1. Link it: pocket_projects_link_pr with id %[1]d and the pull request's url (plus title, branch, repo, number). Pocket Projects then follows it and completes the issue when it is merged.\n"+
+	fmt.Fprintf(&sys, "\n## After you open a pull request\nThen update the ticket with the Pocket Projects tools (search for pocket_projects_ tools if they are not loaded yet), each write small (they wait for the person's approval):\n"+
+		"1. Link it: pocket_projects_link_pr with id %[1]d and the pull request's url (plus title, branch, repo, number). Pocket Projects also picks up PRs opened in this conversation by itself, so if that tool is missing just carry on; it follows the PR and completes the issue when it is merged.\n"+
 		"2. Post one comment with pocket_projects_comment (id %[1]d): what changed, how it was tested, and what is NOT done.\n"+
 		"3. Turn concrete follow-ups into sub-issues with pocket_projects_create_issue (parent_id %[1]d, team %[2]s); for small items append a \"- [ ] …\" checklist to the description with pocket_projects_update_issue instead (if that is refused, put the checklist in the comment).\n", ci.ID, teamKeyOf(ci.Identifier))
 	if ins := strings.TrimSpace(tai.Instructions); ins != "" {
