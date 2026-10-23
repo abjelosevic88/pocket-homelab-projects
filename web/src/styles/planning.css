@@ -303,8 +303,8 @@
 .cal-chip.event:hover { background: var(--hover); }
 .cal-chip.event.allday { background: color-mix(in srgb, var(--ec) 14%, transparent); }
 .cal-time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.cal-more { z-index: 1; border: 0; background: none; text-align: left; padding: 1px 6px; font-size: 11.5px; color: var(--muted); cursor: pointer; border-radius: 5px; }
-.cal-more:hover { background: var(--hover); color: var(--text); }
+.calp-more { z-index: 1; border: 0; background: none; text-align: left; padding: 1px 6px; font-size: 11.5px; color: var(--muted); cursor: pointer; border-radius: 5px; }
+.calp-more:hover { background: var(--hover); color: var(--text); }
 .cal-cycle { z-index: 1; display: flex; align-items: center; gap: 5px; min-width: 0; margin: 0 3px; padding: 0 7px; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--ic) 20%, var(--bg)); color: color-mix(in srgb, var(--ic) 50%, var(--text)); font-size: 11.5px; font-weight: 600; cursor: pointer; text-align: left; }
 .cal-cycle:hover { background: color-mix(in srgb, var(--ic) 26%, var(--bg)); }
 .cal-cycle.done { opacity: .6; }

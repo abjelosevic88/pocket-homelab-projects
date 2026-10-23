@@ -171,7 +171,7 @@ export default function CalendarPage() {
                     return (
                       <div key={'c' + d} className="cal-items" style={{ gridColumn: i + 1, gridRow: nLanes + 2 }}>
                         {shown.map((e, k) => chip(e, k, true))}
-                        {list.length > shown.length && <button type="button" className="cal-more" onClick={ev => setDayPop({ day: d, at: rectOf(ev.currentTarget) })}>+{list.length - shown.length} more</button>}
+                        {list.length > shown.length && <button type="button" className="calp-more" onClick={ev => setDayPop({ day: d, at: rectOf(ev.currentTarget) })}>+{list.length - shown.length} more</button>}
                       </div>
                     )
                   })}
