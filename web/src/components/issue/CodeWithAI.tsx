@@ -72,7 +72,8 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
     const tab = panel ? null : window.open('about:blank', '_blank')
     setBusy(true)
     try {
-      const r = await api.post<{ url: string; send: boolean }>(`${V1}/issues/${issue.id}/code`, { action, note })
+      const r = await api.post<{ url: string; send: boolean; files?: number; skipped?: string[] }>(`${V1}/issues/${issue.id}/code`, { action, note })
+      if (r.skipped?.length) toast(`Not sent to the agent: ${r.skipped.join(', ')} (it can only take pictures and documents with text, up to 20 MB each)`, 'err')
       if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}`, r.send)
       else if (tab) { tab.opener = null; tab.location.href = r.url } else window.open(r.url, '_blank', 'noopener')
       onStarted()

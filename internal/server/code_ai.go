@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 
@@ -383,6 +384,21 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
+// codeFile is a file attached to the issue; it goes to Pocket AI with the
+// draft, so the agent sees the screenshots and reads the documents.
+type codeFile struct {
+	Name, Mime, Path string
+	Size             int64
+	Sent             bool // within the limits below
+}
+
+// What goes along: Pocket AI takes 8 files per draft and 20 MB per file.
+const (
+	codeMaxFiles     = 8
+	codeMaxFileBytes = 20 << 20
+	codeMaxAllBytes  = 60 << 20
+)
+
 var codeActions = map[string]string{"investigate": "Investigate", "fix": "Fix it", "chat": "Chat"}
 
 // codeIssue is everything the prompt says about an issue.
@@ -392,6 +408,8 @@ type codeIssue struct {
 	SubIssues                                                              []string
 	Comments                                                               []string // "Name (date): body"
 	Git                                                                    []string // "commit abc123 on branch x: title"
+	Links                                                                  []string // other attachments: "Title — URL"
+	Files                                                                  []codeFile
 	Team, Cwd                                                              string
 	ID                                                                     int64
 }
@@ -460,6 +478,22 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai)
 	body := map[string]any{"cwd": cwd, "title": title, "text": text, "system": system, "source": "projects",
 		"ref": is.Identifier, "ref_url": ci.URL, "ref_label": is.Identifier + " " + is.Title}
+	// the issue's files: screenshots the agent looks at, documents it reads
+	files := []map[string]any{}
+	for _, f := range ci.Files {
+		if !f.Sent {
+			continue
+		}
+		data, err := os.ReadFile(f.Path)
+		if err != nil {
+			s.log.Warn("code: attachment unreadable", "issue", is.Identifier, "file", f.Name, "err", err)
+			continue
+		}
+		files = append(files, map[string]any{"name": f.Name, "data": data})
+	}
+	if len(files) > 0 {
+		body["files"] = files
+	}
 	for k, v := range map[string]string{"provider": tai.Provider, "model": tai.Model, "effort": tai.Effort, "mode": mode} {
 		if v != "" {
 			body[k] = v
@@ -469,8 +503,13 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 		body["account_id"] = *tai.AccountID
 	}
 	var draft struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
+		ID    string `json:"id"`
+		URL   string `json:"url"`
+		Files []struct {
+			Name  string `json:"name"`
+			OK    bool   `json:"ok"`
+			Error string `json:"error"`
+		} `json:"files"`
 	}
 	if err := sb.call(ctx, http.MethodPost, "/api/v1/link/drafts", body, &draft); err != nil {
 		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
@@ -488,7 +527,20 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 			s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}})
 		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"url": draft.URL, "draft_id": draft.ID, "send": tai.SendNow})
+	sent, skipped := 0, []string{} // skipped: files Pocket AI could not read (an archive, a scanned PDF…) or too large
+	for _, f := range draft.Files {
+		if f.OK {
+			sent++
+		} else {
+			skipped = append(skipped, f.Name)
+		}
+	}
+	for _, f := range ci.Files {
+		if !f.Sent {
+			skipped = append(skipped, f.Name)
+		}
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"url": draft.URL, "draft_id": draft.ID, "send": tai.SendNow, "files": sent, "skipped": skipped})
 }
 
 func shortCwd(p string) string {
@@ -549,8 +601,23 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 		ci.Comments = append(ci.Comments, fmt.Sprintf("%s (%s): %s", who, strings.SplitN(c.CreatedAt, "T", 2)[0], clip(strings.TrimSpace(c.Body), 3000)))
 	}
 	atts, _ := s.store.Attachments(ctx, is.ID, 0)
+	total := int64(0)
 	for _, att := range atts {
-		if att.Kind != "commit" && att.Kind != "pull_request" {
+		switch att.Kind {
+		case "file":
+			f := codeFile{Name: firstNonEmpty(att.FileName, att.Title), Mime: att.Mime, Path: s.filePath(&att), Size: att.Size}
+			if len(ci.Files) < codeMaxFiles && f.Size <= codeMaxFileBytes && total+f.Size <= codeMaxAllBytes {
+				f.Sent, total = true, total+f.Size
+			}
+			ci.Files = append(ci.Files, f)
+			continue
+		case "commit", "pull_request":
+		case "ai_thread":
+			continue
+		default:
+			if att.URL != "" {
+				ci.Links = append(ci.Links, strings.TrimSpace(firstNonEmpty(att.Title, att.Kind)+" — "+att.URL))
+			}
 			continue
 		}
 		var meta struct {
@@ -626,6 +693,17 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (titl
 	}
 	section("Sub-issues", ci.SubIssues)
 	section("Linked commits and pull requests", ci.Git)
+	var files, left []string
+	for _, f := range ci.Files {
+		if f.Sent {
+			files = append(files, f.Name)
+		} else {
+			left = append(left, f.Name+" (too large to send; open it on the issue)")
+		}
+	}
+	section("Attached files (sent with this message)", files)
+	section("Attached files not sent", left)
+	section("Links", ci.Links)
 	section("Latest comments", ci.Comments)
 	text = strings.TrimSpace(b.String())
 

@@ -1,8 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -196,6 +199,29 @@ func TestCodeWithPocketAI(t *testing.T) {
 	d = ai.drafts[2]
 	if !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["system"].(string), "Resolves WEB-1 (") || strings.Contains(d["system"].(string), "Keep Pocket Projects out") {
 		t.Fatalf("fix draft (refs on): %+v", d)
+	}
+	// the issue's files go along (the agent sees screenshots, reads documents); links are listed
+	var mp bytes.Buffer
+	mw := multipart.NewWriter(&mp)
+	fw, _ := mw.CreateFormFile("file", "CleanShot 15.04.43@2x.png")
+	fw.Write([]byte("\x89PNG\r\n\x1a\nfake"))
+	mw.Close()
+	if code, b := alex.raw("POST", "/api/v1/issues/WEB-1/attachments", mw.FormDataContentType(), mp.Bytes()); code != 201 {
+		t.Fatalf("upload: %d %s", code, b)
+	}
+	alex.do("POST", "/api/v1/issues/WEB-1/attachments", map[string]any{"url": "https://example.com/spec"}, 201, nil)
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "chat"}, 201, nil)
+	d = ai.drafts[len(ai.drafts)-1]
+	files, _ := d["files"].([]any)
+	if len(files) != 1 {
+		t.Fatalf("files not sent: %+v", d["files"])
+	}
+	f0 := files[0].(map[string]any)
+	if raw, _ := base64.StdEncoding.DecodeString(f0["data"].(string)); f0["name"] != "CleanShot 15.04.43@2x.png" || !bytes.HasPrefix(raw, []byte("\x89PNG")) {
+		t.Fatalf("file: %v", f0["name"])
+	}
+	if txt := d["text"].(string); !strings.Contains(txt, "### Attached files (sent with this message)\n- CleanShot 15.04.43@2x.png") || !strings.Contains(txt, "https://example.com/spec") {
+		t.Fatalf("prompt does not list the attachments:\n%s", txt)
 	}
 	// after a pull request: link it, comment, follow-ups — with the issue's numeric id, either way
 	for _, i := range []int{1, 2} {
