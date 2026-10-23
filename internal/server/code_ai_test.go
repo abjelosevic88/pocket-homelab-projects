@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +30,8 @@ func (f *fakeAI) server(t *testing.T) *httptest.Server {
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/agent-options":
 			w.Write([]byte(`{"providers":[{"id":"claude","name":"Claude Code","available":true,"models":[{"id":"opus","name":"Opus"}],"efforts":["low","high"],"modes":[{"id":"default","name":"Ask"},{"id":"plan","name":"Plan"}],"readonly_mode":"plan","default_model":"opus"},{"id":"codex","name":"Codex","available":true,"efforts":[{"id":"high","name":"High"}],"modes":[{"id":"auto","name":"Auto"},{"id":"read-only","name":"Read only"}],"readonly_mode":"read-only"}],"accounts":[],"workspaces":[{"name":"Athena","path":"/home/a/Projects/athena"}],"default_provider":"claude","home":"/home/a"}`))
+		case r.Method == "GET" && r.URL.Path == "/api/v1/link/dirs":
+			json.NewEncoder(w).Encode(map[string]any{"path": r.URL.Query().Get("path"), "dirs": []map[string]any{{"name": "athena", "path": "/home/a/Projects/athena", "git": true}}})
 		case r.Method == "POST" && r.URL.Path == "/api/v1/link/drafts":
 			var body map[string]any
 			json.NewDecoder(r.Body).Decode(&body)
@@ -83,6 +86,16 @@ func TestCodeWithPocketAI(t *testing.T) {
 	ai := &fakeAI{}
 	srv := ai.server(t)
 	connectAI(t, s, alex.user.ID, srv.URL)
+
+	// folder suggestions come from Pocket AI, path passed through
+	var dirs struct {
+		Path string                        `json:"path"`
+		Dirs []struct{ Name, Path string } `json:"dirs"`
+	}
+	alex.do("GET", "/api/v1/ai/dirs?path="+url.QueryEscape("~/Projects"), nil, 200, &dirs)
+	if dirs.Path != "~/Projects" || len(dirs.Dirs) != 1 || dirs.Dirs[0].Name != "athena" {
+		t.Fatalf("dirs: %+v", dirs)
+	}
 
 	// no code folder yet
 	if code, body := alex.raw("POST", "/api/v1/issues/WEB-1/code", "application/json", []byte(`{"action":"investigate"}`)); code != 400 || !strings.Contains(string(body), "code folder") {

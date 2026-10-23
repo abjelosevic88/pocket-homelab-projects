@@ -391,3 +391,5 @@ input.bare, textarea.bare { border-color: transparent; background: transparent; 
 .toast-progress { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: #9dbbff; transform-origin: left; transition: transform .1s linear; }
 .toast-action:focus-visible, .toast-x:focus-visible { outline: 2px solid #9dbbff; outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } .toast-progress { transition: none; } }
+.folder-menu { max-height: 280px; }
+.folder-menu .menu-item { height: 30px; }

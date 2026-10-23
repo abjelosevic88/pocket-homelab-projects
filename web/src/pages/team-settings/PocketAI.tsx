@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import type { AgentChoice, AgentOptions, TeamAI } from '../../lib/types'
+import { FolderInput } from '../../components/FolderInput'
 import { Icon } from '../../components/icons'
 import { type Option, Select } from '../../components/Select'
 import { errMsg, Field, Loading, useAsync, useToast } from '../../components/ui'
@@ -62,9 +63,8 @@ export function PocketAITab({ team, admin }: TabProps) {
 
       <Section title="Code conversations" sub={<>“Code with Pocket AI” on an issue opens Pocket AI in this folder with the issue written out as the first message. You read it and press send; <b>Investigate</b> always starts read-only.</>}>
         <div className="stack">
-          <Field label="Code folder" help={<>A full path on the server{o?.home ? <>, e.g. <code>{o.home}/Projects/app</code></> : ''}. A project can use its own folder (project properties).</>}>
-            <input value={f.cwd} onChange={e => set({ cwd: e.target.value })} placeholder="~/Projects/app" list="pai-workspaces" disabled={!admin} spellCheck={false} />
-            <datalist id="pai-workspaces">{(o?.workspaces || []).map(w => <option key={w.path} value={w.path}>{w.name}</option>)}</datalist>
+          <Field label="Code folder" help={<>Start typing a path on the server (<code>~/</code> works) and pick from the folders listed. A project can use its own folder (project properties).</>}>
+            <FolderInput value={f.cwd} onChange={cwd => set({ cwd })} disabled={!admin} suggestions={(o?.workspaces || []).map(w => ({ value: w.path, hint: w.name }))} />
           </Field>
           <div className="ui-ai-grid">
             <Field label="Agent" group><Select label="Agent" value={f.provider} options={providerOpts} disabled={!admin} onChange={v => set({ provider: v as TeamAI['provider'], model: '', effort: '', mode: '', account_id: null })} /></Field>

@@ -23,6 +23,7 @@ import (
 
 func (s *Server) codeRoutes(r chi.Router) {
 	r.Get("/ai/agent-options", s.handleAgentOptions)
+	r.Get("/ai/dirs", s.handleAIDirs)
 	r.Get("/teams/{ref}/ai", s.handleGetTeamAI)
 	r.Put("/teams/{ref}/ai", s.handlePutTeamAI)
 	r.Get("/teams/{ref}/memory", s.handleGetTeamMemory)
@@ -75,6 +76,22 @@ func (s *Server) handleAgentOptions(w http.ResponseWriter, r *http.Request) {
 	}
 	var raw json.RawMessage
 	if err := sb.call(r.Context(), http.MethodGet, "/api/v1/link/agent-options", nil, &raw); err != nil {
+		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, raw)
+}
+
+// handleAIDirs lists server folders through Pocket AI (Projects itself runs
+// in a container and cannot see them) for the code-folder fields.
+func (s *Server) handleAIDirs(w http.ResponseWriter, r *http.Request) {
+	sb, err := s.aiSibling(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	var raw json.RawMessage
+	if err := sb.call(r.Context(), http.MethodGet, "/api/v1/link/dirs?path="+url.QueryEscape(r.URL.Query().Get("path")), nil, &raw); err != nil {
 		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
 		return
 	}

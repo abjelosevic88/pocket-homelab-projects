@@ -11,7 +11,8 @@ import { Icon } from '../icons'
 import { HealthBadge, PersonAvatar, PriorityIcon, ProjectStatusIcon, PROJECT_STATUS_LABEL } from '../issue-bits'
 import { MarkdownEditor } from '../MarkdownEditor'
 import { DateMenu, PickerMenu, TeamMark, useItems } from '../pickers'
-import { type Anchor, errMsg, Prompt, rectOf, useIsMobile, useToast } from '../ui'
+import { type Anchor, errMsg, Modal, rectOf, useIsMobile, useToast } from '../ui'
+import { FolderInput } from '../FolderInput'
 import { api, V1 } from '../../lib/api'
 import { CADENCES, cadenceLabel, peopleItems, ProjectPicker, useTeamPeople } from './common'
 import { Milestones } from './Milestones'
@@ -175,11 +176,22 @@ function CodeFolder({ p }: { p: ProjectDetail }) {
     <div className="prop-row">
       <span className="prop-label">Code</span>
       {p.can_edit ? <button type="button" className="prop-val" onClick={() => setEdit(true)} title="Folder for Code with Pocket AI">{val}</button> : <span className="prop-val static">{val}</span>}
-      {edit && <Prompt title="Code folder" value={cwd} placeholder="~/Projects/app" onDone={save} onClose={() => setEdit(false)}>
-        <p className="muted xsmall">Where “Code with Pocket AI” opens for this project’s issues. Empty = the team’s folder (Team settings → Pocket AI).</p>
-        {cwd && <button type="button" className="btn ghost sm" onClick={() => save('')}>Use the team’s folder</button>}
-      </Prompt>}
+      {edit && <CodeFolderDialog value={cwd} onDone={save} onClose={() => setEdit(false)} />}
     </div>
+  )
+}
+
+function CodeFolderDialog({ value, onDone, onClose }: { value: string; onDone: (v: string) => void; onClose: () => void }) {
+  const [v, setV] = useState(value)
+  return (
+    <Modal title="Code folder" onClose={onClose} size="sm">
+      <form onSubmit={e => { e.preventDefault(); onDone(v.trim().replace(/(.)\/+$/, '$1')) }} className="stack">
+        <FolderInput value={v} onChange={setV} autoFocus />
+        <p className="muted xsmall">Where “Code with Pocket AI” opens for this project’s issues. Empty = the team’s folder (Team settings → Pocket AI).</p>
+        {value && <button type="button" className="btn ghost sm" onClick={() => onDone('')}>Use the team’s folder</button>}
+        <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary">Save</button></div>
+      </form>
+    </Modal>
   )
 }
 
