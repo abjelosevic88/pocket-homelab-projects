@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path"
 	"strings"
 
@@ -28,6 +27,10 @@ func (s *Server) codeRoutes(r chi.Router) {
 	r.Get("/ai/active", s.handleAIActive)
 	r.Get("/teams/{ref}/ai", s.handleGetTeamAI)
 	r.Put("/teams/{ref}/ai", s.handlePutTeamAI)
+	// where the team's attachments are kept: files.go
+	r.Get("/teams/{ref}/files", s.handleTeamFiles)
+	r.Put("/teams/{ref}/files", s.handlePutTeamFiles)
+	r.Post("/teams/{ref}/files/move", s.handleMoveTeamFiles)
 	r.Get("/teams/{ref}/memory", s.handleGetTeamMemory)
 	r.Put("/teams/{ref}/memory", s.handlePutTeamMemory)
 	r.Post("/teams/{ref}/memory", s.handleRememberTeam)
@@ -387,9 +390,10 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 // codeFile is a file attached to the issue; it goes to Pocket AI with the
 // draft, so the agent sees the screenshots and reads the documents.
 type codeFile struct {
-	Name, Mime, Path string
-	Size             int64
-	Sent             bool // within the limits below
+	Name, Mime string
+	Att        store.Attachment // read through openAttachment: disk or Pocket Files
+	Size       int64
+	Sent       bool // within the limits below
 }
 
 // What goes along: Pocket AI takes 8 files per draft and 20 MB per file.
@@ -484,7 +488,7 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 		if !f.Sent {
 			continue
 		}
-		data, err := os.ReadFile(f.Path)
+		data, err := s.readAttachment(ctx, &f.Att)
 		if err != nil {
 			s.log.Warn("code: attachment unreadable", "issue", is.Identifier, "file", f.Name, "err", err)
 			continue
@@ -605,7 +609,7 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 	for _, att := range atts {
 		switch att.Kind {
 		case "file":
-			f := codeFile{Name: firstNonEmpty(att.FileName, att.Title), Mime: att.Mime, Path: s.filePath(&att), Size: att.Size}
+			f := codeFile{Name: firstNonEmpty(att.FileName, att.Title), Mime: att.Mime, Att: att, Size: att.Size}
 			if len(ci.Files) < codeMaxFiles && f.Size <= codeMaxFileBytes && total+f.Size <= codeMaxAllBytes {
 				f.Sent, total = true, total+f.Size
 			}

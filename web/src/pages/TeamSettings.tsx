@@ -15,10 +15,11 @@ import { TemplatesTab } from './team-settings/Templates'
 import { IntegrationsTab } from './team-settings/Integrations'
 import { ImportExportTab } from './team-settings/ImportExport'
 import { PocketAITab } from './team-settings/PocketAI'
+import { AttachmentsTab } from './team-settings/Attachments'
 import { ROLE_LABEL } from './team-settings/common'
 import '../styles/settings-ui.css'
 
-type TabId = 'general' | 'members' | 'workflow' | 'labels' | 'cycles' | 'templates' | 'integrations' | 'ai' | 'import'
+type TabId = 'general' | 'members' | 'workflow' | 'labels' | 'cycles' | 'templates' | 'integrations' | 'ai' | 'files' | 'import'
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'settings' },
   { id: 'members', label: 'Members', icon: 'users' },
@@ -28,6 +29,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'templates', label: 'Templates', icon: 'file-text' },
   { id: 'integrations', label: 'Integrations', icon: 'git-branch' },
   { id: 'ai', label: 'Pocket AI', icon: 'sparkles' },
+  { id: 'files', label: 'Attachments', icon: 'paperclip' },
   { id: 'import', label: 'Import / export', icon: 'upload' },
 ]
 
@@ -71,6 +73,7 @@ export default function TeamSettings() {
           {tab === 'templates' && <TemplatesTab {...props} />}
           {tab === 'integrations' && <IntegrationsTab {...props} />}
           {tab === 'ai' && <PocketAITab {...props} />}
+          {tab === 'files' && <AttachmentsTab {...props} />}
           {tab === 'import' && <ImportExportTab {...props} />}
         </div>
       </div>

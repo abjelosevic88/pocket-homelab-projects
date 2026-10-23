@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -76,6 +77,30 @@ func (s *Server) handleAddAttachment(w http.ResponseWriter, r *http.Request) {
 			if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
 				att.Mime = t
 			}
+		}
+		// the team keeps attachments in Pocket Files: straight there
+		if tf, _ := s.store.GetTeamFiles(ctx, is.TeamID); tf.Mode == filesMode {
+			if err := s.store.SaveAttachment(ctx, att); err != nil {
+				s.fail(w, err, "attachment")
+				return
+			}
+			n, meta, err := s.saveToFiles(ctx, tf, is, name, f)
+			if err != nil {
+				_ = s.store.DeleteAttachment(ctx, att.ID)
+				code := http.StatusBadGateway
+				if errors.Is(err, errTooLarge) {
+					code = http.StatusBadRequest
+				}
+				writeErr(w, code, "Not attached: "+err.Error())
+				return
+			}
+			att.Size, att.Meta = n, meta
+			att.URL = "/api/v1/attachments/" + strconv.FormatInt(att.ID, 10) + "/file"
+			_ = s.store.SetAttachmentFile(ctx, att.ID, n, att.URL, meta)
+			_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: ptr(me(r)), ActorApp: s.linkApp(r), Field: "attachment_added", ToLabel: att.Title})
+			s.changed(r, "issue", []int64{is.TeamID}, is.ID)
+			writeJSON(w, http.StatusCreated, att)
+			return
 		}
 		if err := s.store.SaveAttachment(ctx, att); err != nil {
 			s.fail(w, err, "attachment")
@@ -187,13 +212,16 @@ func (s *Server) handleAttachmentFile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
-	f, err := os.Open(s.filePath(att))
+	rc, size, mod, err := s.openAttachment(r.Context(), att)
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "the file is missing on the server")
+		code := http.StatusBadGateway // Pocket Files unreachable or the link is off
+		if metaOf(att).FilesPath == "" {
+			code = http.StatusNotFound
+		}
+		writeErr(w, code, err.Error())
 		return
 	}
-	defer f.Close()
-	fi, _ := f.Stat()
+	defer rc.Close()
 	ct := att.Mime
 	if ct == "" {
 		ct = "application/octet-stream"
@@ -211,7 +239,20 @@ func (s *Server) handleAttachmentFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename*=UTF-8''%s`, disp, url.PathEscape(att.FileName)))
 	w.Header().Set("Cache-Control", "private, max-age=86400")
-	http.ServeContent(w, r, "", fi.ModTime(), f)
+	if f, ok := rc.(*os.File); ok {
+		http.ServeContent(w, r, "", mod, f) // ranges and If-Modified-Since for files on disk
+		return
+	}
+	if !mod.IsZero() {
+		w.Header().Set("Last-Modified", mod.UTC().Format(http.TimeFormat))
+	}
+	if size > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	}
+	if r.Method == http.MethodHead {
+		return
+	}
+	_, _ = io.Copy(w, rc)
 }
 
 func (s *Server) handleDeleteAttachment(w http.ResponseWriter, r *http.Request) {
@@ -226,12 +267,17 @@ func (s *Server) handleDeleteAttachment(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusForbidden, "guests can remove only what they attached")
 		return
 	}
+	// the file first: in Pocket Files it moves to Deleted/, and when that
+	// can't happen right now the attachment stays rather than leaving a stray file
+	if att.Kind == "file" {
+		if err := s.removeAttachmentFile(r.Context(), att); err != nil {
+			writeErr(w, http.StatusBadGateway, "Not removed: "+err.Error())
+			return
+		}
+	}
 	if err := s.store.DeleteAttachment(r.Context(), att.ID); err != nil {
 		s.fail(w, err, "attachment")
 		return
-	}
-	if att.Kind == "file" {
-		_ = os.Remove(s.filePath(att))
 	}
 	if is != nil {
 		_ = s.store.AddHistory(r.Context(), store.History{IssueID: &is.ID, ActorID: ptr(me(r)), Field: "attachment_removed", FromLabel: att.Title})
