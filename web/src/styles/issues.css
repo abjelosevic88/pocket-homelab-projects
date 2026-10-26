@@ -483,7 +483,6 @@ button.ic-chip:hover { background: var(--hover); }
 .cc-row { display: flex; align-items: center; gap: 11px; min-height: 52px; padding: 7px 12px; border-top: 1px solid var(--hairline); color: var(--text); text-decoration: none !important; min-width: 0; position: relative; }
 .cc-row:first-child { border-top: 0; }
 .cc-row:hover, .cc-row.menu-open { background: var(--hover); }
-.cc-row.on::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: #7c3aed; }
 .cc-ico { position: relative; display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; background: color-mix(in srgb, #7c3aed 10%, transparent); color: #7c3aed; }
 .cc-ico.investigate { background: color-mix(in srgb, #0284c7 11%, transparent); color: #0284c7; }
 .cc-ico.fix { background: color-mix(in srgb, #16a34a 11%, transparent); color: #16a34a; }
