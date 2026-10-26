@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -43,6 +44,19 @@ func (f *fakeNotes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(out)
 	case r.Method == "GET" && r.URL.Path == "/api/v1/folders":
 		json.NewEncoder(w).Encode([]map[string]any{{"path": "Athena", "count": 0}, {"path": "Athena/Plans", "count": 1}})
+	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/api/v1/notes/"):
+		id := strings.TrimPrefix(r.URL.Path, "/api/v1/notes/")
+		json.NewEncoder(w).Encode(map[string]any{"id": json.Number(id), "content": f.notes[id], "etag": "e" + strconv.Itoa(len(f.notes[id]))})
+	case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/api/v1/notes/"):
+		id := strings.TrimPrefix(r.URL.Path, "/api/v1/notes/")
+		var in struct{ Content, ETag string }
+		json.NewDecoder(r.Body).Decode(&in)
+		if in.ETag != "e"+strconv.Itoa(len(f.notes[id])) {
+			http.Error(w, `{"error":"changed"}`, http.StatusConflict)
+			return
+		}
+		f.notes[id] = in.Content
+		json.NewEncoder(w).Encode(map[string]any{"id": json.Number(id)})
 	case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/append"):
 		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/notes/"), "/append")
 		if _, ok := f.notes[id]; !ok {
@@ -123,5 +137,34 @@ func TestIssueNotes(t *testing.T) {
 	alex.do("GET", "/api/v1/notes/folders", nil, 200, &folders)
 	if len(folders) != 2 {
 		t.Fatalf("folders: %v", folders)
+	}
+
+	// unlinking takes the issue's link out of the note again
+	alex.do("DELETE", "/api/v1/issues/AS-1/notes/401", nil, 204, nil)
+	if text := notes.notes["401"]; strings.Contains(text, "/issue/AS-1") || !strings.HasPrefix(text, "# Plan") {
+		t.Fatalf("after unlink: %q", text)
+	}
+	if alex.status("DELETE", "/api/v1/issues/AS-1/notes/401", nil) != 409 {
+		t.Fatal("unlinking a note without the link did not say so")
+	}
+}
+
+func TestUnlinkFromNote(t *testing.T) {
+	page := "https://projects.example.com/issue/AS-7"
+	for _, c := range []struct{ in, want string }{
+		{"# Plan\n\n[AS-7 · Audit](https://projects.example.com/issue/AS-7)\n\nsteps", "# Plan\n\nsteps"},
+		{"- [AS-7](https://Projects.example.com/issue/AS-7/)\n- keep", "- keep"},
+		{"See [the ticket](https://projects.example.com/issue/AS-7?tab=x) for more.", "See the ticket for more."},
+		{"bare https://projects.example.com/issue/AS-7, then text", "bare , then text"},
+		{"<https://projects.example.com/issue/AS-7>", ""},
+	} {
+		got, ok := unlinkFromNote(c.in, page)
+		if !ok || got != c.want {
+			t.Errorf("%q → %q (%v), want %q", c.in, got, ok, c.want)
+		}
+	}
+	// a different issue that starts the same stays
+	if _, ok := unlinkFromNote("[AS-70](https://projects.example.com/issue/AS-70) and https://projects.example.com/issue/AS-71", page); ok {
+		t.Error("AS-70 / AS-71 were taken for AS-7")
 	}
 }

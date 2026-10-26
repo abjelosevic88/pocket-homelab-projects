@@ -11,7 +11,7 @@ import { IssueRow } from '../IssueRow'
 import { openCreateIssue } from '../CreateIssue'
 import { IssueSearchPicker } from '../issues/IssueSearch'
 import { NoteSearch } from '../project/Resources'
-import { type Anchor, Menu, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
+import { type Anchor, Menu, type MenuItem, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
 
 const changed = (is: IssueDetail) => emitChange({ kind: 'issue', team_ids: [is.team_id], ids: [is.id] })
 
@@ -203,10 +203,11 @@ interface IssueNote { id: string; title: string; folder: string; snippet: string
 /** The person's notes in Pocket Notes that link to the issue. Nothing is stored here: a note is
  *  linked when its text links to the issue, so New note starts one with the link in it and Link a
  *  note adds the link to the end of one. */
-export function IssueNotes({ issue, openId, onOpen }: { issue: IssueDetail; openId?: string; onOpen?: (n: { id: string; title: string; url: string }) => void }) {
+export function IssueNotes({ issue, openId, onOpen, onUnlinked }: { issue: IssueDetail; openId?: string; onOpen?: (n: { id: string; title: string; url: string }) => void; onUnlinked?: (id: string) => void }) {
   const { toast } = useToast()
   const [data, setData] = useState<RelatedSection<IssueNote> | null>(null)
   const [at, setAt] = useState<Anchor | null>(null)
+  const [menu, setMenu] = useState<{ n: IssueNote; anchor: Anchor } | null>(null)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let live = true
@@ -229,6 +230,21 @@ export function IssueNotes({ issue, openId, onOpen }: { issue: IssueDetail; open
       onOpen?.({ id: r.id, title: r.title || n.title, url: r.url })
     } catch (e) { toast((e as Error).message, 'err') }
   }
+  const unlink = async (n: IssueNote) => {
+    try {
+      await api.del(`${V1}/issues/${issue.id}/notes/${n.id}`)
+      setData(d => d && { ...d, items: d.items.filter(x => x.id !== n.id) })
+      toast(`“${n.title || 'Untitled'}” is no longer linked to ${issue.identifier}`)
+      onUnlinked?.(n.id)
+    } catch (e) { toast((e as Error).message, 'err') }
+  }
+  const menuItems = (n: IssueNote): MenuItem[] => [
+    ...(onOpen ? [{ label: 'Open beside the issue', icon: 'sidebar', onSelect: () => onOpen(n) }] : []),
+    { label: 'Open in Pocket Notes', icon: 'external', onSelect: () => window.open(n.url, '_blank', 'noopener') },
+    { label: 'Copy link to the note', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(n.url); toast('Link copied') } },
+    'sep',
+    { label: 'Remove link', icon: 'x', danger: true, hint: 'keeps the note', onSelect: () => unlink(n) },
+  ]
   const items = data?.items || []
   return (
     <section className="ip-sec">
@@ -243,7 +259,8 @@ export function IssueNotes({ issue, openId, onOpen }: { issue: IssueDetail; open
       </div>
       {items.length > 0 ? <div className="ip-box">
         {items.map(n => (
-          <div key={n.id} className={`att-row ${openId === n.id ? 'open' : ''}`}>
+          <div key={n.id} className={`att-row ${openId === n.id ? 'open' : ''} ${menu?.n.id === n.id ? 'menu-open' : ''}`}
+            onContextMenu={e => { e.preventDefault(); setMenu({ n, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}>
             <span className="att-ico note"><Icon name="note" size={15} /></span>
             <span className="att-main"><a href={n.url} target="_blank" rel="noreferrer" title={onOpen ? 'Open beside the issue (⌘-click: new tab)' : undefined}
               onClick={e => { if (onOpen && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); onOpen(n) } }}>{n.title || 'Untitled'}</a><small>{[n.folder || 'Pocket Notes', n.modified ? ago(n.modified) : ''].filter(Boolean).join(' · ')}</small></span>
@@ -251,6 +268,7 @@ export function IssueNotes({ issue, openId, onOpen }: { issue: IssueDetail; open
         ))}
       </div> : data && <p className="muted small ip-note-empty">{ok ? `Your notes in Pocket Notes that link to ${issue.identifier} show up here.` : data.detail}</p>}
       {at && <NoteSearch anchor={at} onClose={() => setAt(null)} onPick={link} />}
+      {menu && <Menu items={menuItems(menu.n)} anchor={menu.anchor} onClose={() => setMenu(null)} width={240} />}
     </section>
   )
 }

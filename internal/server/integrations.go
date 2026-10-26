@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ func (s *Server) integrationRoutes(r chi.Router) {
 	r.Get("/projects/{id}/related", s.handleProjectRelated)
 	r.Get("/issues/{ref}/notes", s.handleIssueNotes)
 	r.Post("/issues/{ref}/notes", s.handleIssueLinkNote)
+	r.Delete("/issues/{ref}/notes/{note}", s.handleIssueUnlinkNote)
 	r.Get("/teams/{ref}/notes", s.handleTeamNotes)
 	r.Put("/teams/{ref}/notes", s.handlePutTeamNotes)
 	r.Get("/notes/folders", s.handleNoteFolders)
@@ -299,6 +301,95 @@ func (s *Server) handleIssueLinkNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": string(n.ID), "title": n.Title, "url": sb.public + "/note/" + string(n.ID)})
+}
+
+// handleIssueUnlinkNote takes the issue's link out of one of the person's
+// notes, which is what unlinks it (the note itself stays).
+func (s *Server) handleIssueUnlinkNote(w http.ResponseWriter, r *http.Request) {
+	noteID := chi.URLParam(r, "note")
+	if !digitsOnly(noteID) {
+		writeErr(w, http.StatusBadRequest, "not a note id")
+		return
+	}
+	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	app, _ := pocketApp("notes")
+	sb := s.siblingAppOrFail(w, r, app.only("notes:read", "notes:write"))
+	if sb == nil {
+		return
+	}
+	c, cancel := context.WithTimeout(r.Context(), siblingTimeout)
+	defer cancel()
+	page := s.issueURL(r, is.Identifier)
+	for try := 0; ; try++ {
+		var n struct {
+			Content string `json:"content"`
+			ETag    string `json:"etag"`
+		}
+		if err := sb.call(c, http.MethodGet, "/api/v1/notes/"+noteID, nil, &n); err != nil {
+			writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
+			return
+		}
+		content, ok := unlinkFromNote(n.Content, page)
+		if !ok {
+			writeErr(w, http.StatusConflict, "this note doesn't link to "+is.Identifier+" in a way that can be taken out here; open the note and remove the link there")
+			return
+		}
+		err := sb.call(c, http.MethodPut, "/api/v1/notes/"+noteID, map[string]any{"content": content, "etag": n.ETag}, nil)
+		if err == nil {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		// changed between reading and saving (someone typing in it): read again once
+		if try == 0 && (strings.Contains(err.Error(), " 409 ") || strings.Contains(err.Error(), " 412 ")) {
+			continue
+		}
+		writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
+		return
+	}
+}
+
+// unlinkFromNote takes every link to page out of a note's Markdown: a line
+// that is only the link goes, a link inside text keeps its words, a bare
+// address goes. ok is false when nothing was found.
+func unlinkFromNote(content, page string) (string, bool) {
+	u, err := url.Parse(page)
+	if err != nil || u.Host == "" {
+		return content, false
+	}
+	addr := `https?://` + regexp.QuoteMeta(u.Host+strings.TrimRight(u.Path, "/")) + `(?:[/?#][^\s)>\]]*)?`
+	md := `\[([^\]]*)\]\(<?` + addr + `>?(?:\s+"[^"]*")?\)`
+	whole := regexp.MustCompile(`(?i)^\s*(?:[-*+]\s+)?(?:` + md + `|<` + addr + `>|` + addr + `)\s*$`)
+	link := regexp.MustCompile(`(?i)` + md)
+	auto := regexp.MustCompile(`(?i)<` + addr + `>`)
+	bare := regexp.MustCompile(`(?i)` + addr + `([\s.,;:!)]|$)`)
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
+	changed := false
+	for _, l := range lines {
+		if whole.MatchString(l) {
+			changed = true
+			continue
+		}
+		m := link.ReplaceAllString(l, "$1")
+		m = auto.ReplaceAllString(m, "")
+		m = bare.ReplaceAllString(m, "$1")
+		if m != l {
+			changed = true
+		}
+		out = append(out, m)
+	}
+	if !changed {
+		return content, false
+	}
+	text := strings.Join(out, "\n")
+	for strings.Contains(text, "\n\n\n") {
+		text = strings.ReplaceAll(text, "\n\n\n", "\n\n")
+	}
+	return text, true
 }
 
 func digitsOnly(v string) bool {

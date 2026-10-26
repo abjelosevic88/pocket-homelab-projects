@@ -169,7 +169,7 @@ export default function IssuePage() {
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
-          {!d.deleted_at && <IssueNotes issue={d} openId={noteDock?.id} onOpen={setNoteDock} />}
+          {!d.deleted_at && <IssueNotes issue={d} openId={noteDock?.id} onOpen={setNoteDock} onUnlinked={id => setNoteDock(n => n?.id === id ? null : n)} />}
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
           {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />

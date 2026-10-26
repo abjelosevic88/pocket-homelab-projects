@@ -160,3 +160,4 @@ input.ci-title { font-size: 19px; font-weight: 650; height: 42px; border: 0; box
 .kbd-on-primary { margin-left: 6px; background: rgba(255, 255, 255, .18); border: 0; color: rgba(255, 255, 255, .92); font-weight: 600; }
 .chip { font-family: inherit; }
 .section-title { font-size: 12px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 8px; }
+.pick-item:hover:not(:disabled), .search-pop .pick-item:focus-visible { background: var(--hover); }
