@@ -2,7 +2,7 @@
 // issue in the team's code folder. Pocket AI shows the prompt as a draft in a
 // panel docked beside the issue (a new tab without one); the issue lists its
 // conversations with their state.
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../../lib/api'
 import { refreshAIActive } from '../../lib/ai-active'
@@ -26,7 +26,7 @@ const STATUS: Record<string, { dot: 'ok' | 'warn' | 'error' | 'off'; label: stri
 
 /** The docked Pocket AI panel of the issue page: open(url) shows a conversation in it;
  *  version changes whenever the panel saw the conversation move on. */
-export type CodePanel = { open: (url: string, title: string, send?: boolean) => void; close?: () => void; version: number }
+export type CodePanel = { open: (url: string, title: string, send?: boolean) => void; close?: (url: string) => void; version: number }
 
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
@@ -147,7 +147,7 @@ export function CodeSide({ issue, code, onStarted }: { issue: IssueDetail; code:
 }
 
 /** The issue's conversations, on the issue itself: one click opens it in the panel. */
-export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail; code: IssueCode; openUrl?: string }) {
+export function CodeConversations({ issue, code, openUrls = [] }: { issue: IssueDetail; code: IssueCode; openUrls?: string[] }) {
   const panel = useContext(CodePanelContext)
   const { toast } = useToast()
   const [menu, setMenu] = useState<{ t: CodeThread; anchor: Anchor } | null>(null)
@@ -155,12 +155,13 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
   const list = visible(code.list)
   if (!list.length && !code.worktrees.length) return null
   const nameOf = (t: CodeThread) => t.title.replace(`${issue.identifier} · `, '') || issue.identifier
+  const shown = (u: string) => openUrls.some(o => sameConversation(o, u))
   const act = async (t: CodeThread, how: 'unlink' | 'delete') => {
     try {
       if (how === 'unlink') await api.post(`${V1}/issues/${issue.id}/code/${encodeURIComponent(t.draft_id)}/unlink`)
       else await api.del(`${V1}/issues/${issue.id}/code/${encodeURIComponent(t.draft_id)}`)
       // the docked panel showing it closes with it
-      if (panel && openUrl && (openUrl === t.url || openUrl.split('?')[0] === t.url.split('?')[0])) panel.close?.()
+      if (panel && shown(t.url)) panel.close?.(t.url)
       toast(how === 'unlink' ? 'Removed from the issue — it stays in Pocket AI' : t.status === 'draft' ? 'Draft deleted' : 'Conversation deleted')
       code.reload()
     } catch (e) { toast(errMsg(e), 'err') }
@@ -173,7 +174,6 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
     ...(t.status === 'draft' ? [] : [{ label: 'Remove from issue', icon: 'x', hint: 'stays in Pocket AI', onSelect: () => act(t, 'unlink') }]),
     { label: t.status === 'draft' ? 'Delete draft' : 'Delete conversation…', icon: 'trash', danger: true, onSelect: () => t.status === 'draft' ? act(t, 'delete') : setDeleting(t) },
   ]
-  const shown = (u: string) => !!openUrl && (openUrl === u || openUrl.split('?')[0] === u.split('?')[0])
   return (
     <section className="ip-sec">
       <div className="ip-sec-head"><h3>Conversations <span className="count">{list.length}</span></h3></div>
@@ -264,64 +264,40 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
   )
 }
 
-const DOCK_W = 'pp-ai-dock-w'
-const clampW = (w: number) => Math.round(Math.max(360, Math.min(w, window.innerWidth - 420, 1100)))
-
-function embedURL(u: string, send: boolean) {
+export function embedURL(u: string, send: boolean) {
   const x = new URL(u, location.href)
   x.searchParams.set('embed', '1')
   if (send && x.searchParams.has('draft')) x.searchParams.set('send', '1')
   return x.href
 }
 
-/** Pocket AI docked beside the issue: the conversation runs in Pocket AI, shown here. */
-export function CodeDock({ url, title, send = false, mobile, onClose, onMoved }: { url: string; title: string; send?: boolean; mobile: boolean; onClose: () => void; onMoved: (threadId: string, status: string) => void }) {
-  const [src] = useState(() => embedURL(url, send)) // set once: changing it would reload the frame
-  const [out, setOut] = useState(url)
-  const [w, setW] = useState(() => clampW(Number(localStorage.getItem(DOCK_W)) || 520))
-  const [drag, setDrag] = useState(false)
-  const moved = useRef(onMoved)
-  moved.current = onMoved
+/** Two addresses of the same conversation (a draft link, the thread it became, ?embed…). */
+export function sameConversation(a: string, b: string) {
+  return a === b || a.split('?')[0] === b.split('?')[0] && !/[?&]draft=/.test(a + b) || draftOf(a) !== '' && draftOf(a) === draftOf(b)
+}
+const draftOf = (u: string) => { try { return new URL(u, location.href).searchParams.get('draft') || '' } catch { return '' } }
 
-  // the frame says which thread it shows (a draft becomes a thread on send)
-  useEffect(() => {
-    const origin = new URL(url, location.href).origin
-    const h = (e: MessageEvent) => {
-      if (e.origin !== origin || e.data?.type !== 'pocket-ai') return
-      if (e.data.thread_id) setOut(`${origin}/t/${e.data.thread_id}`)
-      moved.current(e.data.thread_id || '', e.data.status || '')
-      refreshAIActive()
-    }
-    window.addEventListener('message', h)
-    return () => window.removeEventListener('message', h)
-  }, [url])
-
-  const resize = (e: React.PointerEvent) => {
-    e.preventDefault()
-    const x0 = e.clientX, w0 = w
-    setDrag(true)
-    const mv = (ev: PointerEvent) => setW(clampW(w0 + x0 - ev.clientX))
-    const up = (ev: PointerEvent) => {
-      setDrag(false)
-      localStorage.setItem(DOCK_W, String(clampW(w0 + x0 - ev.clientX)))
-      window.removeEventListener('pointermove', mv)
-      window.removeEventListener('pointerup', up)
-    }
-    window.addEventListener('pointermove', mv)
-    window.addEventListener('pointerup', up)
-  }
-
+/** + beside the panel's tabs: start a conversation about the issue, or bring back one of its
+ *  conversations that has no tab yet. */
+export function NewTabButton({ issue, code, openUrls, onStarted }: { issue: IssueDetail; code: IssueCode; openUrls: string[]; onStarted: () => void }) {
+  const { start, busy } = useCodeStart(issue, onStarted)
+  const panel = useContext(CodePanelContext)
+  const [at, setAt] = useState<Anchor | null>(null)
+  const [note, setNote] = useState(false)
+  const base = useMenu((a, wt) => start(a, '', wt), () => setNote(true))
+  const closed = visible(code.list).filter(t => !openUrls.some(o => sameConversation(o, t.url)))
+  const items: MenuItem[] = [
+    ...base,
+    ...(closed.length && panel ? ['sep' as const, { heading: 'Open a conversation' }, ...closed.slice(0, 8).map(t => ({
+      label: t.title.replace(`${issue.identifier} · `, '') || t.action || 'Pocket AI', icon: 'sparkles', hint: (STATUS[t.status] || { label: t.status }).label,
+      onSelect: () => panel.open(t.url, `${issue.identifier} · ${t.action || 'Pocket AI'}`),
+    }))] : []),
+  ]
   return (
-    <aside className={`ai-dock ${mobile ? 'sheet' : ''} ${drag ? 'dragging' : ''}`} style={mobile ? undefined : { width: w }} aria-label="Pocket AI">
-      {!mobile && <div className="ai-dock-grip" onPointerDown={resize} role="separator" aria-orientation="vertical" aria-label="Resize" />}
-      <div className="ai-dock-head">
-        <Icon name="sparkles" size={14} className="ai-dock-ico" />
-        <span className="ellipsis">{title}</span>
-        <span className="spacer" style={{ flex: 1 }} />
-        <a className="btn ghost icon-only sm" href={out} target="_blank" rel="noreferrer" title="Open in Pocket AI" aria-label="Open in Pocket AI"><Icon name="external" size={15} /></a>
-        <button type="button" className="btn ghost icon-only sm" onClick={onClose} title="Close" aria-label="Close Pocket AI"><Icon name="x" size={15} /></button>
-      </div>
-      <iframe src={src} title="Pocket AI" allow="clipboard-read; clipboard-write; camera; microphone" />
-    </aside>
+    <>
+      <button type="button" className="btn ghost icon-only xs dock-new" disabled={busy} onClick={e => setAt(rectOf(e.currentTarget))} aria-label="New tab" title="New conversation"><Icon name="plus" size={15} /></button>
+      {at && <Menu anchor={at} items={items} width={260} onClose={() => setAt(null)} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, wt) => { setNote(false); start(a, n, wt) }} />}
+    </>
   )
 }

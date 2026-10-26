@@ -5,7 +5,9 @@
 import { useSyncExternalStore } from 'react'
 import type { StateType } from './types'
 
-export type IssueTab = { ref: string; title: string; type?: StateType; dock?: { url: string; title: string } | null }
+/** One tab of the panel beside an issue: a Pocket AI conversation or a note. */
+export type DockTabSaved = { kind: 'ai' | 'note'; url: string; title: string; id?: string }
+export type IssueTab = { ref: string; title: string; type?: StateType; dock?: { url: string; title: string } | null; docks?: DockTabSaved[]; dockActive?: number }
 
 const KEY = 'pp-tabs'
 const CLOSED = 'pp-tabs-closed'
@@ -39,12 +41,18 @@ export function openTab(ref: string, title: string, type?: StateType) {
   set(cur ? tabs.map(t => t.ref === r ? { ...t, title, type } : t) : [...tabs, { ref: r, title, type }], closed.filter(t => t.ref !== r))
 }
 
-/** The tab's Pocket AI panel (null = closed). */
-export function tabDock(ref: string) { return tabs.find(t => t.ref === norm(ref))?.dock || null }
-export function setTabDock(ref: string, dock: IssueTab['dock']) {
+/** The tab's side panel: its tabs (conversations, notes) and which one shows. */
+export function tabDocks(ref: string): { docks: DockTabSaved[]; active: number } {
+  const t = tabs.find(x => x.ref === norm(ref))
+  if (!t) return { docks: [], active: 0 }
+  if (t.docks) return { docks: t.docks, active: t.dockActive || 0 }
+  return { docks: t.dock ? [{ kind: 'ai', url: t.dock.url, title: t.dock.title }] : [], active: 0 } // saved before the panel had tabs
+}
+export function setTabDocks(ref: string, docks: DockTabSaved[], active: number) {
   const r = norm(ref)
-  if (!tabs.some(t => t.ref === r)) return
-  set(tabs.map(t => t.ref === r ? { ...t, dock } : t))
+  const cur = tabs.find(t => t.ref === r)
+  if (!cur || (JSON.stringify(cur.docks) === JSON.stringify(docks) && (cur.dockActive || 0) === active && !cur.dock)) return
+  set(tabs.map(t => t.ref === r ? { ...t, dock: undefined, docks, dockActive: active } : t))
 }
 
 /** Closes tabs; the closed ones can be reopened (most recent first). */

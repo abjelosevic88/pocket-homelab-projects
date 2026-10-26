@@ -22,9 +22,9 @@ import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyTex
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, IssueNotes, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
-import { type DockNote, NoteDock } from '../components/NoteDock'
-import { openTab, setTabDock, tabDock } from '../lib/tabs'
-import { CodeButton, CodeConversations, CodeDock, type CodePanel, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
+import { type DockTab, IssueDock, newDockKey } from '../components/issue/IssueDock'
+import { openTab, setTabDocks, tabDocks } from '../lib/tabs'
+import { CodeButton, CodeConversations, type CodePanel, sameConversation, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
 type SideProp = Prop | 'parent'
@@ -42,21 +42,53 @@ export default function IssuePage() {
       .catch(e => setErr({ status: (e as ApiError).status || 0, msg: (e as Error).message }))
   }, [ref])
   useEffect(() => { setD(null); load() }, [load])
-  // Pocket AI docked beside the issue (replaces the properties while open)
-  const [dock, setDock] = useState<{ url: string; title: string; send: boolean; key: number } | null>(null)
+  // The panel beside the issue (replaces the properties while open): tabs of Pocket AI
+  // conversations and notes
+  const [docks, setDocks] = useState<DockTab[]>([])
+  const [activeDock, setActiveDock] = useState('')
   const [dockVersion, setDockVersion] = useState(0)
-  const [noteDock, setNoteDock] = useState<DockNote | null>(null)
-  // a tab brings back its Pocket AI panel (phones have no tabs)
+  // a tab brings back its panel (phones have no tabs)
   useEffect(() => {
-    const t = mobile ? null : tabDock(ref)
-    setDock(t ? { url: t.url, title: t.title, send: false, key: Date.now() } : null)
-    setNoteDock(null)
+    const saved = mobile ? { docks: [], active: 0 } : tabDocks(ref)
+    const list = saved.docks.map(t => ({ ...t, key: newDockKey() }))
+    setDocks(list)
+    setActiveDock(list[Math.min(saved.active, list.length - 1)]?.key || '')
   }, [ref]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (d && !mobile) openTab(d.identifier, d.title, d.state_type) }, [d?.identifier, d?.title, d?.state_type, mobile]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (d) setTabDock(d.identifier, dock ? { url: dock.url, title: dock.title } : null) }, [dock?.key, d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (d && !mobile) setTabDocks(d.identifier, docks.map(({ kind, url, title, id }) => ({ kind, url, title, id })), Math.max(0, docks.findIndex(t => t.key === activeDock)))
+  }, [docks, activeDock, d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
+  const docksRef = useRef(docks)
+  docksRef.current = docks
+  const activeRef = useRef(activeDock)
+  activeRef.current = activeDock
+  // opens a conversation or a note in a tab: the one it already has, else a new one
+  const openDock = useCallback((t: Omit<DockTab, 'key'>) => {
+    const list = docksRef.current
+    const had = list.find(x => x.kind === t.kind && (t.kind === 'note' ? x.id === t.id || x.url === t.url : sameConversation(x.url, t.url)))
+    if (had) { setActiveDock(had.key); return }
+    const tab = { ...t, key: newDockKey() }
+    docksRef.current = [...list, tab]
+    setDocks(docksRef.current)
+    setActiveDock(tab.key)
+  }, [])
+  const closeDock = useCallback((key: string) => {
+    const list = docksRef.current
+    const i = list.findIndex(t => t.key === key)
+    if (i < 0) return
+    const rest = list.filter(t => t.key !== key)
+    docksRef.current = rest
+    setDocks(rest)
+    if (activeRef.current === key) setActiveDock(rest[Math.min(i, rest.length - 1)]?.key || '')
+  }, [])
   const code = useIssueCode(d, dockVersion)
   const breakdownRef = useRef<(() => void) | null>(null)
-  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => { setNoteDock(null); setDock({ url, title, send, key: Date.now() }) }, close: () => setDock(null), version: dockVersion }), [dockVersion])
+  const codePanel = useMemo<CodePanel>(() => ({
+    open: (url, title, send = false) => openDock({ kind: 'ai', url, title, send }),
+    close: url => { const t = docksRef.current.find(x => x.kind === 'ai' && sameConversation(x.url, url)); if (t) closeDock(t.key) },
+    version: dockVersion,
+  }), [dockVersion, openDock, closeDock])
+  const noteOpen = docks.find(t => t.key === activeDock && t.kind === 'note')?.id
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -165,23 +197,24 @@ export default function IssuePage() {
           <TitleEditor issue={d} canEdit={canEdit} onSave={async t => { const f = await patchIssue(d.id, { title: t }).catch(e => { toast((e as Error).message, 'err'); return null }); if (f) { merge(f); emitChange({ kind: 'issue', team_ids: [d.team_id], ids: [d.id] }) } }} />
           {mobile && <MobileChips issue={d} onOpen={openProp} canEdit={canEdit} />}
           <Description issue={d} canEdit={canEdit} onSaved={merge} />
-          <CodeConversations issue={d} code={code} openUrl={dock?.url} />
+          <CodeConversations issue={d} code={code} openUrls={docks.filter(t => t.kind === 'ai').map(t => t.url)} />
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
-          {!d.deleted_at && <IssueNotes issue={d} openId={noteDock?.id} onOpen={setNoteDock} onUnlinked={id => setNoteDock(n => n?.id === id ? null : n)} />}
+          {!d.deleted_at && <IssueNotes issue={d} openId={noteOpen} onOpen={n => openDock({ kind: 'note', url: n.url, title: n.title, id: n.id })} onUnlinked={id => { const t = docksRef.current.find(x => x.kind === 'note' && x.id === id); if (t) closeDock(t.key) }} />}
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
           {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
-      {noteDock && <NoteDock note={noteDock} mobile={mobile} onClose={() => setNoteDock(null)} />}
-      {dock && <div style={{ display: noteDock ? 'none' : 'contents' }}><CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={(tid, status) => {
-        code.patch(tid, status); setDockVersion(v => v + 1)
-        // a draft became a conversation: the tab comes back to the conversation, not the draft
-        if (tid && d) setTabDock(d.identifier, { url: `${new URL(dock.url, location.href).origin}/t/${tid}`, title: dock.title })
-      }} /></div>}
-      {!mobile && !dock && !noteDock && <aside className="ip-side" aria-label="Properties">
+      {docks.length > 0 && <IssueDock issue={d} code={code} tabs={docks} active={activeDock} mobile={mobile}
+        onActivate={setActiveDock} onCloseTab={closeDock} onCloseAll={() => { setDocks([]); setActiveDock('') }} onStarted={() => { load(); code.reload() }}
+        onMoved={(key, tid, status) => {
+          code.patch(tid, status); setDockVersion(v => v + 1)
+          // a draft became a conversation: the tab now stands for the conversation, not the draft
+          if (tid) setDocks(list => list.map(t => t.key === key ? { ...t, url: `${new URL(t.url, location.href).origin}/t/${tid}`, send: false } : t))
+        }} />}
+      {!mobile && !docks.length && <aside className="ip-side" aria-label="Properties">
         <Properties issue={d} canEdit={canEdit} onOpen={openProp} />
         <div className="ip-side-sec ip-side-actions">
           <button type="button" className={`side-btn ${d.subscribed ? 'on' : ''}`} onClick={toggleSub}><Icon name="bell" size={15} />{d.subscribed ? 'Subscribed' : 'Subscribe'}<span className="hint">{d.subscriber_ids.length} following</span></button>
