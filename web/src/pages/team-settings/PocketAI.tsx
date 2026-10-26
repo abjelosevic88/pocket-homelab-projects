@@ -25,6 +25,13 @@ export function PocketAITab({ team, admin }: TabProps) {
   const { toast } = useToast()
   const saved = useAsync(() => api.get<TeamAI>(`${V1}/teams/${team.key}/ai`), [team.key])
   const options = useAsync(() => api.get<AgentOptions>(`${V1}/ai/agent-options`), [])
+  // Pocket AI may be restarting for an update: ask again a few times.
+  const [tries, setTries] = useState(0)
+  useEffect(() => {
+    if (!options.error || tries >= 4) return
+    const id = setTimeout(() => { setTries(n => n + 1); options.reload() }, 3000 + tries * 2000)
+    return () => clearTimeout(id)
+  }, [options.error, tries]) // eslint-disable-line react-hooks/exhaustive-deps
   const [f, setF] = useState<TeamAI | null>(null)
   const [memory, setMemory] = useState('')
   const [busy, setBusy] = useState(false)
@@ -59,7 +66,14 @@ export function PocketAITab({ team, admin }: TabProps) {
   const host = hosts.find(h => h.id === f.host_id)
   const hostOpts: Option<string>[] = [{ value: '0', label: 'Pocket AI’s server' },
     ...hosts.map(h => ({ value: String(h.id), label: h.name, hint: h.ok ? undefined : 'not reachable at the last check' }))]
-  if (f.host_id && !host) hostOpts.push({ value: String(f.host_id), label: `Machine #${f.host_id}`, hint: 'removed from Pocket AI' })
+  // The saved machine is not in the list: Pocket AI did not answer (yet), or it was removed there.
+  const unknown = !!f.host_id && !host
+  if (unknown) hostOpts.push({ value: String(f.host_id), label: `Machine #${f.host_id}`, hint: o ? 'removed from Pocket AI' : 'Pocket AI did not list its machines' })
+  const serverHelp = unknown
+    ? (!o ? (options.error ? <>Could not get the machines from Pocket AI just now ({options.error}) — trying again; reload the page if it stays like this.</> : <>Asking Pocket AI for its machines…</>)
+      : <>This machine is no longer in Pocket AI → Settings → Servers. Pick another one, or Pocket AI’s own server.</>)
+    : hosts.length ? <>Where the agent runs and the code lives: Pocket AI’s own server or another machine from Pocket AI → Settings → Servers (it signs in with that machine’s own Claude Code / Codex login).</>
+      : <>Pocket AI’s own server. Add other machines in Pocket AI → Settings → Servers to run the team’s conversations there.</>
 
   return (
     <div className="stack loose">
@@ -68,8 +82,8 @@ export function PocketAITab({ team, admin }: TabProps) {
 
       <Section title="Code conversations" sub={<>“Code with Pocket AI” on an issue starts a Pocket AI conversation in this folder, in a panel beside the issue, with the issue written out as the first message; <b>Investigate</b> always starts read-only.</>}>
         <div className="stack">
-          <Field label="Server" help={hosts.length ? <>Where the agent runs and the code lives: Pocket AI’s own server or another machine from Pocket AI → Settings → Servers (it signs in with that machine’s own Claude Code / Codex login).</> : <>Pocket AI’s own server. Add other machines in Pocket AI → Settings → Servers to run the team’s conversations there.</>}>
-            <Select label="Server" value={String(f.host_id || 0)} options={hostOpts} disabled={!admin || !hosts.length}
+          <Field label="Server" help={serverHelp}>
+            <Select label="Server" value={String(f.host_id || 0)} options={hostOpts} disabled={!admin || (!hosts.length && !f.host_id)}
               onChange={v => { const id = Number(v); if (id !== (f.host_id || 0)) set({ host_id: id, cwd: '', account_id: id ? null : f.account_id }) }} />
           </Field>
           <Field label="Code folder" help={<>Start typing a path on {host ? <b>{host.name}</b> : 'the server'} (<code>~/</code> works) and pick from the folders listed. A project can use its own folder (project properties).</>}>
