@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { refreshAIActive } from '../../lib/ai-active'
 import type { IssueDetail } from '../../lib/types'
 import { Icon } from '../icons'
+import { type Anchor, Menu, type MenuItem, Prompt, useToast } from '../ui'
 import { noteEmbedURL } from '../NoteDock'
 import { embedURL, type IssueCode, NewTabButton, sameConversation } from './CodeWithAI'
 import { contextItem, contextItems } from './dockContext'
@@ -54,18 +55,21 @@ function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown
     window.addEventListener('message', h)
     return () => window.removeEventListener('message', h)
   }, [tab.key, tab.kind])
-  return <iframe ref={ref} src={src} title={tab.title || (tab.kind === 'ai' ? 'Pocket AI' : 'Note')} className={shown ? '' : 'dock-hidden'}
+  return <iframe ref={ref} src={src} data-dock={tab.key} title={tab.title || (tab.kind === 'ai' ? 'Pocket AI' : 'Note')} className={shown ? '' : 'dock-hidden'}
     allow="clipboard-read; clipboard-write; camera; microphone" />
 }
 
-export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onCloseTab, onCloseAll, onMoved, onStarted, onOpen }: {
+export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onCloseTab, onCloseAll, onMoved, onStarted, onOpen, onRename }: {
   issue: IssueDetail; code: IssueCode; tabs: DockTab[]; active: string; mobile: boolean
-  onActivate: (key: string) => void; onCloseTab: (key: string) => void; onCloseAll: () => void
+  onActivate: (key: string) => void; onCloseTab: (key: string) => void; onCloseAll: () => void; onRename: (key: string, title: string) => void
   onMoved: (key: string, threadId: string, status: string) => void; onStarted: () => void; onOpen: (url: string, title: string) => void
 }) {
   const [w, setW] = useState(() => clampW(Number(localStorage.getItem(DOCK_W)) || 520))
   const [drag, setDrag] = useState(false)
   const strip = useRef<HTMLDivElement>(null)
+  const { toast } = useToast()
+  const [menu, setMenu] = useState<{ t: DockTab; anchor: Anchor } | null>(null)
+  const [renaming, setRenaming] = useState<DockTab | null>(null)
   const cur = tabs.find(t => t.key === active) || tabs[0]
   useEffect(() => { strip.current?.querySelector('.dock-tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' }) }, [active, tabs.length])
 
@@ -88,6 +92,29 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
   const name = (t: DockTab) => t.title.replace(`${issue.identifier} · `, '') || (t.kind === 'ai' ? 'Pocket AI' : 'Note')
   const openUrls = tabs.filter(t => t.kind === 'ai').map(t => t.url)
   const out = cur ? cur.url : ''
+  // renames the tab, and a conversation in Pocket AI too (its frame does it, signed in there)
+  const rename = (t: DockTab, title: string) => {
+    const v = title.trim()
+    if (!v) return
+    onRename(t.key, `${issue.identifier} · ${v}`)
+    if (t.kind === 'ai' && /\/t\/[^/?]+/.test(t.url)) {
+      const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-dock="${t.key}"]`)
+      frame?.contentWindow?.postMessage({ type: 'pocket-ai-command', rename: v }, new URL(t.url, location.href).origin)
+      window.setTimeout(code.reload, 1200)
+    }
+  }
+  const menuItems = (t: DockTab): MenuItem[] => {
+    const i = tabs.findIndex(x => x.key === t.key)
+    return [
+      { label: 'Rename…', icon: 'edit', onSelect: () => setRenaming(t) },
+      { label: t.kind === 'ai' ? 'Open in Pocket AI' : 'Open in Pocket Notes', icon: 'external', onSelect: () => window.open(t.url, '_blank', 'noopener') },
+      { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(t.url).then(() => toast('Link copied'), () => toast('Could not copy', 'err')) } },
+      'sep',
+      { label: 'Close', icon: 'x', onSelect: () => onCloseTab(t.key) },
+      { label: 'Close other tabs', disabled: tabs.length < 2, onSelect: () => tabs.filter(x => x.key !== t.key).forEach(x => onCloseTab(x.key)) },
+      { label: 'Close tabs to the right', disabled: i === tabs.length - 1, onSelect: () => tabs.slice(i + 1).forEach(x => onCloseTab(x.key)) },
+    ]
+  }
 
   return (
     <aside className={`ai-dock ${mobile ? 'sheet' : ''} ${drag ? 'dragging' : ''}`} style={mobile ? undefined : { width: w }} aria-label="Conversations and notes">
@@ -100,7 +127,9 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
               <div key={t.key} role="tab" aria-selected={t.key === cur?.key} tabIndex={0} title={t.title}
                 className={`dock-tab ${t.key === cur?.key ? 'on' : ''}`}
                 onClick={() => onActivate(t.key)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(t.key) } }}
-                onAuxClick={e => { if (e.button === 1) { e.preventDefault(); onCloseTab(t.key) } }}>
+                onAuxClick={e => { if (e.button === 1) { e.preventDefault(); onCloseTab(t.key) } }}
+                onContextMenu={e => { e.preventDefault(); setMenu({ t, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}
+                onDoubleClick={() => setRenaming(t)}>
                 {st === 'running' || st === 'waiting' ? <span className={`code-pulse ${st}`} />
                   : <Icon name={t.kind === 'ai' ? 'sparkles' : 'note'} size={13} className={t.kind === 'ai' ? 'ai-dock-ico' : 'note-dock-ico'} />}
                 <span className="ellipsis">{name(t)}</span>
@@ -113,6 +142,9 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
         {out && <a className="btn ghost icon-only sm" href={out} target="_blank" rel="noreferrer" title={cur?.kind === 'note' ? 'Open in Pocket Notes' : 'Open in Pocket AI'} aria-label="Open in a new tab"><Icon name="external" size={15} /></a>}
         <button type="button" className="btn ghost icon-only sm" onClick={onCloseAll} title="Close the panel" aria-label="Close the panel"><Icon name="x" size={15} /></button>
       </div>
+      {menu && <Menu items={menuItems(menu.t)} anchor={menu.anchor} onClose={() => setMenu(null)} width={220} />}
+      {renaming && <Prompt title={renaming.kind === 'ai' ? 'Rename the conversation' : 'Rename the tab'} value={name(renaming)} button="Rename"
+        onClose={() => setRenaming(null)} onDone={v => { const t = renaming; setRenaming(null); rename(t, v) }} />}
       <div className="dock-frames">
         {tabs.map(t => <DockFrame key={t.key} tab={t} issue={issue} shown={t.key === cur?.key} onMoved={onMoved} onOpen={onOpen} />)}
       </div>

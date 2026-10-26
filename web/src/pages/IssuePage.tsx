@@ -209,6 +209,7 @@ export default function IssuePage() {
       </div>
       {docks.length > 0 && <IssueDock issue={d} code={code} tabs={docks} active={activeDock} mobile={mobile}
         onOpen={(url, title) => { openDock({ kind: 'ai', url, title: `${d.identifier} · ${title.replace(/^Fork of .*/, 'Fork')}` }); code.reload() }}
+        onRename={(key, title) => setDocks(list => list.map(t => t.key === key ? { ...t, title } : t))}
         onActivate={setActiveDock} onCloseTab={closeDock} onCloseAll={() => { setDocks([]); setActiveDock('') }} onStarted={() => { load(); code.reload() }}
         onMoved={(key, tid, status) => {
           code.patch(tid, status); setDockVersion(v => v + 1)
