@@ -22,6 +22,7 @@ import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyTex
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
+import { openTab, setTabDock, tabDock } from '../lib/tabs'
 import { CodeButton, CodeConversations, CodeDock, type CodePanel, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
@@ -43,7 +44,13 @@ export default function IssuePage() {
   // Pocket AI docked beside the issue (replaces the properties while open)
   const [dock, setDock] = useState<{ url: string; title: string; send: boolean; key: number } | null>(null)
   const [dockVersion, setDockVersion] = useState(0)
-  useEffect(() => setDock(null), [ref])
+  // a tab brings back its Pocket AI panel (phones have no tabs)
+  useEffect(() => {
+    const t = mobile ? null : tabDock(ref)
+    setDock(t ? { url: t.url, title: t.title, send: false, key: Date.now() } : null)
+  }, [ref]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (d && !mobile) openTab(d.identifier, d.title, d.state_type) }, [d?.identifier, d?.title, d?.state_type, mobile]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (d) setTabDock(d.identifier, dock ? { url: dock.url, title: dock.title } : null) }, [dock?.key, d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
   const code = useIssueCode(d, dockVersion)
   const breakdownRef = useRef<(() => void) | null>(null)
   const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => setDock({ url, title, send, key: Date.now() }), close: () => setDock(null), version: dockVersion }), [dockVersion])
@@ -164,7 +171,11 @@ export default function IssuePage() {
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
-      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={(tid, status) => { code.patch(tid, status); setDockVersion(v => v + 1) }} />}
+      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={(tid, status) => {
+        code.patch(tid, status); setDockVersion(v => v + 1)
+        // a draft became a conversation: the tab comes back to the conversation, not the draft
+        if (tid && d) setTabDock(d.identifier, { url: `${new URL(dock.url, location.href).origin}/t/${tid}`, title: dock.title })
+      }} />}
       {!mobile && !dock && <aside className="ip-side" aria-label="Properties">
         <Properties issue={d} canEdit={canEdit} onOpen={openProp} />
         <div className="ip-side-sec ip-side-actions">

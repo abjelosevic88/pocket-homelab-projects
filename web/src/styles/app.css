@@ -171,3 +171,23 @@
 }
 .sb-trash { margin-left: auto; }
 .app.drawer-mode .sidebar-wrap:not(.open) { box-shadow: none; }
+
+/* open issues as tabs (components/IssueTabs.tsx) */
+.tabbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--border); background: var(--sidebar, var(--bg)); flex-shrink: 0; min-width: 0; }
+.tabbar-scroll { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 0 1 auto; }
+.tabbar-scroll::-webkit-scrollbar { display: none; }
+.tab { position: relative; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 6px 0 10px; border-radius: 9px 9px 0 0; color: var(--muted); font-size: 13px;
+  width: 210px; min-width: 110px; flex: 0 1 210px; cursor: pointer; user-select: none; border: 1px solid transparent; border-bottom: 0; }
+.tab:hover { background: var(--surface-2); color: var(--text-2); }
+.tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-soft); }
+.tab.on { background: var(--bg); color: var(--text); margin-bottom: -1px; height: 33px; border-color: var(--border); }
+.tab.dragging { opacity: .45; }
+.tab-ico { display: grid; place-items: center; width: 16px; height: 16px; flex-shrink: 0; }
+.tab-ico .code-pulse { margin: 0; }
+.tab-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab-ref { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tab-x { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--faint); cursor: pointer; opacity: 0; flex-shrink: 0; }
+.tab:hover .tab-x, .tab.on .tab-x, .tab:focus-within .tab-x { opacity: 1; }
+.tab-x:hover { background: var(--surface-3, var(--surface-2)); color: var(--text); }
+.tab-more { display: grid; place-items: center; width: 30px; height: 30px; margin-left: auto; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; flex-shrink: 0; }
+.tab-more:hover { background: var(--surface-2); color: var(--text); }

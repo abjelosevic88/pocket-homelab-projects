@@ -14,6 +14,7 @@ import { CreateIssueModal, openCreateIssue, type IssueDefaults } from './CreateI
 import { PersonAvatar } from './issue-bits'
 import { type MenuItem, MenuButton, modalOpen, useIsMobile, useMediaQuery } from './ui'
 import { AskButton } from './AskButton'
+import { IssueTabs } from './IssueTabs'
 
 const SIDEBAR_KEY = 'pp-sidebar'
 const section = (path: string) => path.split('/').slice(0, 3).join('/')
@@ -118,6 +119,7 @@ export default function Layout() {
       <div className={`sidebar-wrap ${sidebarOpen ? 'open' : ''}`}><Sidebar onNavigate={closeDrawer} /></div>
       <div className="main">
         <TopBar onMenu={toggleSidebar} onPalette={() => setPalette(true)} mobile={mobile} compact={narrow} sidebarOpen={sidebarOpen} />
+        {!mobile && <IssueTabs />}
         <div className="content-row">
           <main className="content"><ErrorBoundary key={section(loc.pathname)} where={loc.pathname}><Outlet /></ErrorBoundary></main>
         </div>
