@@ -66,9 +66,9 @@ export function Resources({ p, reload }: { p: ProjectDetail; reload: () => void 
   )
 }
 
-interface NoteHit { id: string; title: string; snippet: string; folder: string; url: string }
+export interface NoteHit { id: string; title: string; snippet: string; folder: string; url: string }
 
-function NoteSearch({ anchor, onClose, onPick }: { anchor: Anchor; onClose: () => void; onPick: (n: NoteHit) => void }) {
+export function NoteSearch({ anchor, onClose, onPick }: { anchor: Anchor; onClose: () => void; onPick: (n: NoteHit) => void }) {
   const [q, setQ] = useState('')
   const dq = useDebounce(q, 250)
   const [hits, setHits] = useState<NoteHit[] | null>(null)

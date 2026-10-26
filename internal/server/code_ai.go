@@ -808,6 +808,12 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 	fmt.Fprintf(&sys, "This conversation is about issue %s (%q) in Pocket Projects (%s), team %s, working in %s.\n", ci.Identifier, ci.Title, ci.URL, ci.Team, ci.Cwd)
 	fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %d; writes wait for the person's approval. ", ci.ID)
 	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + "): one short factual line, never secrets or credentials.\n")
+	link := "[" + strings.NewReplacer("[", "(", "]", ")").Replace(ci.Identifier+" · "+ci.Title) + "](" + ci.URL + ")"
+	if tai.HostID == 0 {
+		fmt.Fprintf(&sys, "\n## Notes\nWhen the person asks to put a plan, write-up or findings in a note (Pocket Notes), create it with pocket_notes_create (category \"Projects\") and put this link in its content: %[1]s. Every note that links to the issue is listed under Notes on the issue page, so that is all linking takes. To link an existing note, add the same link to it with pocket_notes_append.\n", link)
+	} else {
+		sys.WriteString("\n## Notes\nThe Pocket tools (Pocket Notes, Pocket Projects) do not reach this machine. When the person asks to put something in a note, write it out in full as Markdown in your reply and tell them to use New note under Notes on the issue, which makes a note already linked to it.\n")
+	}
 	if tai.LinkRefs {
 		fmt.Fprintf(&sys, "\n## Commits and pull requests\nPut %[1]s in commit messages so Pocket Projects links them to the issue. End pull request descriptions with \"Resolves %[1]s (%[2]s)\".\n", ci.Identifier, ci.URL)
 	} else {

@@ -1,15 +1,16 @@
 // Sections of the issue page: sub-issues (with Pocket AI break-down),
-// relations, attachments (files, links, git, calendar, tasks) and contacts.
+// relations, attachments (files, links, git, calendar, tasks), notes and contacts.
 import React, { useEffect, useRef, useState } from 'react'
 import { api, upload, V1 } from '../../lib/api'
 import { emitChange, useApp } from '../../lib/app-context'
 import { ago, bytes } from '../../lib/format'
-import type { Attachment, ContactSuggestion, Issue, IssueDetail, RelationOut } from '../../lib/types'
+import type { Attachment, ContactSuggestion, Issue, IssueDetail, RelatedSection, RelationOut } from '../../lib/types'
 import { Icon } from '../icons'
 import { IssueLink, ProgressRing, StatusIcon } from '../issue-bits'
 import { IssueRow } from '../IssueRow'
 import { openCreateIssue } from '../CreateIssue'
 import { IssueSearchPicker } from '../issues/IssueSearch'
+import { NoteSearch } from '../project/Resources'
 import { type Anchor, Menu, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
 
 const changed = (is: IssueDetail) => emitChange({ kind: 'issue', team_ids: [is.team_id], ids: [is.id] })
@@ -191,6 +192,60 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
         })}
       </div> : <div className="drop-zone">Drop files here, paste images into the description, or link commits by mentioning {issue.identifier} in git.</div>}
       {link && <Prompt title="Add a link" placeholder="https://…" button="Add" onDone={addLink} onClose={() => setLink(false)} />}
+    </section>
+  )
+}
+
+// ---------- notes ----------
+
+interface IssueNote { id: string; title: string; folder: string; snippet: string; modified: number; url: string }
+
+/** The person's notes in Pocket Notes that link to the issue. Nothing is stored here: a note is
+ *  linked when its text links to the issue, so New note starts one with the link in it and Link a
+ *  note adds the link to the end of one. */
+export function IssueNotes({ issue }: { issue: IssueDetail }) {
+  const { toast } = useToast()
+  const [data, setData] = useState<RelatedSection<IssueNote> | null>(null)
+  const [at, setAt] = useState<Anchor | null>(null)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    let live = true
+    api.get<RelatedSection<IssueNote>>(`${V1}/issues/${issue.id}/notes`).then(d => live && setData(d))
+      .catch(e => live && setData({ status: 'error', detail: (e as Error).message, app_url: '', items: [] }))
+    return () => { live = false }
+  }, [issue.id, tick])
+  // a note started with New note opens in another tab: look again when the person comes back
+  useEffect(() => {
+    const again = () => { if (document.visibilityState === 'visible') setTick(t => t + 1) }
+    document.addEventListener('visibilitychange', again)
+    return () => document.removeEventListener('visibilitychange', again)
+  }, [])
+  const ok = data?.status === 'ok'
+  const link = async (n: { id: string; title: string }) => {
+    setAt(null)
+    try { await api.post(`${V1}/issues/${issue.id}/notes`, { note_id: n.id }); toast(`Linked “${n.title || 'Untitled'}”`); setTick(t => t + 1) } catch (e) { toast((e as Error).message, 'err') }
+  }
+  const items = data?.items || []
+  return (
+    <section className="ip-sec">
+      <div className="ip-sec-head"><h3>Notes {items.length > 0 && <span className="count">{items.length}</span>}</h3>{!data && <Spinner />}<span className="spacer" />
+        <span title={ok ? undefined : data?.detail}>
+          {ok && data.new_url ? <a className="btn ghost sm" href={data.new_url} target="_blank" rel="noreferrer"><Icon name="plus" size={14} />New note</a>
+            : <button type="button" className="btn ghost sm" disabled><Icon name="plus" size={14} />New note</button>}
+        </span>
+        <span title={ok ? undefined : data?.detail}>
+          <button type="button" className="btn ghost sm" disabled={!ok} onClick={e => setAt(rectOf(e.currentTarget))}><Icon name="link" size={14} />Link a note</button>
+        </span>
+      </div>
+      {items.length > 0 ? <div className="ip-box">
+        {items.map(n => (
+          <div key={n.id} className="att-row">
+            <span className="att-ico note"><Icon name="note" size={15} /></span>
+            <span className="att-main"><a href={n.url} target="_blank" rel="noreferrer">{n.title || 'Untitled'}</a><small>{[n.folder || 'Pocket Notes', n.modified ? ago(n.modified) : ''].filter(Boolean).join(' · ')}</small></span>
+          </div>
+        ))}
+      </div> : data && <p className="muted small ip-note-empty">{ok ? `Your notes in Pocket Notes that link to ${issue.identifier} show up here.` : data.detail}</p>}
+      {at && <NoteSearch anchor={at} onClose={() => setAt(null)} onPick={link} />}
     </section>
   )
 }

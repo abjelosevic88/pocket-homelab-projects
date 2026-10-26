@@ -21,7 +21,7 @@ import { Select } from '../components/Select'
 import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyText, rectOf, useIsMobile, useToast } from '../components/ui'
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
-import { Attachments, Contacts, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
+import { Attachments, Contacts, IssueNotes, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
 import { openTab, setTabDock, tabDock } from '../lib/tabs'
 import { CodeButton, CodeConversations, CodeDock, type CodePanel, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
@@ -166,6 +166,7 @@ export default function IssuePage() {
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
+          {!d.deleted_at && <IssueNotes issue={d} />}
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
           {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />

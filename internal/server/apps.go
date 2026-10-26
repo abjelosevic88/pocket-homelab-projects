@@ -37,7 +37,20 @@ type PocketApp struct {
 	Scopes      []string `json:"scopes"`
 	Reason      string   `json:"reason"`
 	Description string   `json:"description"`
+	ReadScopes  []string `json:"-"` // enough for looking only (default: Scopes)
 }
+
+// reading narrows the app to the scopes for looking only, so lists keep
+// working while the link for writing is switched off.
+func (a PocketApp) reading() PocketApp {
+	if len(a.ReadScopes) > 0 {
+		a.Scopes = a.ReadScopes
+	}
+	return a
+}
+
+// only narrows the app to the given scopes.
+func (a PocketApp) only(scopes ...string) PocketApp { a.Scopes = scopes; return a }
 
 var pocketApps = []PocketApp{
 	{ID: "calendar", Name: "Pocket Calendar", Slug: "calendar", Scopes: []string{"calendar:read", "calendar:write"},
@@ -49,9 +62,9 @@ var pocketApps = []PocketApp{
 	{ID: "tasks", Name: "Pocket Tasks", Slug: "tasks", Scopes: []string{"tasks:read", "tasks:write"},
 		Reason:      "Put an issue on your personal to-do list and tick it off when the issue is done",
 		Description: "\"Add to my Tasks\" on an issue makes a to-do linking back to it (with its due date); completing the issue completes the to-do."},
-	{ID: "notes", Name: "Pocket Notes", Slug: "notes", Scopes: []string{"notes:read"},
-		Reason:      "Show the notes that link to a project and link notes as project resources",
-		Description: "Notes that mention a project appear on its page; \"New note\" opens Pocket Notes with the project linked."},
+	{ID: "notes", Name: "Pocket Notes", Slug: "notes", Scopes: []string{"notes:read", "notes:write"}, ReadScopes: []string{"notes:read"},
+		Reason:      "Show the notes that link to an issue or a project, and link a note to an issue by adding the issue's link to it",
+		Description: "Notes that link to an issue or a project appear on its page; \"New note\" opens Pocket Notes with it linked, \"Link a note\" adds the link to one of your notes."},
 	{ID: "ai", Name: "Pocket AI", Slug: "ai", Scopes: []string{"threads:write"},
 		Reason:      "Prepare Claude Code / Codex conversations about issues in the team's code folder",
 		Description: "\"Code with Pocket AI\" on an issue opens Pocket AI with the issue, the team's instructions and memory ready; you read the prompt and press send."},

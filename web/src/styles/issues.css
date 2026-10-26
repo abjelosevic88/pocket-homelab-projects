@@ -447,3 +447,4 @@ button.ic-chip:hover { background: var(--hover); }
 .team-ai-row > :first-child { flex: 1; min-width: 0; }
 .team-ai-state { flex-shrink: 0; padding: 0 16px 0 8px; font-size: 12px; font-weight: 600; color: #7c3aed; }
 .team-ai-state.waiting { color: #b45309; }
+.ip-note-empty { margin: 0; line-height: 1.45; }

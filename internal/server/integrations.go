@@ -33,6 +33,8 @@ func (s *Server) integrationRoutes(r chi.Router) {
 	r.Post("/projects/{id}/event", s.handleProjectEvent)
 	r.Post("/milestones/{id}/event", s.handleMilestoneEvent)
 	r.Get("/projects/{id}/related", s.handleProjectRelated)
+	r.Get("/issues/{ref}/notes", s.handleIssueNotes)
+	r.Post("/issues/{ref}/notes", s.handleIssueLinkNote)
 }
 
 // siblingErr says in plain words why another app did not answer.
@@ -48,6 +50,10 @@ func siblingErr(app string, err error) string {
 
 func (s *Server) siblingOrFail(w http.ResponseWriter, r *http.Request, appID string) *sibling {
 	app, _ := pocketApp(appID)
+	return s.siblingAppOrFail(w, r, app)
+}
+
+func (s *Server) siblingAppOrFail(w http.ResponseWriter, r *http.Request, app PocketApp) *sibling {
 	sb, err := s.siblingFor(r.Context(), userFrom(r.Context()), app)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, app.Name+": "+err.Error())
@@ -115,7 +121,8 @@ func (s *Server) contactPageURL(ctx context.Context, uid int64, contactID string
 // ---------- Pocket Notes ----------
 
 func (s *Server) handleNoteSearch(w http.ResponseWriter, r *http.Request) {
-	sb := s.siblingOrFail(w, r, "notes")
+	app, _ := pocketApp("notes")
+	sb := s.siblingAppOrFail(w, r, app.reading())
 	if sb == nil {
 		return
 	}
@@ -154,6 +161,7 @@ type RelatedSection struct {
 func (s *Server) relatedSection(ctx context.Context, u *store.User, appID string, fill func(context.Context, *sibling, *RelatedSection) error) RelatedSection {
 	sec := RelatedSection{Items: []map[string]any{}}
 	app, _ := pocketApp(appID)
+	app = app.reading()
 	st, _ := s.store.GetSettings(ctx, u.ID)
 	switch mode := s.appMode(st, app); {
 	case mode == modeOff:
@@ -194,23 +202,7 @@ func (s *Server) handleProjectRelated(w http.ResponseWriter, r *http.Request) {
 	done := make(chan struct{}, 2)
 	var notes, cal RelatedSection
 	go func() {
-		notes = s.relatedSection(ctx, u, "notes", func(c context.Context, sb *sibling, sec *RelatedSection) error {
-			q := url.Values{"title": {p.Name}, "url": {page}, "label": {p.Name}, "folder": {"Projects"}}
-			sec.NewURL = sb.public + "/new?" + q.Encode()
-			var list []struct {
-				ID        flexID `json:"id"`
-				Title     string `json:"title"`
-				Excerpt   string `json:"excerpt"`
-				UpdatedAt string `json:"updated_at"`
-			}
-			if err := sb.call(c, http.MethodGet, "/api/v1/mentions?url="+url.QueryEscape(page), nil, &list); err != nil {
-				return err
-			}
-			for _, n := range list {
-				sec.Items = append(sec.Items, map[string]any{"id": string(n.ID), "title": n.Title, "snippet": n.Excerpt, "updated_at": n.UpdatedAt, "url": sb.public + "/note/" + string(n.ID)})
-			}
-			return nil
-		})
+		notes = s.notesAbout(ctx, u, page, p.Name, p.Name)
 		done <- struct{}{}
 	}()
 	go func() {
@@ -230,6 +222,92 @@ func (s *Server) handleProjectRelated(w http.ResponseWriter, r *http.Request) {
 	<-done
 	out["notes"], out["calendar"] = notes, cal
 	writeJSON(w, http.StatusOK, out)
+}
+
+// notesAbout lists the person's notes in Pocket Notes that link to page (the
+// relation is the link itself, see Pocket Notes docs/notes-from-apps.md) and
+// the address that starts a new one, linked, in the Projects folder.
+func (s *Server) notesAbout(ctx context.Context, u *store.User, page, title, label string) RelatedSection {
+	return s.relatedSection(ctx, u, "notes", func(c context.Context, sb *sibling, sec *RelatedSection) error {
+		q := url.Values{"title": {title}, "url": {page}, "label": {label}, "folder": {"Projects"}}
+		sec.NewURL = sb.public + "/new?" + q.Encode()
+		var list []struct {
+			ID        flexID `json:"id"`
+			Title     string `json:"title"`
+			Category  string `json:"category"`
+			Excerpt   string `json:"excerpt"`
+			UpdatedAt string `json:"updated_at"`
+			Modified  int64  `json:"modified"`
+		}
+		if err := sb.call(c, http.MethodGet, "/api/v1/mentions?url="+url.QueryEscape(page), nil, &list); err != nil {
+			return err
+		}
+		for _, n := range list {
+			sec.Items = append(sec.Items, map[string]any{"id": string(n.ID), "title": n.Title, "folder": n.Category, "snippet": n.Excerpt, "updated_at": n.UpdatedAt, "modified": n.Modified, "url": sb.public + "/note/" + string(n.ID)})
+		}
+		return nil
+	})
+}
+
+// issueNoteLink is the line that makes a note about an issue.
+func issueNoteLink(is *store.Issue, page string) string {
+	label := strings.NewReplacer("[", "(", "]", ")", "\n", " ").Replace(is.Identifier + " · " + is.Title)
+	return "[" + label + "](" + page + ")"
+}
+
+// handleIssueNotes: the person's notes that link to the issue.
+func (s *Server) handleIssueNotes(w http.ResponseWriter, r *http.Request) {
+	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	writeJSON(w, http.StatusOK, s.notesAbout(r.Context(), userFrom(r.Context()), s.issueURL(r, is.Identifier), is.Identifier+" "+is.Title, is.Identifier+" · "+is.Title))
+}
+
+// handleIssueLinkNote links one of the person's notes to the issue by adding
+// the issue's link at the end of it (nothing is stored here).
+func (s *Server) handleIssueLinkNote(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		NoteID flexID `json:"note_id"`
+	}
+	if err := decode(r, &in); err != nil || !digitsOnly(string(in.NoteID)) {
+		writeErr(w, http.StatusBadRequest, "note_id is required")
+		return
+	}
+	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	app, _ := pocketApp("notes")
+	sb := s.siblingAppOrFail(w, r, app.only("notes:write"))
+	if sb == nil {
+		return
+	}
+	c, cancel := context.WithTimeout(r.Context(), siblingTimeout)
+	defer cancel()
+	var n struct {
+		ID    flexID `json:"id"`
+		Title string `json:"title"`
+	}
+	if err := sb.call(c, http.MethodPost, "/api/v1/notes/"+string(in.NoteID)+"/append", map[string]string{"text": issueNoteLink(is, s.issueURL(r, is.Identifier))}, &n); err != nil {
+		writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"id": string(n.ID), "title": n.Title, "url": sb.public + "/note/" + string(n.ID)})
+}
+
+func digitsOnly(v string) bool {
+	if v == "" || len(v) > 19 {
+		return false
+	}
+	for _, c := range v {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // ---------- Pocket Calendar ----------
