@@ -75,7 +75,7 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
     try {
       const r = await api.post<{ url: string; send: boolean; files?: number; skipped?: string[] }>(`${V1}/issues/${issue.id}/code`, { action, note, worktree: worktree || undefined })
       if (r.skipped?.length) toast(`Not sent to the agent: ${r.skipped.join(', ')} (it can only take pictures and documents with text, up to 20 MB each)`, 'err')
-      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}${worktree ? ' in a worktree' : ''}`, r.send)
+      if (panel) panel.open(r.url, `${issue.identifier} · ${worktree && action === 'chat' ? 'Chat in a worktree' : ACTIONS.find(a => a.id === action)!.label + (worktree ? ' in a worktree' : '')}`, r.send)
       else if (tab) { tab.opener = null; tab.location.href = r.url } else window.open(r.url, '_blank', 'noopener')
       onStarted()
     } catch (e) {
@@ -92,7 +92,8 @@ function useMenu(start: (a: Action, worktree?: boolean) => void, withNote: () =>
     { heading: 'Code with Pocket AI' },
     ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, hint: a.id === 'investigate' ? 'read-only' : undefined, onSelect: () => start(a.id) })),
     // its own folder and branch: the main checkout stays as it is; the issue's next ones reuse it
-    { label: 'Fix it in a new worktree', icon: 'git-branch', hint: 'isolated', onSelect: () => start('fix', true) },
+    // (Fix it in a worktree: With a note…)
+    { label: 'Chat in a worktree', icon: 'git-branch', hint: 'own branch', onSelect: () => start('chat', true) },
     { label: 'With a note…', icon: 'edit', onSelect: withNote },
     ...(breakdown ? ['sep' as const, { heading: 'Plan' }, { label: 'Break down into sub-issues', icon: 'subtasks', hint: 'suggests 5', onSelect: breakdown }] : []),
   ]
