@@ -12,12 +12,13 @@ export type FolderHint = { value: string; hint?: string; git?: boolean }
 
 const NONE: FolderHint[] = []
 const cache = new Map<string, Promise<Listing>>()
-function listDirs(dir: string): Promise<Listing> {
-  let p = cache.get(dir)
+function listDirs(dir: string, host = 0): Promise<Listing> {
+  const key = `${host}|${dir}`
+  let p = cache.get(key)
   if (!p) {
-    p = api.get<Listing>(`${V1}/ai/dirs?path=${encodeURIComponent(dir)}`)
-    p.catch(() => cache.delete(dir))
-    cache.set(dir, p)
+    p = api.get<Listing>(`${V1}/ai/dirs?path=${encodeURIComponent(dir)}${host ? `&host=${host}` : ''}`)
+    p.catch(() => cache.delete(key))
+    cache.set(key, p)
   }
   return p
 }
@@ -29,8 +30,10 @@ function split(v: string): [string, string] {
   return [v.slice(0, i) || '/', v.slice(i + 1)]
 }
 
-export function FolderInput({ value, onChange, placeholder = '~/Projects/app', disabled, autoFocus, suggestions = NONE }: {
+export function FolderInput({ value, onChange, placeholder = '~/Projects/app', disabled, autoFocus, suggestions = NONE, host = 0 }: {
   value: string; onChange: (v: string) => void; placeholder?: string; disabled?: boolean; autoFocus?: boolean; suggestions?: FolderHint[]
+  /** the Pocket AI machine whose folders are listed (0 = Pocket AI's own server) */
+  host?: number
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
@@ -47,7 +50,7 @@ export function FolderInput({ value, onChange, placeholder = '~/Projects/app', d
       if (!value.trim() && suggestions.length) { setItems(suggestions); setError(''); setHi(0); return }
       const [dir, typed] = split(value)
       try {
-        const l = await listDirs(dir)
+        const l = await listDirs(dir, host)
         if (!live) return
         // write paths the way the person started them: ~/… stays ~/…
         const show = (p: string) => value.startsWith('~') && l.home && (p === l.home || p.startsWith(l.home + '/')) ? '~' + p.slice(l.home.length) : p
@@ -65,7 +68,7 @@ export function FolderInput({ value, onChange, placeholder = '~/Projects/app', d
       }
     }, 120)
     return () => { live = false; clearTimeout(t) }
-  }, [value, open, sugKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [value, open, sugKey, host]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
     if (!open) return

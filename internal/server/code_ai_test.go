@@ -224,6 +224,17 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if got := plainBranch("alex/web-1-fix-login", "WEB-1"); got != "alex/fix-login" {
 		t.Fatalf("plain branch %q", got)
 	}
+	// another machine (Pocket AI → Settings → Servers): its own login, the host goes with the draft
+	alex.do("PUT", "/api/v1/teams/WEB/ai", map[string]any{"cwd": "/work/web", "host_id": 3, "account_id": 2, "provider": "claude", "link_refs": true}, 200, &tai)
+	if tai.HostID != 3 || tai.AccountID != nil {
+		t.Fatalf("host saved: %+v", tai)
+	}
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "fix"}, 201, nil)
+	if d = ai.drafts[len(ai.drafts)-1]; d["host_id"] != float64(3) || d["account_id"] != nil || d["cwd"] != "/srv/relaunch" { // the project's folder, on the team's machine
+		t.Fatalf("draft on another machine: %+v", d)
+	}
+	alex.do("PUT", "/api/v1/teams/WEB/ai", map[string]any{"cwd": "~/Projects/web", "provider": "claude", "model": "opus", "effort": "high", "mode": "default",
+		"instructions": "Use pnpm, never npm.", "send_now": true, "link_refs": true}, 200, &tai)
 	// the issue's files go along (the agent sees screenshots, reads documents); links are listed
 	var mp bytes.Buffer
 	mw := multipart.NewWriter(&mp)

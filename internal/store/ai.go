@@ -15,6 +15,7 @@ type TeamAI struct {
 	Cwd          string `json:"cwd"`
 	Provider     string `json:"provider"`
 	AccountID    *int64 `json:"account_id"`
+	HostID       int64  `json:"host_id"` // the Pocket AI machine it runs on, 0 = Pocket AI's own server
 	Model        string `json:"model"`
 	Effort       string `json:"effort"`
 	Mode         string `json:"mode"`
@@ -35,8 +36,8 @@ var ErrMemoryFull = errors.New("memory full")
 func (s *Store) GetTeamAI(ctx context.Context, teamID int64) (*TeamAI, error) {
 	t := TeamAI{TeamID: teamID}
 	var acc sql.NullInt64
-	err := s.DB.QueryRowContext(ctx, `SELECT cwd, provider, account_id, model, effort, mode, instructions, memory, send_now, link_refs, updated_at FROM team_ai WHERE team_id = ?`, teamID).
-		Scan(&t.Cwd, &t.Provider, &acc, &t.Model, &t.Effort, &t.Mode, &t.Instructions, &t.Memory, &t.SendNow, &t.LinkRefs, &t.UpdatedAt)
+	err := s.DB.QueryRowContext(ctx, `SELECT cwd, provider, account_id, model, effort, mode, instructions, memory, send_now, link_refs, host_id, updated_at FROM team_ai WHERE team_id = ?`, teamID).
+		Scan(&t.Cwd, &t.Provider, &acc, &t.Model, &t.Effort, &t.Mode, &t.Instructions, &t.Memory, &t.SendNow, &t.LinkRefs, &t.HostID, &t.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &t, nil
 	}
@@ -51,10 +52,10 @@ func (s *Store) GetTeamAI(ctx context.Context, teamID int64) (*TeamAI, error) {
 
 // SaveTeamAI stores everything but the memory.
 func (s *Store) SaveTeamAI(ctx context.Context, t *TeamAI) error {
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO team_ai(team_id, cwd, provider, account_id, model, effort, mode, instructions, send_now, link_refs, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(team_id) DO UPDATE SET cwd=excluded.cwd, provider=excluded.provider, account_id=excluded.account_id, model=excluded.model,
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO team_ai(team_id, cwd, provider, account_id, model, effort, mode, instructions, send_now, link_refs, host_id, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(team_id) DO UPDATE SET cwd=excluded.cwd, host_id=excluded.host_id, provider=excluded.provider, account_id=excluded.account_id, model=excluded.model,
 		effort=excluded.effort, mode=excluded.mode, instructions=excluded.instructions, send_now=excluded.send_now, link_refs=excluded.link_refs, updated_at=excluded.updated_at`,
-		t.TeamID, t.Cwd, t.Provider, t.AccountID, t.Model, t.Effort, t.Mode, t.Instructions, t.SendNow, t.LinkRefs, Now())
+		t.TeamID, t.Cwd, t.Provider, t.AccountID, t.Model, t.Effort, t.Mode, t.Instructions, t.SendNow, t.LinkRefs, t.HostID, Now())
 	return err
 }
 

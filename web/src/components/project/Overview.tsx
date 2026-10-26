@@ -164,8 +164,9 @@ function Properties({ p, save }: { p: ProjectDetail; save: Save }) {
 function CodeFolder({ p }: { p: ProjectDetail }) {
   const { toast } = useToast()
   const [cwd, setCwd] = useState<string | null>(null)
+  const [host, setHost] = useState(0)
   const [edit, setEdit] = useState(false)
-  useEffect(() => { api.get<{ cwd: string }>(`${V1}/projects/${p.id}/ai`).then(r => setCwd(r.cwd)).catch(() => setCwd('')) }, [p.id])
+  useEffect(() => { api.get<{ cwd: string; host_id?: number }>(`${V1}/projects/${p.id}/ai`).then(r => { setCwd(r.cwd); setHost(r.host_id || 0) }).catch(() => setCwd('')) }, [p.id])
   const save = async (v: string) => {
     setEdit(false)
     try { const r = await api.put<{ cwd: string }>(`${V1}/projects/${p.id}/ai`, { cwd: v }); setCwd(r.cwd); toast(r.cwd ? 'Code folder saved' : 'Uses the team’s code folder') } catch (e) { toast(errMsg(e), 'err') }
@@ -176,17 +177,17 @@ function CodeFolder({ p }: { p: ProjectDetail }) {
     <div className="prop-row">
       <span className="prop-label">Code</span>
       {p.can_edit ? <button type="button" className="prop-val" onClick={() => setEdit(true)} title="Folder for Code with Pocket AI">{val}</button> : <span className="prop-val static">{val}</span>}
-      {edit && <CodeFolderDialog value={cwd} onDone={save} onClose={() => setEdit(false)} />}
+      {edit && <CodeFolderDialog value={cwd} host={host} onDone={save} onClose={() => setEdit(false)} />}
     </div>
   )
 }
 
-function CodeFolderDialog({ value, onDone, onClose }: { value: string; onDone: (v: string) => void; onClose: () => void }) {
+function CodeFolderDialog({ value, host, onDone, onClose }: { value: string; host: number; onDone: (v: string) => void; onClose: () => void }) {
   const [v, setV] = useState(value)
   return (
     <Modal title="Code folder" onClose={onClose} size="sm">
       <form onSubmit={e => { e.preventDefault(); onDone(v.trim().replace(/(.)\/+$/, '$1')) }} className="stack">
-        <FolderInput value={v} onChange={setV} autoFocus />
+        <FolderInput value={v} onChange={setV} host={host} autoFocus />
         <p className="muted xsmall">Where “Code with Pocket AI” opens for this project’s issues. Empty = the team’s folder (Team settings → Pocket AI).</p>
         {value && <button type="button" className="btn ghost sm" onClick={() => onDone('')}>Use the team’s folder</button>}
         <div className="form-actions"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="submit" className="btn primary">Save</button></div>

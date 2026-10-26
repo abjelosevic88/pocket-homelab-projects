@@ -35,7 +35,7 @@ export function PocketAITab({ team, admin }: TabProps) {
   if (saved.error) return <div className="callout danger"><Icon name="alert" size={15} /><span>{saved.error}</span></div>
   if (!f || !saved.data) return <Loading />
   const set = (patch: Partial<TeamAI>) => setF({ ...f, ...patch })
-  const dirty = (['cwd', 'provider', 'account_id', 'model', 'effort', 'mode', 'instructions', 'send_now', 'link_refs'] as const).some(k => (f[k] ?? null) !== (saved.data![k] ?? null))
+  const dirty = (['cwd', 'host_id', 'provider', 'account_id', 'model', 'effort', 'mode', 'instructions', 'send_now', 'link_refs'] as const).some(k => (f[k] ?? null) !== (saved.data![k] ?? null))
   const memDirty = memory !== saved.data.memory
 
   const save = async () => {
@@ -55,6 +55,11 @@ export function PocketAITab({ team, admin }: TabProps) {
   const accounts = (o?.accounts || []).filter(a => a.provider === (f.provider || o?.default_provider))
   const accountOpts: Option<string>[] = [{ value: '', label: 'My default login' }, ...accounts.map(a => ({ value: String(a.id), label: a.label, hint: a.signed_in ? undefined : 'signed out' }))]
   if (f.account_id != null && !accountOpts.some(x => x.value === String(f.account_id))) accountOpts.push({ value: String(f.account_id), label: `Login #${f.account_id}` })
+  const hosts = o?.hosts || []
+  const host = hosts.find(h => h.id === f.host_id)
+  const hostOpts: Option<string>[] = [{ value: '0', label: 'Pocket AI’s server' },
+    ...hosts.map(h => ({ value: String(h.id), label: h.name, hint: h.ok ? undefined : 'not reachable at the last check' }))]
+  if (f.host_id && !host) hostOpts.push({ value: String(f.host_id), label: `Machine #${f.host_id}`, hint: 'removed from Pocket AI' })
 
   return (
     <div className="stack loose">
@@ -63,12 +68,17 @@ export function PocketAITab({ team, admin }: TabProps) {
 
       <Section title="Code conversations" sub={<>“Code with Pocket AI” on an issue starts a Pocket AI conversation in this folder, in a panel beside the issue, with the issue written out as the first message; <b>Investigate</b> always starts read-only.</>}>
         <div className="stack">
-          <Field label="Code folder" help={<>Start typing a path on the server (<code>~/</code> works) and pick from the folders listed. A project can use its own folder (project properties).</>}>
-            <FolderInput value={f.cwd} onChange={cwd => set({ cwd })} disabled={!admin} suggestions={(o?.workspaces || []).map(w => ({ value: w.path, hint: w.name }))} />
+          <Field label="Server" help={hosts.length ? <>Where the agent runs and the code lives: Pocket AI’s own server or another machine from Pocket AI → Settings → Servers (it signs in with that machine’s own Claude Code / Codex login).</> : <>Pocket AI’s own server. Add other machines in Pocket AI → Settings → Servers to run the team’s conversations there.</>}>
+            <Select label="Server" value={String(f.host_id || 0)} options={hostOpts} disabled={!admin || !hosts.length}
+              onChange={v => { const id = Number(v); if (id !== (f.host_id || 0)) set({ host_id: id, cwd: '', account_id: id ? null : f.account_id }) }} />
+          </Field>
+          <Field label="Code folder" help={<>Start typing a path on {host ? <b>{host.name}</b> : 'the server'} (<code>~/</code> works) and pick from the folders listed. A project can use its own folder (project properties).</>}>
+            <FolderInput value={f.cwd} onChange={cwd => set({ cwd })} disabled={!admin} host={f.host_id || 0} placeholder={f.host_id ? '/work/app' : undefined}
+              suggestions={f.host_id ? [] : (o?.workspaces || []).map(w => ({ value: w.path, hint: w.name }))} />
           </Field>
           <div className="ui-ai-grid">
             <Field label="Agent" group><Select label="Agent" value={f.provider} options={providerOpts} disabled={!admin} onChange={v => set({ provider: v as TeamAI['provider'], model: '', effort: '', mode: '', account_id: null })} /></Field>
-            <Field label="Login" group><Select label="Login" value={f.account_id == null ? '' : String(f.account_id)} options={accountOpts} disabled={!admin} onChange={v => set({ account_id: v === '' ? null : Number(v) })} /></Field>
+            <Field label="Login" group><Select label="Login" value={f.host_id ? '' : f.account_id == null ? '' : String(f.account_id)} options={f.host_id ? [{ value: '', label: `${host?.name || 'The machine'}’s own login` }] : accountOpts} disabled={!admin || !!f.host_id} onChange={v => set({ account_id: v === '' ? null : Number(v) })} /></Field>
             <Field label="Model" group><Select label="Model" value={f.model} options={opts(provider?.models, f.model, provider?.default_model)} disabled={!admin} onChange={v => set({ model: v })} /></Field>
             <Field label="Effort" group><Select label="Effort" value={f.effort} options={opts(provider?.efforts, f.effort, provider?.default_effort)} disabled={!admin} onChange={v => set({ effort: v })} /></Field>
             <Field label="Mode" group help="For Fix it and Chat; Investigate uses the read-only mode."><Select label="Mode" value={f.mode} options={opts(provider?.modes, f.mode, provider?.default_mode)} disabled={!admin} onChange={v => set({ mode: v })} /></Field>

@@ -182,7 +182,7 @@ export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'commen
 
 /** A team's Pocket AI code conversation settings (instructions = hidden system prompt). */
 export interface TeamAI {
-  team_id: number; cwd: string; provider: '' | 'claude' | 'codex'; account_id: number | null; model: string; effort: string; mode: string
+  team_id: number; cwd: string; provider: '' | 'claude' | 'codex'; account_id: number | null; host_id: number; model: string; effort: string; mode: string
   instructions: string; memory: string; send_now: boolean; link_refs: boolean; updated_at: string
 }
 
@@ -193,6 +193,8 @@ export interface AgentOptions {
     readonly_mode?: string; default_model?: string; default_effort?: string; default_mode?: string }[]
   accounts?: { id: number; provider: string; label: string; signed_in: boolean }[]
   workspaces?: { name: string; path: string }[]
+  /** other machines in Pocket AI → Settings → Servers (its own server is 0) */
+  hosts?: { id: number; name: string; ok: boolean }[]
   default_provider?: string; home?: string
 }
 

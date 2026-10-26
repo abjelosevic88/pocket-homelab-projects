@@ -115,7 +115,11 @@ func (s *Server) handleAIDirs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var raw json.RawMessage
-	if err := sb.call(r.Context(), http.MethodGet, "/api/v1/link/dirs?path="+url.QueryEscape(r.URL.Query().Get("path")), nil, &raw); err != nil {
+	q := url.Values{"path": {r.URL.Query().Get("path")}}
+	if h := r.URL.Query().Get("host"); h != "" && h != "0" {
+		q.Set("host", h)
+	}
+	if err := sb.call(r.Context(), http.MethodGet, "/api/v1/link/dirs?"+q.Encode(), nil, &raw); err != nil {
 		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
 		return
 	}
@@ -158,6 +162,7 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 		Cwd          string `json:"cwd"`
 		Provider     string `json:"provider"`
 		AccountID    *int64 `json:"account_id"`
+		HostID       int64  `json:"host_id"`
 		Model        string `json:"model"`
 		Effort       string `json:"effort"`
 		Mode         string `json:"mode"`
@@ -196,13 +201,19 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 	if in.AccountID != nil && *in.AccountID < 0 {
 		in.AccountID = nil
 	}
+	if in.HostID < 0 {
+		in.HostID = 0
+	}
+	if in.HostID != 0 {
+		in.AccountID = nil // another machine signs in with its own login
+	}
 	ai, err := s.store.GetTeamAI(r.Context(), t.ID)
 	if err != nil {
 		s.fail(w, err, "team ai")
 		return
 	}
 	ai.Cwd, ai.Provider, ai.AccountID, ai.Model, ai.Effort, ai.Mode = cwd, in.Provider, in.AccountID, strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort), strings.TrimSpace(in.Mode)
-	ai.Instructions, ai.SendNow, ai.LinkRefs = strings.TrimSpace(in.Instructions), in.SendNow, in.LinkRefs
+	ai.Instructions, ai.SendNow, ai.LinkRefs, ai.HostID = strings.TrimSpace(in.Instructions), in.SendNow, in.LinkRefs, in.HostID
 	if err := s.store.SaveTeamAI(r.Context(), ai); err != nil {
 		s.fail(w, err, "team ai")
 		return
@@ -294,7 +305,15 @@ func (s *Server) handleGetProjectAI(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "project")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"cwd": s.store.ProjectAICwd(r.Context(), p.ID)})
+	// host_id: the machine of the project's (first) team, whose folders the picker lists
+	host := int64(0)
+	for _, id := range p.TeamIDs {
+		if tai, err := s.store.GetTeamAI(r.Context(), id); err == nil && tai.HostID != 0 {
+			host = tai.HostID
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"cwd": s.store.ProjectAICwd(r.Context(), p.ID), "host_id": host})
 }
 
 func (s *Server) handlePutProjectAI(w http.ResponseWriter, r *http.Request) {
@@ -555,7 +574,9 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 			body[k] = v
 		}
 	}
-	if tai.AccountID != nil {
+	if tai.HostID != 0 {
+		body["host_id"] = tai.HostID
+	} else if tai.AccountID != nil {
 		body["account_id"] = *tai.AccountID
 	}
 	var draft struct {
