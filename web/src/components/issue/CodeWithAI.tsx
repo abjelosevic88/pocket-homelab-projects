@@ -56,6 +56,14 @@ export function useIssueCode(issue: IssueDetail | null, version: number): IssueC
   return { list, worktrees, detail, reload, patch }
 }
 
+type ActionKind = 'investigate' | 'fix' | 'chat' | 'fork' | 'other'
+const ACTION_ICON: Record<ActionKind, string> = { investigate: 'search', fix: 'code', chat: 'message', fork: 'git-branch', other: 'sparkles' }
+/** Which kind of conversation it is, from its action or title. */
+function actionKind(t: CodeThread): ActionKind {
+  const a = `${t.action || ''} ${t.title}`.toLowerCase()
+  return a.includes('fork') ? 'fork' : a.includes('investigat') ? 'investigate' : a.includes('fix') ? 'fix' : a.includes('chat') ? 'chat' : 'other'
+}
+
 /** What the header and the section show: sent conversations, plus the newest unsent draft. */
 function visible(list: CodeThread[]) {
   const sent = list.filter(t => t.status !== 'draft' && t.status !== 'deleted')
@@ -177,21 +185,26 @@ export function CodeConversations({ issue, code, openUrls = [] }: { issue: Issue
   return (
     <section className="ip-sec">
       <div className="ip-sec-head"><h3>Conversations <span className="count">{list.length}</span></h3></div>
-      {list.length > 0 && <div className="ip-box code-convs">
+      {list.length > 0 && <div className="ip-box cc-list">
         {list.map(t => {
           const st = STATUS[t.status] || { dot: 'off' as const, label: t.status }
           const name = t.title.replace(`${issue.identifier} · `, '') || issue.identifier
           return (
-            <a key={t.draft_id} className={`code-conv ${t.status} ${shown(t.url) ? 'on' : ''} ${menu?.t.draft_id === t.draft_id ? 'menu-open' : ''}`} href={t.url} target="_blank" rel="noreferrer"
+            <a key={t.draft_id} className={`cc-row ${t.status} ${shown(t.url) ? 'on' : ''} ${menu?.t.draft_id === t.draft_id ? 'menu-open' : ''}`} href={t.url} target="_blank" rel="noreferrer"
+              title={shown(t.url) ? 'Open in the panel' : 'Open beside the issue (⌘-click: new tab)'}
               onContextMenu={e => { e.preventDefault(); setMenu({ t, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}
               onClick={e => { if (panel && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); panel.open(t.url, `${issue.identifier} · ${t.action || name}`) } }}>
-              {t.status === 'running' || t.status === 'waiting' ? <span className={`code-pulse ${t.status}`} /> : <StatusDot status={st.dot} title={st.label} />}
-              <span className="code-conv-action">{t.action || 'Pocket AI'}</span>
-              {t.worktree && <span className="code-conv-wt" title={`Works in the worktree ${t.worktree}`}><Icon name="git-branch" size={12} /><span className="ellipsis">{t.worktree}</span></span>}
-              <span className="ellipsis muted">{name}</span>
-              <span className="spacer" style={{ flex: 1 }} />
-              <span className={`code-conv-state ${t.status}`}>{t.status === 'draft' ? 'Not sent' : st.label}</span>
-              <span className="faint xsmall">{ago(t.updated_at || t.created_at)}</span>
+              <span className={`cc-ico ${actionKind(t)}`}><Icon name={ACTION_ICON[actionKind(t)]} size={15} />
+                {(t.status === 'running' || t.status === 'waiting') && <span className={`code-pulse ${t.status}`} />}</span>
+              <span className="cc-main">
+                <span className="cc-title"><b>{t.action || 'Pocket AI'}</b>
+                  {t.worktree && <span className="code-conv-wt" title={`Works in the worktree ${t.worktree}`}><Icon name="git-branch" size={11} /><span className="ellipsis">{t.worktree}</span></span>}</span>
+                <small className="ellipsis">{name}</small>
+              </span>
+              <span className="cc-side">
+                <span className={`cc-state ${t.status}`}>{t.status === 'draft' ? 'Not sent' : st.label}</span>
+                <span className="cc-time">{ago(t.updated_at || t.created_at)}</span>
+              </span>
             </a>
           )
         })}
@@ -267,6 +280,7 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
 export function embedURL(u: string, send: boolean) {
   const x = new URL(u, location.href)
   x.searchParams.set('embed', '1')
+  x.searchParams.set('tabs', '1') // a fork made in the frame opens as a tab of the panel
   if (send && x.searchParams.has('draft')) x.searchParams.set('send', '1')
   return x.href
 }

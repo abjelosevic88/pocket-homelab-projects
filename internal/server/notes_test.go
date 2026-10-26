@@ -139,6 +139,12 @@ func TestIssueNotes(t *testing.T) {
 		t.Fatalf("folders: %v", folders)
 	}
 
+	var nc struct{ Content string }
+	alex.do("GET", "/api/v1/issues/AS-1/notes/401/content", nil, 200, &nc)
+	if !strings.HasPrefix(nc.Content, "# Plan") {
+		t.Fatalf("content: %q", nc.Content)
+	}
+
 	// unlinking takes the issue's link out of the note again
 	alex.do("DELETE", "/api/v1/issues/AS-1/notes/401", nil, 204, nil)
 	if text := notes.notes["401"]; strings.Contains(text, "/issue/AS-1") || !strings.HasPrefix(text, "# Plan") {

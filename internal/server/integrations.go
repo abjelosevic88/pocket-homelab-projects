@@ -37,6 +37,7 @@ func (s *Server) integrationRoutes(r chi.Router) {
 	r.Get("/issues/{ref}/notes", s.handleIssueNotes)
 	r.Post("/issues/{ref}/notes", s.handleIssueLinkNote)
 	r.Delete("/issues/{ref}/notes/{note}", s.handleIssueUnlinkNote)
+	r.Get("/issues/{ref}/notes/{note}/content", s.handleIssueNoteContent)
 	r.Get("/teams/{ref}/notes", s.handleTeamNotes)
 	r.Put("/teams/{ref}/notes", s.handlePutTeamNotes)
 	r.Get("/notes/folders", s.handleNoteFolders)
@@ -350,6 +351,37 @@ func (s *Server) handleIssueUnlinkNote(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
 		return
 	}
+}
+
+// handleIssueNoteContent: one of the person's notes as Markdown, for adding
+// it to a Pocket AI message about the issue ("@" in the panel).
+func (s *Server) handleIssueNoteContent(w http.ResponseWriter, r *http.Request) {
+	noteID := chi.URLParam(r, "note")
+	if !digitsOnly(noteID) {
+		writeErr(w, http.StatusBadRequest, "not a note id")
+		return
+	}
+	if _, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead); err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	app, _ := pocketApp("notes")
+	sb := s.siblingAppOrFail(w, r, app.reading())
+	if sb == nil {
+		return
+	}
+	c, cancel := context.WithTimeout(r.Context(), siblingTimeout)
+	defer cancel()
+	var n struct {
+		Title    string `json:"title"`
+		Category string `json:"category"`
+		Content  string `json:"content"`
+	}
+	if err := sb.call(c, http.MethodGet, "/api/v1/notes/"+noteID, nil, &n); err != nil {
+		writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"title": n.Title, "folder": n.Category, "content": n.Content, "url": sb.public + "/note/" + noteID})
 }
 
 // unlinkFromNote takes every link to page out of a note's Markdown: a line

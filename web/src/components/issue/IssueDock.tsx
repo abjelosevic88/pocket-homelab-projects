@@ -8,6 +8,7 @@ import type { IssueDetail } from '../../lib/types'
 import { Icon } from '../icons'
 import { noteEmbedURL } from '../NoteDock'
 import { embedURL, type IssueCode, NewTabButton, sameConversation } from './CodeWithAI'
+import { contextItem, contextItems } from './dockContext'
 
 export interface DockTab { key: string; kind: 'ai' | 'note'; url: string; title: string; send?: boolean; id?: string }
 
@@ -17,15 +18,34 @@ const clampW = (w: number) => Math.round(Math.max(360, Math.min(w, window.innerW
 export const newDockKey = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 
 /** One tab's frame. Its address is set once: changing it would reload the conversation. */
-function DockFrame({ tab, shown, onMoved }: { tab: DockTab; shown: boolean; onMoved: (key: string, threadId: string, status: string) => void }) {
+function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown: boolean; issue: IssueDetail; onMoved: (key: string, threadId: string, status: string) => void; onOpen: (url: string, title: string) => void }) {
   const ref = useRef<HTMLIFrameElement>(null)
   const [src] = useState(() => tab.kind === 'ai' ? embedURL(tab.url, !!tab.send) : noteEmbedURL(tab.url))
   const moved = useRef(onMoved)
   moved.current = onMoved
+  const open = useRef(onOpen)
+  open.current = onOpen
+  const iss = useRef(issue)
+  iss.current = issue
   useEffect(() => {
     // several frames talk at once: only this frame's messages are this tab's
     const h = (e: MessageEvent) => {
       if (e.source !== ref.current?.contentWindow) return
+      if (tab.kind === 'ai' && e.data?.type === 'pocket-ai' && (e.data.want === 'context' || e.data.want === 'context-item')) {
+        // "@" in the conversation: the issue's notes, files and links, answered to this frame only
+        const reply = (body: Record<string, unknown>) => ref.current?.contentWindow?.postMessage({ type: 'pocket-ai-context', req: e.data.req, ...body }, new URL(tab.url, location.href).origin)
+        const work = e.data.want === 'context'
+          ? contextItems(iss.current).then(items => ({ label: iss.current.identifier, items }))
+          : contextItem(iss.current, String(e.data.id || ''))
+        work.then(reply, err => reply({ error: (err as Error).message }))
+        return
+      }
+      if (tab.kind === 'ai' && e.data?.type === 'pocket-ai' && e.data.open) {
+        // the conversation asks for another one in a tab (a fork made in it)
+        const o = e.data.open as { url?: string; title?: string }
+        if (typeof o.url === 'string' && new URL(o.url).origin === new URL(tab.url, location.href).origin) open.current(o.url, o.title || 'Fork')
+        return
+      }
       if (tab.kind === 'ai' && e.data?.type === 'pocket-ai') {
         moved.current(tab.key, e.data.thread_id || '', e.data.status || '')
         refreshAIActive()
@@ -38,10 +58,10 @@ function DockFrame({ tab, shown, onMoved }: { tab: DockTab; shown: boolean; onMo
     allow="clipboard-read; clipboard-write; camera; microphone" />
 }
 
-export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onCloseTab, onCloseAll, onMoved, onStarted }: {
+export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onCloseTab, onCloseAll, onMoved, onStarted, onOpen }: {
   issue: IssueDetail; code: IssueCode; tabs: DockTab[]; active: string; mobile: boolean
   onActivate: (key: string) => void; onCloseTab: (key: string) => void; onCloseAll: () => void
-  onMoved: (key: string, threadId: string, status: string) => void; onStarted: () => void
+  onMoved: (key: string, threadId: string, status: string) => void; onStarted: () => void; onOpen: (url: string, title: string) => void
 }) {
   const [w, setW] = useState(() => clampW(Number(localStorage.getItem(DOCK_W)) || 520))
   const [drag, setDrag] = useState(false)
@@ -94,7 +114,7 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
         <button type="button" className="btn ghost icon-only sm" onClick={onCloseAll} title="Close the panel" aria-label="Close the panel"><Icon name="x" size={15} /></button>
       </div>
       <div className="dock-frames">
-        {tabs.map(t => <DockFrame key={t.key} tab={t} shown={t.key === cur?.key} onMoved={onMoved} />)}
+        {tabs.map(t => <DockFrame key={t.key} tab={t} issue={issue} shown={t.key === cur?.key} onMoved={onMoved} onOpen={onOpen} />)}
       </div>
     </aside>
   )
