@@ -448,3 +448,9 @@ button.ic-chip:hover { background: var(--hover); }
 .team-ai-state { flex-shrink: 0; padding: 0 16px 0 8px; font-size: 12px; font-weight: 600; color: #7c3aed; }
 .team-ai-state.waiting { color: #b45309; }
 .ip-note-empty { margin: 0; line-height: 1.45; }
+.team-notes-list { padding: 8px 14px; display: flex; flex-direction: column; }
+.team-note { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--text); text-decoration: none !important; min-width: 0; }
+.team-note:hover { background: var(--hover); }
+.team-note-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.team-note-title { font-weight: 550; display: flex; align-items: center; gap: 5px; }
+.team-ai-sub.notes { color: var(--text-2); }

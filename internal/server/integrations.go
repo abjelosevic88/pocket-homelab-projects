@@ -35,6 +35,9 @@ func (s *Server) integrationRoutes(r chi.Router) {
 	r.Get("/projects/{id}/related", s.handleProjectRelated)
 	r.Get("/issues/{ref}/notes", s.handleIssueNotes)
 	r.Post("/issues/{ref}/notes", s.handleIssueLinkNote)
+	r.Get("/teams/{ref}/notes", s.handleTeamNotes)
+	r.Put("/teams/{ref}/notes", s.handlePutTeamNotes)
+	r.Get("/notes/folders", s.handleNoteFolders)
 }
 
 // siblingErr says in plain words why another app did not answer.
@@ -202,7 +205,7 @@ func (s *Server) handleProjectRelated(w http.ResponseWriter, r *http.Request) {
 	done := make(chan struct{}, 2)
 	var notes, cal RelatedSection
 	go func() {
-		notes = s.notesAbout(ctx, u, page, p.Name, p.Name)
+		notes = s.notesAbout(ctx, u, page, p.Name, p.Name, defaultNotesFolder)
 		done <- struct{}{}
 	}()
 	go func() {
@@ -226,10 +229,10 @@ func (s *Server) handleProjectRelated(w http.ResponseWriter, r *http.Request) {
 
 // notesAbout lists the person's notes in Pocket Notes that link to page (the
 // relation is the link itself, see Pocket Notes docs/notes-from-apps.md) and
-// the address that starts a new one, linked, in the Projects folder.
-func (s *Server) notesAbout(ctx context.Context, u *store.User, page, title, label string) RelatedSection {
+// the address that starts a new one, linked, in folder.
+func (s *Server) notesAbout(ctx context.Context, u *store.User, page, title, label, folder string) RelatedSection {
 	return s.relatedSection(ctx, u, "notes", func(c context.Context, sb *sibling, sec *RelatedSection) error {
-		q := url.Values{"title": {title}, "url": {page}, "label": {label}, "folder": {"Projects"}}
+		q := url.Values{"title": {title}, "url": {page}, "label": {label}, "folder": {folder}}
 		sec.NewURL = sb.public + "/new?" + q.Encode()
 		var list []struct {
 			ID        flexID `json:"id"`
@@ -262,7 +265,7 @@ func (s *Server) handleIssueNotes(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
-	writeJSON(w, http.StatusOK, s.notesAbout(r.Context(), userFrom(r.Context()), s.issueURL(r, is.Identifier), is.Identifier+" "+is.Title, is.Identifier+" · "+is.Title))
+	writeJSON(w, http.StatusOK, s.notesAbout(r.Context(), userFrom(r.Context()), s.issueURL(r, is.Identifier), is.Identifier+" "+is.Title, is.Identifier+" · "+is.Title, s.teamNotesFolder(r.Context(), is.TeamID)))
 }
 
 // handleIssueLinkNote links one of the person's notes to the issue by adding

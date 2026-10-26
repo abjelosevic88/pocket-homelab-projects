@@ -471,6 +471,7 @@ type codeIssue struct {
 	Comments                                                               []string // "Name (date): body"
 	Git                                                                    []string // "commit abc123 on branch x: title"
 	Links                                                                  []string // other attachments: "Title — URL"
+	NotesFolder                                                            string   // the team's folder in Pocket Notes
 	Files                                                                  []codeFile
 	Team, Cwd                                                              string
 	ID                                                                     int64
@@ -635,7 +636,7 @@ func shortCwd(p string) string {
 func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, cwd string) codeIssue {
 	ctx := r.Context()
 	ci := codeIssue{ID: is.ID, Identifier: is.Identifier, Title: is.Title, URL: s.issueURL(r, is.Identifier), Priority: priorityName(is.Priority),
-		Description: is.Description, Branch: s.branchName(ctx, a.uid, is), Team: team, Cwd: cwd}
+		Description: is.Description, Branch: s.branchName(ctx, a.uid, is), Team: team, Cwd: cwd, NotesFolder: s.teamNotesFolder(ctx, is.TeamID)}
 	if st, err := s.store.GetState(ctx, is.StateID); err == nil {
 		ci.Status = st.Name
 	}
@@ -810,7 +811,7 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + "): one short factual line, never secrets or credentials.\n")
 	link := "[" + strings.NewReplacer("[", "(", "]", ")").Replace(ci.Identifier+" · "+ci.Title) + "](" + ci.URL + ")"
 	if tai.HostID == 0 {
-		fmt.Fprintf(&sys, "\n## Notes\nWhen the person asks to put a plan, write-up or findings in a note (Pocket Notes), create it with pocket_notes_create (category \"Projects\") and put this link in its content: %[1]s. Every note that links to the issue is listed under Notes on the issue page, so that is all linking takes. To link an existing note, add the same link to it with pocket_notes_append.\n", link)
+		fmt.Fprintf(&sys, "\n## Notes\nWhen the person asks to put a plan, write-up or findings in a note (Pocket Notes), create it with pocket_notes_create (category %[2]q, the team's folder) and put this link in its content: %[1]s. Every note that links to the issue is listed under Notes on the issue page, so that is all linking takes. To link an existing note, add the same link to it with pocket_notes_append.\n", link, firstNonEmpty(ci.NotesFolder, defaultNotesFolder))
 	} else {
 		sys.WriteString("\n## Notes\nThe Pocket tools (Pocket Notes, Pocket Projects) do not reach this machine. When the person asks to put something in a note, write it out in full as Markdown in your reply and tell them to use New note under Notes on the issue, which makes a note already linked to it.\n")
 	}

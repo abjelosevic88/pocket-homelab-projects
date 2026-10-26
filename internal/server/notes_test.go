@@ -35,6 +35,14 @@ func (f *fakeNotes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		json.NewEncoder(w).Encode(out)
+	case r.Method == "GET" && r.URL.Path == "/api/v1/notes":
+		out := []map[string]any{}
+		if r.URL.Query().Get("category") == "Athena/Plans" && r.URL.Query().Get("recursive") == "1" {
+			out = append(out, map[string]any{"id": 401, "title": "Plan", "category": "Athena/Plans", "modified": 1792500000})
+		}
+		json.NewEncoder(w).Encode(out)
+	case r.Method == "GET" && r.URL.Path == "/api/v1/folders":
+		json.NewEncoder(w).Encode([]map[string]any{{"path": "Athena", "count": 0}, {"path": "Athena/Plans", "count": 1}})
 	case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/append"):
 		id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v1/notes/"), "/append")
 		if _, ok := f.notes[id]; !ok {
@@ -85,5 +93,35 @@ func TestIssueNotes(t *testing.T) {
 	}
 	if alex.status("POST", "/api/v1/issues/AS-1/notes", map[string]any{"note_id": 999}) != 502 {
 		t.Fatal("a missing note did not fail")
+	}
+
+	// the team's folder: issue notes start there, the team page lists it
+	ben := person(t, s, h, "ben@example.com", "Ben", "member")
+	alex.do("POST", "/api/v1/teams/AS/members", map[string]any{"user_id": ben.user.ID, "role": "member"}, 200, nil)
+	if ben.status("PUT", "/api/v1/teams/AS/notes", map[string]any{"folder": "Mine"}) != 403 {
+		t.Fatal("a member chose the team's folder")
+	}
+	var tn struct {
+		Folder    string         `json:"folder"`
+		FolderURL string         `json:"folder_url"`
+		Notes     RelatedSection `json:"notes"`
+	}
+	alex.do("PUT", "/api/v1/teams/AS/notes", map[string]any{"folder": " /Athena//Plans/ "}, 200, &tn)
+	if tn.Folder != "Athena/Plans" || len(tn.Notes.Items) != 1 || !strings.HasSuffix(tn.FolderURL, "/?in=Athena%2FPlans") {
+		t.Fatalf("team notes: %+v", tn)
+	}
+	alex.do("GET", "/api/v1/issues/AS-1/notes", nil, 200, &sec)
+	if !strings.Contains(sec.NewURL, "folder=Athena%2FPlans") {
+		t.Fatalf("new note folder: %s", sec.NewURL)
+	}
+	var team2 store.Team
+	alex.do("GET", "/api/v1/teams/AS", nil, 200, &team2)
+	if team2.NotesFolder != "Athena/Plans" {
+		t.Fatalf("team json: %q", team2.NotesFolder)
+	}
+	var folders []map[string]any
+	alex.do("GET", "/api/v1/notes/folders", nil, 200, &folders)
+	if len(folders) != 2 {
+		t.Fatalf("folders: %v", folders)
 	}
 }

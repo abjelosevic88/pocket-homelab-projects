@@ -94,3 +94,17 @@ func splitCols(cols string) []string {
 	}
 	return out
 }
+
+// TeamNotesFolder is the team's folder in Pocket Notes ("" = none chosen).
+func (s *Store) TeamNotesFolder(ctx context.Context, teamID int64) string {
+	var f string
+	_ = s.DB.QueryRowContext(ctx, `SELECT folder FROM team_notes WHERE team_id = ?`, teamID).Scan(&f)
+	return f
+}
+
+// SetTeamNotesFolder stores the team's folder in Pocket Notes.
+func (s *Store) SetTeamNotesFolder(ctx context.Context, teamID int64, folder string) error {
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO team_notes(team_id, folder, updated_at) VALUES(?,?,?)
+		ON CONFLICT(team_id) DO UPDATE SET folder=excluded.folder, updated_at=excluded.updated_at`, teamID, folder, Now())
+	return err
+}

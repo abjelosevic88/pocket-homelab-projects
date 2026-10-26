@@ -86,6 +86,8 @@ an identifier), `sort` (manual/priority/updated/created/due/title/estimate/ident
 | `GET /projects/{id}/related` | `{notes, calendar}` sections from Pocket Notes and Pocket Calendar |
 | `GET /issues/{ref}/notes` | your notes in Pocket Notes that link to the issue (`{status, detail, new_url, items}`) |
 | `POST /issues/{ref}/notes` | `{note_id}`: link one of your notes to the issue (adds `[AS-7 · title](issue address)` to its end) |
+| `GET /teams/{ref}/notes` · `PUT` `{folder}` (admins) | the team's folder in Pocket Notes and your notes in it (`{folder, folder_url, notes}`) |
+| `GET /notes/folders` | your folders in Pocket Notes, for pickers |
 | `POST /projects/{id}/event` | a meeting in Pocket Calendar |
 
 ## Cycles, views, inbox, the rest

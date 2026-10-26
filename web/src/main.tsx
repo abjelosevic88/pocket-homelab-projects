@@ -12,6 +12,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import Login from './pages/Login'
 import TeamIssues from './pages/TeamIssues'
 import TeamAI from './pages/TeamAI'
+import TeamNotes from './pages/TeamNotes'
 import IssuePage from './pages/IssuePage'
 import MyIssues from './pages/MyIssues'
 import ViewsPage from './pages/ViewsPage'
@@ -64,6 +65,7 @@ function App() {
         <Route path="/team/:key" element={<Navigate to="issues" replace />} />
         <Route path="/team/:key/:tab" element={<TeamIssues />} />
         <Route path="/team/:key/ai" element={<TeamAI />} />
+        <Route path="/team/:key/notes" element={<TeamNotes />} />
         <Route path="/team/:key/projects" element={<Projects />} />
         <Route path="/team/:key/cycles" element={<Cycles />} />
         <Route path="/team/:key/cycles/:id" element={<CyclePage />} />

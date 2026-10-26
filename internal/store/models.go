@@ -66,6 +66,8 @@ type Team struct {
 	States  []State        `json:"states,omitempty"`
 	Labels  []Label        `json:"labels,omitempty"`
 	Counts  map[string]int `json:"counts,omitempty"`
+	// The team's folder in Pocket Notes ("" = none).
+	NotesFolder string `json:"notes_folder"`
 }
 
 // TeamMember is a person on a team with their role there.

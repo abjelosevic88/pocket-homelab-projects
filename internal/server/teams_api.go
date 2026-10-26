@@ -61,6 +61,7 @@ func (s *Server) fillTeam(ctx context.Context, t *store.Team) {
 	t.States, _ = s.store.TeamStates(ctx, t.ID)
 	t.Labels, _ = s.store.TeamLabels(ctx, t.ID)
 	t.Counts = s.store.TeamCounts(ctx, t.ID)
+	t.NotesFolder = s.store.TeamNotesFolder(ctx, t.ID)
 }
 
 func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) {
