@@ -203,7 +203,7 @@ interface IssueNote { id: string; title: string; folder: string; snippet: string
 /** The person's notes in Pocket Notes that link to the issue. Nothing is stored here: a note is
  *  linked when its text links to the issue, so New note starts one with the link in it and Link a
  *  note adds the link to the end of one. */
-export function IssueNotes({ issue }: { issue: IssueDetail }) {
+export function IssueNotes({ issue, openId, onOpen }: { issue: IssueDetail; openId?: string; onOpen?: (n: { id: string; title: string; url: string }) => void }) {
   const { toast } = useToast()
   const [data, setData] = useState<RelatedSection<IssueNote> | null>(null)
   const [at, setAt] = useState<Anchor | null>(null)
@@ -223,7 +223,11 @@ export function IssueNotes({ issue }: { issue: IssueDetail }) {
   const ok = data?.status === 'ok'
   const link = async (n: { id: string; title: string }) => {
     setAt(null)
-    try { await api.post(`${V1}/issues/${issue.id}/notes`, { note_id: n.id }); toast(`Linked “${n.title || 'Untitled'}”`); setTick(t => t + 1) } catch (e) { toast((e as Error).message, 'err') }
+    try {
+      const r = await api.post<{ id: string; title: string; url: string }>(`${V1}/issues/${issue.id}/notes`, { note_id: n.id })
+      toast(`Linked “${n.title || 'Untitled'}”`); setTick(t => t + 1)
+      onOpen?.({ id: r.id, title: r.title || n.title, url: r.url })
+    } catch (e) { toast((e as Error).message, 'err') }
   }
   const items = data?.items || []
   return (
@@ -239,9 +243,10 @@ export function IssueNotes({ issue }: { issue: IssueDetail }) {
       </div>
       {items.length > 0 ? <div className="ip-box">
         {items.map(n => (
-          <div key={n.id} className="att-row">
+          <div key={n.id} className={`att-row ${openId === n.id ? 'open' : ''}`}>
             <span className="att-ico note"><Icon name="note" size={15} /></span>
-            <span className="att-main"><a href={n.url} target="_blank" rel="noreferrer">{n.title || 'Untitled'}</a><small>{[n.folder || 'Pocket Notes', n.modified ? ago(n.modified) : ''].filter(Boolean).join(' · ')}</small></span>
+            <span className="att-main"><a href={n.url} target="_blank" rel="noreferrer" title={onOpen ? 'Open beside the issue (⌘-click: new tab)' : undefined}
+              onClick={e => { if (onOpen && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); onOpen(n) } }}>{n.title || 'Untitled'}</a><small>{[n.folder || 'Pocket Notes', n.modified ? ago(n.modified) : ''].filter(Boolean).join(' · ')}</small></span>
           </div>
         ))}
       </div> : data && <p className="muted small ip-note-empty">{ok ? `Your notes in Pocket Notes that link to ${issue.identifier} show up here.` : data.detail}</p>}

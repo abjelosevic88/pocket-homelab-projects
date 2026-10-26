@@ -8,7 +8,8 @@ import { ago } from '../lib/format'
 import type { RelatedSection } from '../lib/types'
 import { Icon } from '../components/icons'
 import { TeamMark } from '../components/pickers'
-import { Empty, Loading } from '../components/ui'
+import { Empty, Loading, useIsMobile } from '../components/ui'
+import { type DockNote, NoteDock } from '../components/NoteDock'
 import '../styles/issues.css'
 
 interface FolderNote { id: string; title: string; folder: string; snippet: string; modified: number; pinned: boolean; url: string }
@@ -21,6 +22,8 @@ export default function TeamNotes() {
   const [data, setData] = useState<TeamNotesData | null>(null)
   const [err, setErr] = useState('')
   const [tick, setTick] = useState(0)
+  const [open, setOpen] = useState<DockNote | null>(null)
+  const mobile = useIsMobile()
   useEffect(() => {
     if (!team) return
     let live = true
@@ -49,9 +52,11 @@ export default function TeamNotes() {
         : !data.folder ? <Empty title="No Notes folder yet" icon="note">Connect {team.name} to a folder in Pocket Notes in <Link to={`/team/${team.key}/settings/notes`}>Team settings → Notes</Link>.</Empty>
         : sec && sec.status !== 'ok' ? <Empty title="Pocket Notes can’t be reached" icon="note">{sec.detail}</Empty>
         : !sec?.items.length ? <Empty title="No notes here yet" icon="note">Notes you put in <code>{data.folder}</code> in Pocket Notes, and notes started from {team.name}’s issues, show up here.</Empty>
-        : <div className="team-notes-list">
+        : <div className="team-notes-body">
+          <div className="team-notes-list">
           {sec.items.map(n => (
-            <a key={n.id} className="team-note" href={n.url} target="_blank" rel="noreferrer">
+            <a key={n.id} className={`team-note ${open?.id === n.id ? 'open' : ''}`} href={n.url} target="_blank" rel="noreferrer" title="Open beside the list (⌘-click: new tab)"
+              onClick={e => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); setOpen(n) } }}>
               <Icon name="note" size={15} className="faint" />
               <span className="grow team-note-main">
                 <span className="ellipsis team-note-title">{n.title || 'Untitled'}</span>
@@ -61,6 +66,8 @@ export default function TeamNotes() {
               <span className="xsmall muted nowrap">{ago(n.modified)}</span>
             </a>
           ))}
+          </div>
+          {open && <NoteDock note={open} mobile={mobile} onClose={() => setOpen(null)} />}
         </div>}
     </div>
   )

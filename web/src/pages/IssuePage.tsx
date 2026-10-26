@@ -22,6 +22,7 @@ import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyTex
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, IssueNotes, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
+import { type DockNote, NoteDock } from '../components/NoteDock'
 import { openTab, setTabDock, tabDock } from '../lib/tabs'
 import { CodeButton, CodeConversations, CodeDock, type CodePanel, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
@@ -44,16 +45,18 @@ export default function IssuePage() {
   // Pocket AI docked beside the issue (replaces the properties while open)
   const [dock, setDock] = useState<{ url: string; title: string; send: boolean; key: number } | null>(null)
   const [dockVersion, setDockVersion] = useState(0)
+  const [noteDock, setNoteDock] = useState<DockNote | null>(null)
   // a tab brings back its Pocket AI panel (phones have no tabs)
   useEffect(() => {
     const t = mobile ? null : tabDock(ref)
     setDock(t ? { url: t.url, title: t.title, send: false, key: Date.now() } : null)
+    setNoteDock(null)
   }, [ref]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (d && !mobile) openTab(d.identifier, d.title, d.state_type) }, [d?.identifier, d?.title, d?.state_type, mobile]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (d) setTabDock(d.identifier, dock ? { url: dock.url, title: dock.title } : null) }, [dock?.key, d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
   const code = useIssueCode(d, dockVersion)
   const breakdownRef = useRef<(() => void) | null>(null)
-  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => setDock({ url, title, send, key: Date.now() }), close: () => setDock(null), version: dockVersion }), [dockVersion])
+  const codePanel = useMemo<CodePanel>(() => ({ open: (url, title, send = false) => { setNoteDock(null); setDock({ url, title, send, key: Date.now() }) }, close: () => setDock(null), version: dockVersion }), [dockVersion])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -166,18 +169,19 @@ export default function IssuePage() {
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
-          {!d.deleted_at && <IssueNotes issue={d} />}
+          {!d.deleted_at && <IssueNotes issue={d} openId={noteDock?.id} onOpen={setNoteDock} />}
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
           {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
-      {dock && <CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={(tid, status) => {
+      {noteDock && <NoteDock note={noteDock} mobile={mobile} onClose={() => setNoteDock(null)} />}
+      {dock && <div style={{ display: noteDock ? 'none' : 'contents' }}><CodeDock key={dock.key} url={dock.url} title={dock.title} send={dock.send} mobile={mobile} onClose={() => setDock(null)} onMoved={(tid, status) => {
         code.patch(tid, status); setDockVersion(v => v + 1)
         // a draft became a conversation: the tab comes back to the conversation, not the draft
         if (tid && d) setTabDock(d.identifier, { url: `${new URL(dock.url, location.href).origin}/t/${tid}`, title: dock.title })
-      }} />}
-      {!mobile && !dock && <aside className="ip-side" aria-label="Properties">
+      }} /></div>}
+      {!mobile && !dock && !noteDock && <aside className="ip-side" aria-label="Properties">
         <Properties issue={d} canEdit={canEdit} onOpen={openProp} />
         <div className="ip-side-sec ip-side-actions">
           <button type="button" className={`side-btn ${d.subscribed ? 'on' : ''}`} onClick={toggleSub}><Icon name="bell" size={15} />{d.subscribed ? 'Subscribed' : 'Subscribe'}<span className="hint">{d.subscriber_ids.length} following</span></button>
