@@ -335,6 +335,32 @@ type codeThread struct {
 	URL          string   `json:"url"`
 	CreatedAt    string   `json:"created_at"`
 	UpdatedAt    string   `json:"updated_at"`
+	// Worktree: the branch of the git worktree it works in ("" = the code folder itself)
+	Worktree   string `json:"worktree,omitempty"`
+	WorktreeID int64  `json:"worktree_id,omitempty"`
+}
+
+// codeWorktree is a git worktree of the issue in Pocket AI: one its
+// conversations work in, or a branch named after it.
+type codeWorktree struct {
+	ID        int64    `json:"id"`
+	Branch    string   `json:"branch"`
+	Base      string   `json:"base"`
+	Repo      string   `json:"repo"`
+	Host      string   `json:"host,omitempty"`
+	Status    string   `json:"status"` // active | archived
+	Setup     string   `json:"setup"`
+	MergedAt  string   `json:"merged_at"`
+	PRURL     string   `json:"pr_url"`
+	CreatedAt string   `json:"created_at"`
+	Threads   []string `json:"thread_ids"`
+	Live      bool     `json:"live"`
+	Ahead     int      `json:"ahead"`
+	Dirty     int      `json:"dirty"`
+	Unpushed  int      `json:"unpushed"`
+	Merged    bool     `json:"merged"`
+	PRState   string   `json:"pr_state,omitempty"`
+	URL       string   `json:"url"`
 }
 
 func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
@@ -345,7 +371,7 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
-	out := map[string]any{"threads": []codeThread{}, "connected": false, "detail": ""}
+	out := map[string]any{"threads": []codeThread{}, "worktrees": []codeWorktree{}, "connected": false, "detail": ""}
 	sb, err := s.aiSibling(ctx)
 	if err != nil {
 		out["detail"] = err.Error()
@@ -385,7 +411,18 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	out["threads"], out["connected"] = list, true
+	// the issue's worktrees (an older Pocket AI has no such list: none shown)
+	wts := []codeWorktree{}
+	wq := url.Values{"source": {"projects"}, "ref": {is.Identifier}, "branch": {s.branchName(ctx, me(r), is)}}
+	if err := sb.call(ctx, http.MethodGet, "/api/v1/link/worktrees?"+wq.Encode(), nil, &wts); err != nil || wts == nil {
+		wts = []codeWorktree{}
+	}
+	for i := range wts {
+		if wts[i].URL != "" && !strings.HasPrefix(wts[i].URL, "http") {
+			wts[i].URL = sb.public + wts[i].URL
+		}
+	}
+	out["threads"], out["worktrees"], out["connected"] = list, wts, true
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -425,6 +462,9 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Action string `json:"action"`
 		Note   string `json:"note"`
+		// Worktree: work in a git worktree of the issue's own (fix, chat):
+		// Pocket AI makes it on send and reuses it for the issue's next ones.
+		Worktree bool `json:"worktree"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -432,6 +472,10 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if codeActions[in.Action] == "" {
 		writeErr(w, http.StatusBadRequest, "action is investigate, fix or chat")
+		return
+	}
+	if in.Worktree && in.Action == "investigate" {
+		writeErr(w, http.StatusBadRequest, "investigating reads the code as it is; a worktree is for fixing or chatting")
 		return
 	}
 	if len(in.Note) > 8000 {
@@ -481,9 +525,15 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ci := s.codeIssueOf(r, a, is, team.Name, cwd)
-	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai)
+	if in.Worktree && !tai.LinkRefs {
+		ci.Branch = plainBranch(ci.Branch, is.Identifier)
+	}
+	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree)
 	body := map[string]any{"cwd": cwd, "title": title, "text": text, "system": system, "source": "projects",
 		"ref": is.Identifier, "ref_url": ci.URL, "ref_label": is.Identifier + " " + is.Title}
+	if in.Worktree {
+		body["worktree"] = map[string]any{"name": ci.Branch}
+	}
 	// the issue's files: screenshots the agent looks at, documents it reads
 	files := []map[string]any{}
 	for _, f := range ci.Files {
@@ -526,7 +576,11 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	}
 	if a.check(is.TeamID, needWrite) == nil {
 		uid := me(r)
-		att := &store.Attachment{IssueID: &is.ID, Kind: "ai_thread", Title: "Pocket AI · " + codeActions[in.Action], Subtitle: shortCwd(cwd),
+		label := codeActions[in.Action]
+		if in.Worktree {
+			label += " in a worktree"
+		}
+		att := &store.Attachment{IssueID: &is.ID, Kind: "ai_thread", Title: "Pocket AI · " + label, Subtitle: shortCwd(cwd),
 			URL: draft.URL, ExtApp: "ai", ExtID: draft.ID, State: "draft", CreatedBy: &uid}
 		if err := s.store.SaveAttachment(ctx, att); err == nil {
 			_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: &uid, Field: "ai_thread", ToValue: in.Action, ToLabel: att.Title})
@@ -657,18 +711,34 @@ Finish with a short summary of what changed and offer to post it as a comment on
 Implement the change, run the project's tests or build, and commit. Do not push unless I ask.
 Finish with a short summary of what changed and offer to post it as a comment on %[1]s.`,
 	"chat": `Let's talk about this issue. Read the relevant code when it helps, but do not change anything unless I ask.`,
+	// in a worktree Pocket AI made for the issue: already on its branch
+	"fix-worktree": `Fix this issue. You are in a git worktree of its own, on the branch %[2]s: stay on it, do not switch branches.
+Implement the change, run the project's tests or build, and commit. Do not push unless I ask.
+Finish with a short summary of what changed and offer to post it as a comment on %[1]s.`,
+	"chat-worktree": `Let's talk about this issue. You are in a git worktree of its own, on the branch %[2]s. Read the relevant code when it helps, but do not change anything unless I ask.`,
+}
+
+// plainBranch is the issue's branch without its identifier, for teams that
+// keep Pocket Projects out of the repository: "me/as-12-login" → "me/login".
+func plainBranch(branch, ident string) string {
+	if p := strings.Replace(branch, strings.ToLower(ident)+"-", "", 1); p != branch && !strings.HasSuffix(p, "/") && p != "" {
+		return p
+	}
+	return strings.Replace(branch, strings.ToLower(ident), "fix", 1)
 }
 
 // buildCodePrompt returns the conversation title, the visible first message
 // and the hidden system context.
-func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI) (title, text, system string) {
+func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, worktree bool) (title, text, system string) {
 	title = ci.Identifier + " · " + ci.Title
 	if r := []rune(title); len(r) > 80 {
 		title = string(r[:79]) + "…"
 	}
 	var b strings.Builder
 	ask := codeAsk[action]
-	if action == "fix" && !tai.LinkRefs {
+	if worktree && codeAsk[action+"-worktree"] != "" {
+		ask = codeAsk[action+"-worktree"]
+	} else if action == "fix" && !tai.LinkRefs {
 		ask = codeAsk["fix-plain"]
 	}
 	fmt.Fprintf(&b, ask, ci.Identifier, ci.Branch)

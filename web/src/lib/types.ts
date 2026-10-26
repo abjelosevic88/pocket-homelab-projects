@@ -197,4 +197,9 @@ export interface AgentOptions {
 }
 
 /** One Pocket AI conversation about an issue. */
-export interface CodeThread { draft_id: string; thread_id: string; title: string; status: string; action?: string; url: string; created_at: string; updated_at: string }
+export interface CodeThread { draft_id: string; thread_id: string; title: string; status: string; action?: string; url: string; created_at: string; updated_at: string; worktree?: string; worktree_id?: number }
+/** A git worktree of the issue in Pocket AI: its conversations' own, or a branch named after it. */
+export interface CodeWorktree {
+  id: number; branch: string; base: string; repo: string; host?: string; status: 'active' | 'archived'; setup: string; merged_at: string; pr_url: string
+  created_at: string; thread_ids: string[]; live: boolean; ahead: number; dirty: number; unpushed: number; merged: boolean; pr_state?: string; url: string
+}

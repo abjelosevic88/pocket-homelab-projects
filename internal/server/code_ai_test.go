@@ -49,12 +49,18 @@ func (f *fakeAI) server(t *testing.T) *httptest.Server {
 		case strings.HasPrefix(r.URL.Path, "/api/v1/link/threads/d"):
 			f.actions = append(f.actions, r.Method+" "+r.URL.Path)
 			w.WriteHeader(204)
+		case r.Method == "GET" && r.URL.Path == "/api/v1/link/worktrees":
+			if r.URL.Query().Get("ref") != "WEB-1" || !strings.HasSuffix(r.URL.Query().Get("branch"), "web-1-fix-login") {
+				w.Write([]byte(`[]`))
+				return
+			}
+			w.Write([]byte(`[{"id":4,"branch":"alex/web-1-fix-login","status":"active","thread_ids":["t1"],"ahead":2,"url":"/worktrees?open=4"}]`))
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/threads":
 			if r.URL.Query().Get("ref") != "WEB-1" || r.URL.Query().Get("source") != "projects" {
 				w.Write([]byte(`[]`))
 				return
 			}
-			w.Write([]byte(`[{"draft_id":"d1","thread_id":"t1","title":"WEB-1 · Fix login","status":"running","url":"https://ai.example/t/t1","pull_requests":["https://github.com/acme/web/pull/99"]}]`))
+			w.Write([]byte(`[{"draft_id":"d1","thread_id":"t1","title":"WEB-1 · Fix login","status":"running","worktree":"alex/web-1-fix-login","worktree_id":4,"url":"https://ai.example/t/t1","pull_requests":["https://github.com/acme/web/pull/99"]}]`))
 		default:
 			w.WriteHeader(404)
 		}
@@ -85,9 +91,10 @@ func TestCodeWithPocketAI(t *testing.T) {
 
 	// not connected: a clear answer, nothing breaks
 	var codes struct {
-		Threads   []codeThread `json:"threads"`
-		Connected bool         `json:"connected"`
-		Detail    string       `json:"detail"`
+		Threads   []codeThread   `json:"threads"`
+		Worktrees []codeWorktree `json:"worktrees"`
+		Connected bool           `json:"connected"`
+		Detail    string         `json:"detail"`
 	}
 	alex.do("GET", "/api/v1/issues/WEB-1/code", nil, 200, &codes)
 	if codes.Connected || codes.Detail == "" {
@@ -204,6 +211,19 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["system"].(string), "Resolves WEB-1 (") || strings.Contains(d["system"].(string), "Keep Pocket Projects out") {
 		t.Fatalf("fix draft (refs on): %+v", d)
 	}
+	// in a worktree of the issue's own: Pocket AI makes it on the issue's branch, the prompt stays on it
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "fix", "worktree": true}, 201, nil)
+	d = ai.drafts[len(ai.drafts)-1]
+	if wt, _ := d["worktree"].(map[string]any); wt == nil || !strings.HasSuffix(wt["name"].(string), "web-1-fix-login") ||
+		!strings.Contains(d["text"].(string), "git worktree of its own, on the branch "+wt["name"].(string)) || strings.Contains(d["text"].(string), "switch to a branch") {
+		t.Fatalf("worktree draft: %+v", d)
+	}
+	if alex.status("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "investigate", "worktree": true}) != 400 {
+		t.Fatal("read-only investigation in a worktree accepted")
+	}
+	if got := plainBranch("alex/web-1-fix-login", "WEB-1"); got != "alex/fix-login" {
+		t.Fatalf("plain branch %q", got)
+	}
 	// the issue's files go along (the agent sees screenshots, reads documents); links are listed
 	var mp bytes.Buffer
 	mw := multipart.NewWriter(&mp)
@@ -246,6 +266,11 @@ func TestCodeWithPocketAI(t *testing.T) {
 	alex.do("GET", "/api/v1/issues/WEB-1/code", nil, 200, &codes)
 	if !codes.Connected || len(codes.Threads) != 1 || codes.Threads[0].Status != "running" {
 		t.Fatalf("threads: %+v", codes)
+	}
+	// its worktrees come along, with Pocket AI's address made absolute
+	if len(codes.Worktrees) != 1 || codes.Worktrees[0].Branch != "alex/web-1-fix-login" || codes.Worktrees[0].URL != srv.URL+"/worktrees?open=4" ||
+		codes.Threads[0].Worktree != "alex/web-1-fix-login" || codes.Threads[0].WorktreeID != 4 {
+		t.Fatalf("worktrees: %+v / %+v", codes.Worktrees, codes.Threads)
 	}
 	// the PR that conversation opened was attached when the list was read
 	if pr, err := s.store.FindAttachment(context.Background(), is.ID, "git", "https://github.com/acme/web/pull/99"); err != nil || pr.Kind != "pull_request" || pr.State != "open" {

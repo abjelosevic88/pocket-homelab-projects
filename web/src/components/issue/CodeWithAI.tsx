@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../../lib/api'
 import { refreshAIActive } from '../../lib/ai-active'
 import { ago } from '../../lib/format'
-import type { CodeThread, IssueDetail } from '../../lib/types'
+import type { CodeThread, CodeWorktree, IssueDetail } from '../../lib/types'
 import { StatusDot } from '../../pages/settings/common'
 import { Icon } from '../icons'
 import { type Anchor, Confirm, errMsg, Menu, type MenuItem, Modal, rectOf, useToast } from '../ui'
@@ -31,17 +31,18 @@ export type CodePanel = { open: (url: string, title: string, send?: boolean) => 
 export const CodePanelContext = createContext<CodePanel | null>(null)
 
 /** The issue's conversations, live: polled every few seconds while one is working or waiting. */
-export type IssueCode = { list: CodeThread[]; detail: string; reload: () => void; patch: (threadId: string, status: string) => void }
+export type IssueCode = { list: CodeThread[]; worktrees: CodeWorktree[]; detail: string; reload: () => void; patch: (threadId: string, status: string) => void }
 export function useIssueCode(issue: IssueDetail | null, version: number): IssueCode {
   const [list, setList] = useState<CodeThread[]>([])
+  const [worktrees, setWorktrees] = useState<CodeWorktree[]>([])
   const [detail, setDetail] = useState('')
   const id = issue?.id
   const reload = useCallback(() => {
     if (!id) return
-    api.get<{ threads: CodeThread[]; connected: boolean; detail: string }>(`${V1}/issues/${id}/code`)
-      .then(r => { setList(r.threads || []); setDetail(r.connected ? '' : r.detail) }).catch(() => {})
+    api.get<{ threads: CodeThread[]; worktrees?: CodeWorktree[]; connected: boolean; detail: string }>(`${V1}/issues/${id}/code`)
+      .then(r => { setList(r.threads || []); setWorktrees(r.worktrees || []); setDetail(r.connected ? '' : r.detail) }).catch(() => {})
   }, [id])
-  useEffect(() => { setList([]); setDetail('') }, [id])
+  useEffect(() => { setList([]); setWorktrees([]); setDetail('') }, [id])
   useEffect(() => { reload() }, [reload, version, issue?.updated_at])
   const live = list.some(t => t.status === 'running' || t.status === 'waiting')
   useEffect(() => {
@@ -52,7 +53,7 @@ export function useIssueCode(issue: IssueDetail | null, version: number): IssueC
   const patch = useCallback((threadId: string, status: string) => {
     setList(l => l.map(t => t.thread_id === threadId && status && t.status !== status ? { ...t, status } : t))
   }, [])
-  return { list, detail, reload, patch }
+  return { list, worktrees, detail, reload, patch }
 }
 
 /** What the header and the section show: sent conversations, plus the newest unsent draft. */
@@ -68,13 +69,13 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   const navigate = useNavigate()
   const panel = useContext(CodePanelContext)
   const [busy, setBusy] = useState(false)
-  const start = async (action: Action, note = '') => {
+  const start = async (action: Action, note = '', worktree = false) => {
     const tab = panel ? null : window.open('about:blank', '_blank')
     setBusy(true)
     try {
-      const r = await api.post<{ url: string; send: boolean; files?: number; skipped?: string[] }>(`${V1}/issues/${issue.id}/code`, { action, note })
+      const r = await api.post<{ url: string; send: boolean; files?: number; skipped?: string[] }>(`${V1}/issues/${issue.id}/code`, { action, note, worktree: worktree || undefined })
       if (r.skipped?.length) toast(`Not sent to the agent: ${r.skipped.join(', ')} (it can only take pictures and documents with text, up to 20 MB each)`, 'err')
-      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}`, r.send)
+      if (panel) panel.open(r.url, `${issue.identifier} · ${ACTIONS.find(a => a.id === action)!.label}${worktree ? ' in a worktree' : ''}`, r.send)
       else if (tab) { tab.opener = null; tab.location.href = r.url } else window.open(r.url, '_blank', 'noopener')
       onStarted()
     } catch (e) {
@@ -86,10 +87,12 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   return { start, busy }
 }
 
-function useMenu(start: (a: Action) => void, withNote: () => void, breakdown?: () => void): MenuItem[] {
+function useMenu(start: (a: Action, worktree?: boolean) => void, withNote: () => void, breakdown?: () => void): MenuItem[] {
   return [
     { heading: 'Code with Pocket AI' },
     ...ACTIONS.map(a => ({ label: a.label, icon: a.icon, hint: a.id === 'investigate' ? 'read-only' : undefined, onSelect: () => start(a.id) })),
+    // its own folder and branch: the main checkout stays as it is; the issue's next ones reuse it
+    { label: 'Fix it in a new worktree', icon: 'git-branch', hint: 'isolated', onSelect: () => start('fix', true) },
     { label: 'With a note…', icon: 'edit', onSelect: withNote },
     ...(breakdown ? ['sep' as const, { heading: 'Plan' }, { label: 'Break down into sub-issues', icon: 'subtasks', hint: 'suggests 5', onSelect: breakdown }] : []),
   ]
@@ -106,7 +109,7 @@ export function CodeButton({ issue, code, onStarted, breakdown }: { issue: Issue
   const panel = useContext(CodePanelContext)
   const [at, setAt] = useState<Anchor | null>(null)
   const [note, setNote] = useState(false)
-  const items = useMenu(a => start(a), () => setNote(true), breakdown)
+  const items = useMenu((a, wt) => start(a, '', wt), () => setNote(true), breakdown)
   const live = liveState(code.list)
   const first = code.list.find(t => t.status === live)
   const label = live === 'running' ? 'Working…' : live === 'waiting' ? 'Waiting for you' : 'Code'
@@ -120,7 +123,7 @@ export function CodeButton({ issue, code, onStarted, breakdown }: { issue: Issue
         <Icon name="sparkles" size={14} /><span className="hide-mobile">{busy ? 'Opening…' : 'Code'}</span>
       </button>
       {at && <Menu anchor={at} items={items} width={240} align="right" onClose={() => setAt(null)} />}
-      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n) => { setNote(false); start(a, n) }} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, wt) => { setNote(false); start(a, n, wt) }} />}
     </>
   )
 }
@@ -130,14 +133,14 @@ export function CodeSide({ issue, code, onStarted }: { issue: IssueDetail; code:
   const { start, busy } = useCodeStart(issue, onStarted)
   const [at, setAt] = useState<Anchor | null>(null)
   const [note, setNote] = useState(false)
-  const items = useMenu(a => start(a), () => setNote(true))
+  const items = useMenu((a, wt) => start(a, '', wt), () => setNote(true))
   return (
     <div className="ip-side-sec ip-side-actions">
       <h4><Icon name="sparkles" size={13} />Pocket AI</h4>
       <button type="button" className="side-btn" disabled={busy} onClick={e => setAt(rectOf(e.currentTarget))} title={code.detail || undefined}>
         <Icon name="code" size={15} />Code with Pocket AI…</button>
       {at && <Menu anchor={at} items={items} width={240} onClose={() => setAt(null)} />}
-      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n) => { setNote(false); start(a, n) }} />}
+      {note && <NoteDialog onClose={() => setNote(false)} onStart={(a, n, wt) => { setNote(false); start(a, n, wt) }} />}
     </div>
   )
 }
@@ -149,7 +152,7 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
   const [menu, setMenu] = useState<{ t: CodeThread; anchor: Anchor } | null>(null)
   const [deleting, setDeleting] = useState<CodeThread | null>(null)
   const list = visible(code.list)
-  if (!list.length) return null
+  if (!list.length && !code.worktrees.length) return null
   const nameOf = (t: CodeThread) => t.title.replace(`${issue.identifier} · `, '') || issue.identifier
   const act = async (t: CodeThread, how: 'unlink' | 'delete') => {
     try {
@@ -173,7 +176,7 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
   return (
     <section className="ip-sec">
       <div className="ip-sec-head"><h3>Conversations <span className="count">{list.length}</span></h3></div>
-      <div className="ip-box code-convs">
+      {list.length > 0 && <div className="ip-box code-convs">
         {list.map(t => {
           const st = STATUS[t.status] || { dot: 'off' as const, label: t.status }
           const name = t.title.replace(`${issue.identifier} · `, '') || issue.identifier
@@ -183,6 +186,7 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
               onClick={e => { if (panel && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); panel.open(t.url, `${issue.identifier} · ${t.action || name}`) } }}>
               {t.status === 'running' || t.status === 'waiting' ? <span className={`code-pulse ${t.status}`} /> : <StatusDot status={st.dot} title={st.label} />}
               <span className="code-conv-action">{t.action || 'Pocket AI'}</span>
+              {t.worktree && <span className="code-conv-wt" title={`Works in the worktree ${t.worktree}`}><Icon name="git-branch" size={12} /><span className="ellipsis">{t.worktree}</span></span>}
               <span className="ellipsis muted">{name}</span>
               <span className="spacer" style={{ flex: 1 }} />
               <span className={`code-conv-state ${t.status}`}>{t.status === 'draft' ? 'Not sent' : st.label}</span>
@@ -190,7 +194,8 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
             </a>
           )
         })}
-      </div>
+      </div>}
+      {code.worktrees.length > 0 && <Worktrees list={code.worktrees} />}
       {menu && <Menu items={items(menu.t)} anchor={menu.anchor} onClose={() => setMenu(null)} width={240} />}
       {deleting && <Confirm title="Delete this conversation?" confirmLabel="Delete"
         message={<>“{deleting.title}” is deleted in Pocket AI with everything said in it{deleting.status === 'running' || deleting.status === 'waiting' ? '; the agent working in it stops' : ''}. Commits and files it already changed in the code stay as they are.</>}
@@ -199,13 +204,46 @@ export function CodeConversations({ issue, code, openUrl }: { issue: IssueDetail
   )
 }
 
-function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Action, note: string) => void }) {
+/** The issue's git worktrees in Pocket AI: where each stands; a click opens it there. */
+function Worktrees({ list }: { list: CodeWorktree[] }) {
+  return (
+    <div className="code-wts">
+      <h4 className="code-wts-h"><Icon name="git-branch" size={13} />Worktrees <span className="count">{list.length}</span></h4>
+      <div className="ip-box code-convs">
+        {list.map(w => {
+          const merged = w.merged || !!w.merged_at || w.pr_state === 'MERGED'
+          const [dot, state] = w.live ? ['ok', 'Working'] : w.status === 'archived' ? ['off', merged ? 'Merged, archived' : 'Archived']
+            : merged ? ['ok', 'Merged'] : w.setup === 'running' ? ['warn', 'Setting up'] : w.setup === 'failed' ? ['error', 'Setup failed'] : w.pr_state === 'OPEN' ? ['ok', 'PR open'] : ['off', 'Active']
+          const facts = w.status === 'archived' ? [] : [
+            w.ahead ? `${w.ahead} commit${w.ahead === 1 ? '' : 's'}` : '', w.dirty ? `${w.dirty} changed` : '', w.unpushed ? `${w.unpushed} unpushed` : '',
+          ].filter(Boolean)
+          const n = w.thread_ids.length
+          return (
+            <a key={w.id} className={`code-conv code-wt ${w.status}`} href={w.url} target="_blank" rel="noreferrer"
+              title={`${w.repo}${w.host ? ` on ${w.host}` : ''} · from ${w.base} — open in Pocket AI`}>
+              {w.live ? <span className="code-pulse running" /> : <StatusDot status={dot as 'ok' | 'warn' | 'error' | 'off'} title={state} />}
+              <span className="code-conv-action mono ellipsis">{w.branch}</span>
+              <span className="ellipsis muted">{[...facts, n ? `${n} conversation${n === 1 ? '' : 's'}` : 'no conversation here'].join(' · ')}</span>
+              <span className="spacer" style={{ flex: 1 }} />
+              {w.pr_url && <span className="faint xsmall" onClick={e => { e.preventDefault(); e.stopPropagation(); window.open(w.pr_url, '_blank', 'noopener') }} role="link" title={w.pr_url}>PR</span>}
+              <span className={`code-conv-state ${w.live ? 'running' : ''}`}>{state}</span>
+              <span className="faint xsmall">{ago(w.created_at)}</span>
+            </a>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Action, note: string, worktree: boolean) => void }) {
   const [action, setAction] = useState<Action>('investigate')
   const [text, setText] = useState('')
+  const [worktree, setWorktree] = useState(false)
   return (
     <Modal title="Code with Pocket AI" onClose={onClose} size="sm" footer={<>
       <button type="button" className="btn" onClick={onClose}>Cancel</button>
-      <button type="button" className="btn primary" onClick={() => onStart(action, text.trim())}><Icon name="sparkles" size={14} />Open in Pocket AI</button>
+      <button type="button" className="btn primary" onClick={() => onStart(action, text.trim(), worktree && action !== 'investigate')}><Icon name="sparkles" size={14} />Open in Pocket AI</button>
     </>}>
       <div className="stack">
         <div className="code-actions" role="radiogroup" aria-label="What to do">
@@ -216,6 +254,10 @@ function NoteDialog({ onClose, onStart }: { onClose: () => void; onStart: (a: Ac
           ))}
         </div>
         <textarea autoFocus value={text} onChange={e => setText(e.target.value)} rows={4} placeholder="Anything to add, e.g. “start with the session cookie”" />
+        <label className={`row small code-wt ${action === 'investigate' ? 'faint' : ''}`} title={action === 'investigate' ? 'Investigating reads the code as it is' : 'Its own folder and branch for this issue; the main checkout stays as it is'}>
+          <input type="checkbox" checked={worktree && action !== 'investigate'} disabled={action === 'investigate'} onChange={e => setWorktree(e.target.checked)} />
+          <Icon name="git-branch" size={14} />In a new worktree<span className="faint xsmall">reused by the issue's next conversations</span>
+        </label>
       </div>
     </Modal>
   )
