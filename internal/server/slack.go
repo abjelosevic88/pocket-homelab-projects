@@ -186,7 +186,7 @@ func (s *Server) handleSlackDraft(w http.ResponseWriter, r *http.Request) {
 How to write it (the team's instructions):
 %s
 
-Always: plain text (Slack *bold* at most once), no greeting, no sign-off, no link (it is added after your text), no headings, no lists, no emoji. Answer with the message only.
+Always: plain text, no Markdown or *bold*, no greeting, no sign-off, no link (it is added after your text), no headings, no lists, no emoji. Answer with the message only.
 
 Pull request: %s
 Issue %s: %s
@@ -284,7 +284,7 @@ func (s *Server) handleSlackSend(w http.ResponseWriter, r *http.Request) {
 }
 
 // The team's instructions for summaries; the default keeps them to one sentence.
-const slackDefaultPrompt = "One sentence: what changed and why, for teammates who will review or test it."
+const slackDefaultPrompt = "One short sentence, at most 15 words: what the pull request changes, in plain words. No details, caveats, test status or file names."
 
 func (s *Server) slackPrompt(ctx context.Context, teamID int64) string {
 	var p string
