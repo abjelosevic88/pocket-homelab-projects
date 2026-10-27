@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +25,7 @@ func (s *Server) deployRoutes(r chi.Router) {
 	r.Get("/issues/{ref}/deploy", s.handleIssueDeploy)
 	r.Post("/issues/{ref}/deploy", s.handleStartDeploy)
 	r.Get("/issues/{ref}/deploy/{id}", s.handleGetDeploy)
+	r.Get("/deploys/live", s.handleDeploysLive)
 	r.Get("/teams/{ref}/deploy", s.handleTeamDeploy)
 	r.Put("/teams/{ref}/deploy", s.handlePutTeamDeploy)
 }
@@ -128,7 +131,8 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 		Branch   string `json:"branch"`
 		HostName string `json:"host_name"`
 	}
-	body := map[string]any{"host_id": host, "cwd": cwd, "source": "projects", "ref": is.Identifier, "branch": in.Branch}
+	body := map[string]any{"host_id": host, "cwd": cwd, "source": "projects", "ref": is.Identifier, "branch": in.Branch,
+		"ref_url": s.cfg.BaseURL + "/issue/" + is.Identifier, "ref_label": is.Title}
 	var raw map[string]any
 	if err := sb.call(ctx, http.MethodPost, "/api/v1/link/deploys", body, &raw); err != nil {
 		aiFail(w, err)
@@ -143,6 +147,7 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 	if d.HostName != "" {
 		label += " to " + d.HostName
 	}
+	deployLiveByUser.Range(func(k, _ any) bool { deployLiveByUser.Delete(k); return true }) // the slot is everyone's
 	_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: ptr(me(r)), Field: "deploy", ToValue: strconv.FormatInt(d.ID, 10), ToLabel: label})
 	s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}})
 	writeJSON(w, http.StatusCreated, raw)
@@ -236,4 +241,98 @@ func (s *Server) handlePutTeamDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// ---------- what runs on each team's deploy server ----------
+
+// deployLive is one team's deploy server for lists and the sidebar.
+type deployLive struct {
+	TeamKey  string `json:"team_key"`
+	HostName string `json:"host_name"`
+	URL      string `json:"url"`
+	State    string `json:"state"` // live | running | replaced | none
+	Ref      string `json:"ref"`   // the issue on it (live) or being deployed (running)
+	Branch   string `json:"branch"`
+	SHA      string `json:"sha"`
+	Now      string `json:"now,omitempty"` // replaced: what the server says runs
+	Since    string `json:"since,omitempty"`
+}
+
+type deployLiveCache struct {
+	at   time.Time
+	list []deployLive
+}
+
+var deployLiveByUser sync.Map // user id → deployLiveCache
+
+// handleDeploysLive: for every team of the person's with a deploy set up,
+// what its deploy server runs now (asked of Pocket AI, kept 20 s).
+func (s *Server) handleDeploysLive(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	uid := me(r)
+	if c, ok := deployLiveByUser.Load(uid); ok && time.Since(c.(deployLiveCache).at) < 20*time.Second {
+		writeJSON(w, http.StatusOK, map[string]any{"teams": c.(deployLiveCache).list, "connected": true})
+		return
+	}
+	sb, err := s.aiSibling(ctx)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"teams": []deployLive{}, "connected": false})
+		return
+	}
+	type answer struct {
+		Configured bool   `json:"configured"`
+		HostName   string `json:"host_name"`
+		Config     struct {
+			URL string `json:"url"`
+		} `json:"config"`
+		Latest *struct {
+			Ref, Branch, SHA, Status string
+			StartedAt                string `json:"started_at"`
+		} `json:"latest"`
+		Current *struct {
+			Ref, Branch, SHA, Status string
+			FinishedAt               string `json:"finished_at"`
+		} `json:"current"`
+		Live struct {
+			Live bool   `json:"live"`
+			Now  string `json:"now"`
+		} `json:"live"`
+	}
+	asked := map[string]*answer{} // one question per machine + folder
+	out := []deployLive{}
+	for _, id := range s.accessOf(r).ids() {
+		team, err := s.store.GetTeam(ctx, id)
+		if err != nil || team.ArchivedAt != nil {
+			continue
+		}
+		tai, err := s.store.GetTeamAI(ctx, id)
+		if err != nil || tai.Cwd == "" {
+			continue
+		}
+		key := strconv.FormatInt(tai.HostID, 10) + "|" + tai.Cwd
+		a, done := asked[key]
+		if !done {
+			a = &answer{}
+			q := url.Values{"host_id": {strconv.FormatInt(tai.HostID, 10)}, "cwd": {tai.Cwd}}
+			if err := sb.call(ctx, http.MethodGet, "/api/v1/link/deploy?"+q.Encode(), nil, a); err != nil {
+				a = nil
+			}
+			asked[key] = a
+		}
+		if a == nil || !a.Configured {
+			continue
+		}
+		d := deployLive{TeamKey: team.Key, HostName: a.HostName, URL: a.Config.URL, State: "none"}
+		switch {
+		case a.Latest != nil && a.Latest.Status == "running":
+			d.State, d.Ref, d.Branch, d.SHA, d.Since = "running", a.Latest.Ref, a.Latest.Branch, a.Latest.SHA, a.Latest.StartedAt
+		case a.Current != nil && a.Live.Live:
+			d.State, d.Ref, d.Branch, d.SHA, d.Since = "live", a.Current.Ref, a.Current.Branch, a.Current.SHA, a.Current.FinishedAt
+		case a.Current != nil:
+			d.State, d.Branch, d.SHA, d.Now, d.Since = "replaced", a.Current.Branch, a.Current.SHA, a.Live.Now, a.Current.FinishedAt
+		}
+		out = append(out, d)
+	}
+	deployLiveByUser.Store(uid, deployLiveCache{at: time.Now(), list: out})
+	writeJSON(w, http.StatusOK, map[string]any{"teams": out, "connected": true})
 }

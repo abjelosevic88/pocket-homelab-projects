@@ -4,6 +4,7 @@
 // follows them; the section shows what runs there now and the issue's branches.
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { api, V1 } from '../../lib/api'
+import { refreshDeployLive } from '../../lib/deploy-live'
 import { ago } from '../../lib/format'
 import type { DeployBranch, DeployInfo, DeployRun, IssueDetail } from '../../lib/types'
 import { Icon } from '../icons'
@@ -55,7 +56,7 @@ export function IssueDeploy({ issue, deploy }: { issue: IssueDetail; deploy: Ret
       api.get<DeployRun>(`${V1}/issues/${issue.id}/deploy/${run.id}`).then(d => {
         setRun(d)
         if (d.status !== 'running') {
-          reload()
+          reload(); refreshDeployLive()
           toast(d.status === 'ok' ? `Deployed ${d.branch}${d.host_name ? ` to ${d.host_name}` : ''}` : `Deploy failed: ${d.error}`, d.status === 'ok' ? undefined : 'err',
             d.status === 'ok' && d.url ? { label: 'Open', run: () => { window.open(d.url, '_blank', 'noopener') } } : undefined)
         }
@@ -77,7 +78,7 @@ export function IssueDeploy({ issue, deploy }: { issue: IssueDetail; deploy: Ret
     setStarting(b.branch)
     try {
       const d = await api.post<DeployRun>(`${V1}/issues/${issue.id}/deploy`, { branch: b.branch })
-      setRun(d); setShowLog(false); reload()
+      setRun(d); setShowLog(false); reload(); refreshDeployLive()
     } catch (e) { toast(errMsg(e), 'err') } finally { setStarting('') }
   }
 

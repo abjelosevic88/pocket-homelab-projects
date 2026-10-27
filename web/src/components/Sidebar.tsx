@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
 import { useAIActiveList } from '../lib/ai-active'
+import { useTeamDeploy } from '../lib/deploy-live'
 import type { Favorite, Team } from '../lib/types'
 import { Icon } from './icons'
 import { ProjectMark, StatusIcon } from './issue-bits'
@@ -27,6 +28,28 @@ function WithAIItem({ to, teamKey, onNavigate }: { to: string; teamKey: string; 
       <span className="sb-ico"><Icon name="sparkles" size={15} /></span><span className="ellipsis">With AI</span>
       {mine.length > 0 && <span className={`sb-ai-count ${waiting ? 'waiting' : 'running'}`} title={waiting ? 'Waiting for you' : 'Pocket AI is working'}>{mine.length}</span>}
     </NavLink>
+  )
+}
+
+/** The team's deploy server (Team settings → Pocket AI → Deploy): which issue runs
+ *  there now. A click opens that issue; the arrow opens the server's app. */
+function DeployItem({ teamKey, onNavigate }: { teamKey: string; onNavigate: () => void }) {
+  const d = useTeamDeploy(teamKey)
+  const navigate = useNavigate()
+  if (!d) return null
+  const what = d.state === 'running' ? `Deploying ${d.ref || d.branch}…` : d.state === 'live' ? (d.ref || d.branch) : d.state === 'replaced' ? (d.now ? `${d.now.slice(0, 8)} (not from here)` : 'replaced') : 'nothing yet'
+  const tip = d.state === 'live' ? `${d.host_name} runs ${d.ref ? d.ref + ' · ' : ''}${d.branch} @ ${d.sha.slice(0, 8)}`
+    : d.state === 'replaced' ? `${d.host_name}: ${d.branch} was deployed from here; something else runs there since` : `${d.host_name}: ${what}`
+  const openIssue = d.ref && (d.state === 'live' || d.state === 'running')
+  return (
+    <div className={`sb-nav-item sb-deploy ${d.state}`} role="link" tabIndex={0} title={tip}
+      onClick={() => { if (openIssue) { onNavigate(); navigate(`/issue/${d.ref}`) } else if (d.url) window.open(d.url, '_blank', 'noopener') }}
+      onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLElement).click() }}>
+      <span className="sb-ico"><Icon name="server" size={15} /></span>
+      <span className="ellipsis">{d.host_name || 'Deploy'}</span>
+      <span className={`sb-deploy-what ${d.state}`}>{what}</span>
+      {d.url && <a className="sb-deploy-open" href={d.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} aria-label={`Open ${d.url}`} title={`Open ${d.url}`}><Icon name="external" size={12} /></a>}
+    </div>
   )
 }
 
@@ -139,6 +162,7 @@ function TeamGroup({ team, onNavigate }: { team: Team; onNavigate: () => void })
         <Item to={`${base}/issues`} icon={<Icon name="layers" size={15} />} label="Issues" onNavigate={onNavigate} />
         <Item to={`${base}/active`} icon={<Icon name="zap" size={15} />} label="Active" count={team.counts?.started} onNavigate={onNavigate} />
         <WithAIItem to={`${base}/ai`} teamKey={team.key} onNavigate={onNavigate} />
+        <DeployItem teamKey={team.key} onNavigate={onNavigate} />
         <Item to={`${base}/backlog`} icon={<StatusIcon type="backlog" size={15} />} label="Backlog" onNavigate={onNavigate} />
         {team.cycles_enabled && <Item to={`${base}/cycles`} icon={<Icon name="cycle" size={15} />} label="Cycles" onNavigate={onNavigate} />}
         <Item to={`${base}/projects`} icon={<Icon name="briefcase" size={15} />} label="Projects" onNavigate={onNavigate} />

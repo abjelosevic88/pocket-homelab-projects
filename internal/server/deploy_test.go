@@ -97,6 +97,19 @@ func TestDeployIssue(t *testing.T) {
 		t.Fatalf("history: %+v", hist)
 	}
 
+	// lists and the sidebar: what each team's deploy server runs
+	var live struct {
+		Teams     []deployLive `json:"teams"`
+		Connected bool         `json:"connected"`
+	}
+	alex.do("GET", "/api/v1/deploys/live", nil, 200, &live)
+	if !live.Connected || len(live.Teams) != 1 || live.Teams[0].TeamKey != "WEB" || live.Teams[0].HostName != "staging" || live.Teams[0].State != "none" || live.Teams[0].URL != "https://staging.example" {
+		t.Fatalf("live: %+v", live)
+	}
+	if started[0]["ref_url"] != s.cfg.BaseURL+"/issue/WEB-1" || started[0]["ref_label"] != "Fix login" {
+		t.Fatalf("ref url: %v", started[0])
+	}
+
 	alex.do("PUT", "/api/v1/teams/WEB/deploy", map[string]any{"config": map[string]any{"host_id": 3, "run": []string{"deploy"}, "url": "https://staging.example"}}, 200, nil)
 	if saved["cwd"] != "/work/web" || saved["config"].(map[string]any)["url"] != "https://staging.example" {
 		t.Fatalf("saved: %v", saved)

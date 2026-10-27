@@ -12,6 +12,7 @@ import { DueChip, PersonAvatar, PriorityIcon, ProjectMark, StatusIcon, useStateP
 import { LabelChips, PropertyPicker, type Prop } from './pickers'
 import { type Anchor, type MenuItem, Menu, copyText, rectOf, useToast } from './ui'
 import { AIMark } from './issue/AIMark'
+import { DeployMark } from './issue/DeployMark'
 
 /** Apply a patch to an issue, report the fresh issue, offer Undo for the main fields. */
 export function useIssuePatch(onUpdated?: (is: Issue) => void) {
@@ -118,7 +119,7 @@ export function IssueRow({ issue, properties, selected, focused, onToggleSelect,
       {has('status') && <button type="button" className="cell-btn" onClick={click('state')} title={state?.name}><StatusIcon state={state} progress={progress(state)} /></button>}
       <span className="issue-title ellipsis">
         <span className="t">{issue.title}</span>
-        <AIMark identifier={issue.identifier} />
+        <AIMark identifier={issue.identifier} /><DeployMark identifier={issue.identifier} />
         {has('sub_issues') && issue.sub_total > 0 && <span className="subcount" title="Sub-issues"><Icon name="checklist" size={12} />{issue.sub_done}/{issue.sub_total}</span>}
         {issue.blocked_by > 0 && <span className="blocked" title="Blocked"><Icon name="alert-triangle" size={12} /></span>}
         <a href={`/issue/${issue.identifier}`} className="pocket-ask-link" hidden>{issue.identifier}</a>
