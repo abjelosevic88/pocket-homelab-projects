@@ -24,6 +24,7 @@ import { IssueActivity, type ActivityHandle } from '../components/issue/IssueAct
 import { Attachments, Contacts, IssueNotes, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
 import { type DockTab, IssueDock, newDockKey } from '../components/issue/IssueDock'
 import { openTab, setTabDocks, tabDocks } from '../lib/tabs'
+import { IssueDeploy, useIssueDeploy } from '../components/issue/Deploy'
 import { CodeButton, CodeConversations, type CodePanel, sameConversation, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
@@ -82,6 +83,7 @@ export default function IssuePage() {
     if (activeRef.current === key) setActiveDock(rest[Math.min(i, rest.length - 1)]?.key || '')
   }, [])
   const code = useIssueCode(d, dockVersion)
+  const deploy = useIssueDeploy(d)
   const breakdownRef = useRef<(() => void) | null>(null)
   const codePanel = useMemo<CodePanel>(() => ({
     open: (url, title, send = false) => openDock({ kind: 'ai', url, title, send }),
@@ -198,6 +200,7 @@ export default function IssuePage() {
           {mobile && <MobileChips issue={d} onOpen={openProp} canEdit={canEdit} />}
           <Description issue={d} canEdit={canEdit} onSaved={merge} />
           <CodeConversations issue={d} code={code} openUrls={docks.filter(t => t.kind === 'ai').map(t => t.url)} />
+          <IssueDeploy issue={d} deploy={deploy} />
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />

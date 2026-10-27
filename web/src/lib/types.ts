@@ -205,3 +205,50 @@ export interface CodeWorktree {
   id: number; branch: string; base: string; repo: string; host?: string; status: 'active' | 'archived'; setup: string; merged_at: string; pr_url: string
   created_at: string; thread_ids: string[]; live: boolean; ahead: number; dirty: number; unpushed: number; merged: boolean; pr_state?: string; url: string
 }
+
+/** A branch of an issue that can be deployed (Pocket AI's word on it). */
+export interface DeployBranch {
+  branch: string
+  sha: string
+  ahead: number // commits origin lacks; -1 = not on origin yet
+  dirty: number // uncommitted files where it is checked out (not deployed)
+  path?: string
+  subject: string
+  committed_at: string
+}
+
+/** One deploy of a project's single slot. */
+export interface DeployRun {
+  id: number
+  project: string
+  host_id: number
+  host_name?: string
+  branch: string
+  sha: string
+  source: string
+  ref: string
+  status: 'running' | 'ok' | 'failed'
+  note: string
+  log?: string
+  error: string
+  url: string
+  started_at: string
+  finished_at: string
+  mine: boolean
+}
+
+export interface DeployConfig { host_id: number; dir: string; run: string[]; url: string; current?: string }
+
+export interface DeployInfo {
+  configured: boolean
+  detail?: string
+  project?: string
+  repo?: string
+  host_name?: string
+  config: DeployConfig
+  branches?: DeployBranch[]
+  latest?: DeployRun | null
+  current?: DeployRun | null
+  live?: { checked: boolean; now: string; live: boolean }
+  can_deploy?: boolean
+}

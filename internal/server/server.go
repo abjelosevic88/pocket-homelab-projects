@@ -165,6 +165,7 @@ func (s *Server) Router() http.Handler {
 			s.timeRoutes(r)
 			s.aiRoutes(r)
 			s.codeRoutes(r)
+			s.deployRoutes(r)
 			s.prRoutes(r)
 			s.integrationRoutes(r)
 			s.slackRoutes(r)

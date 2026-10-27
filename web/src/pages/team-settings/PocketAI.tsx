@@ -2,7 +2,7 @@
 // team's instructions (a hidden system prompt) and its memory.
 import { useEffect, useMemo, useState } from 'react'
 import { api, V1 } from '../../lib/api'
-import type { AgentChoice, AgentOptions, TeamAI } from '../../lib/types'
+import type { AgentChoice, AgentOptions, DeployConfig, DeployInfo, Team, TeamAI } from '../../lib/types'
 import { FolderInput } from '../../components/FolderInput'
 import { Icon } from '../../components/icons'
 import { type Option, Select } from '../../components/Select'
@@ -115,6 +115,8 @@ export function PocketAITab({ team, admin }: TabProps) {
         </div>
       </Section>
 
+      {saved.data.cwd && <DeploySettings team={team} admin={admin} hostOpts={hostOpts} key={`${saved.data.host_id}:${saved.data.cwd}`} />}
+
       <Section title="Memory" sub="Durable facts about this team’s code, given to every conversation. The agent adds a line here with pocket_projects_remember after you approve it in Pocket AI; edit or tidy it any time.">
         <div className="stack">
           <textarea value={memory} onChange={e => setMemory(e.target.value)} rows={10} disabled={!admin} spellCheck={false} className="mono"
@@ -124,5 +126,57 @@ export function PocketAITab({ team, admin }: TabProps) {
         </div>
       </Section>
     </div>
+  )
+}
+
+/** Deploy: what the issue page's Deploy button runs, for the repository in the team's code folder
+ *  (kept in Pocket AI for the project, so every team and checkout of it shares one). */
+function DeploySettings({ team, admin, hostOpts }: { team: Team; admin: boolean; hostOpts: Option<string>[] }) {
+  const { toast } = useToast()
+  const info = useAsync(() => api.get<DeployInfo>(`${V1}/teams/${team.key}/deploy`), [team.key])
+  const [f, setF] = useState<DeployConfig & { runText: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (info.data) setF({ ...info.data.config, current: info.data.config.current || '', runText: (info.data.config.run || []).join('\n') }) }, [info.data])
+  const sub = <>The <b>Deploy</b> button on an issue puts the issue’s branch on one server — a staging box with one slot, so the newest deploy is what runs there.
+    Pocket AI pushes the branch first if origin lacks commits of it, then runs these commands on that server with <code>$POCKET_BRANCH</code>, <code>$POCKET_SHA</code> and <code>$POCKET_REF</code> (the issue) set.</>
+  if (info.error) return <Section title="Deploy" sub={sub}><div className="callout"><Icon name="info" size={15} /><span>{info.error}</span></div></Section>
+  if (!f || !info.data) return <Section title="Deploy" sub={sub}><Loading /></Section>
+  const set = (patch: Partial<typeof f>) => setF({ ...f, ...patch })
+  const savedCfg = info.data.config
+  const deployHosts = hostOpts.some(h => h.value === String(f.host_id || 0)) ? hostOpts
+    : [...hostOpts, { value: String(f.host_id), label: info.data.host_name || `Machine #${f.host_id}` }]
+  const run = f.runText.split('\n').map(l => l.trim()).filter(Boolean)
+  const dirty = f.host_id !== savedCfg.host_id || f.dir !== savedCfg.dir || f.url !== savedCfg.url || (f.current || '') !== (savedCfg.current || '') || run.join('\n') !== (savedCfg.run || []).join('\n')
+  const save = async (clear = false) => {
+    setBusy(true)
+    try {
+      await api.put(`${V1}/teams/${team.key}/deploy`, { config: clear ? null : { host_id: f.host_id, dir: f.dir, run, url: f.url, current: f.current } })
+      info.reload(); toast(clear ? 'Deploy removed' : 'Deploy saved')
+    } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Section title="Deploy" sub={sub}>
+      <div className="stack">
+        {info.data.project && <div className="muted xsmall">For <span className="mono">{info.data.project}</span>{info.data.repo ? <> ({info.data.repo})</> : null}</div>}
+        <div className="ui-ai-grid">
+          <Field label="Deploy on" group><Select label="Deploy on" value={String(f.host_id || 0)} options={deployHosts} disabled={!admin} onChange={v => set({ host_id: Number(v) })} /></Field>
+          <Field label="Address" group><input value={f.url} onChange={e => set({ url: e.target.value })} disabled={!admin} placeholder="https://staging.example.org" /></Field>
+        </div>
+        <Field label="Commands" help="One per line, run in order from the folder below; the first that fails stops the deploy. Ending with a line that is just an address makes that the link.">
+          <textarea value={f.runText} onChange={e => set({ runText: e.target.value })} rows={4} disabled={!admin} spellCheck={false} className="mono"
+            placeholder={'deploy-staging "$POCKET_BRANCH"'} />
+        </Field>
+        <div className="ui-ai-grid">
+          <Field label="Folder" group help="Where the commands run; empty = home."><input value={f.dir} onChange={e => set({ dir: e.target.value })} disabled={!admin} placeholder="~" className="mono" /></Field>
+          <Field label="What runs now" group help="Optional: prints the commit or branch on the server, so a deploy replaced since isn’t shown as live.">
+            <input value={f.current || ''} onChange={e => set({ current: e.target.value })} disabled={!admin} placeholder="git -C /srv/app rev-parse HEAD" className="mono" /></Field>
+        </div>
+        {admin && <div className="row">
+          {info.data.configured && <button type="button" className="btn ghost" disabled={busy} onClick={() => save(true)}>Remove</button>}
+          <span className="spacer" style={{ flex: 1 }} />
+          <button type="button" className="btn primary" disabled={!dirty || busy || !run.length} onClick={() => save()}>Save deploy</button>
+        </div>}
+      </div>
+    </Section>
   )
 }

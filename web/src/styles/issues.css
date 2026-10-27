@@ -513,3 +513,21 @@ button.ic-chip:hover { background: var(--hover); }
 .slack-preview-h { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .slack-mention { color: #1264a3; background: color-mix(in srgb, #1d9bd1 14%, transparent); border-radius: 4px; padding: 0 2px; font-weight: 500; }
 .slack-preview a { color: #1264a3; word-break: break-all; }
+
+/* Deploy: what runs on the project's deploy target, the issue's branches, the run followed here */
+.dp-url { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); text-decoration: none; }
+.dp-url:hover { color: var(--text); }
+.dp-now, .dp-branch, .dp-run { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--hairline); min-width: 0; font-size: 13px; }
+.dp-now { border-top: 0; color: var(--muted); }
+.dp-now.live > svg { color: #16a34a; }
+.dp-now .code-pulse { margin: 0 2px; }
+.dp-branch > svg { color: var(--muted); flex-shrink: 0; }
+.dp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.dp-main small { font-size: 12px; }
+.dp-warn { color: #b45309; }
+.cc-state.ok { color: #15803d; background: color-mix(in srgb, #16a34a 12%, transparent); }
+.cc-state.failed { color: #dc2626; background: color-mix(in srgb, #dc2626 11%, transparent); }
+.dp-log { margin: 0; max-height: 280px; overflow: auto; padding: 10px 12px; border-top: 1px solid var(--hairline); background: color-mix(in srgb, var(--text) 4%, transparent);
+  font: 11.5px/1.45 var(--mono, ui-monospace, monospace); white-space: pre-wrap; word-break: break-all; }
+[data-theme="dark"] .dp-warn { color: #fcd34d; } [data-theme="dark"] .cc-state.ok { color: #86efac; } [data-theme="dark"] .cc-state.failed { color: #fca5a5; }
+@media (max-width: 640px) { .dp-branch { flex-wrap: wrap; } .dp-branch .btn { margin-left: auto; } }
