@@ -31,6 +31,9 @@ func apiServerCore(t *testing.T, coreURL string) (*Server, http.Handler) {
 	t.Setenv("CORE_URL", coreURL)
 	t.Setenv("BASE_URL", "https://projects.example")
 	t.Setenv("DEMO_DATA", "")
+	// The Pocket AI shell exports its own NOTIFY_URL; without this every test
+	// run posts real "Ben assigned you WEB-3" alerts to ntfy.
+	t.Setenv("NOTIFY_URL", "")
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatal(err)
