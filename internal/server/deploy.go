@@ -250,8 +250,8 @@ type deployLive struct {
 	TeamKey  string `json:"team_key"`
 	HostName string `json:"host_name"`
 	URL      string `json:"url"`
-	State    string `json:"state"` // live | running | replaced | none
-	Ref      string `json:"ref"`   // the issue on it (live) or being deployed (running)
+	State    string `json:"state"`           // live | running | replaced | none
+	Ref      string `json:"ref"`             // the issue on it (live) or being deployed (running)
 	Title    string `json:"title,omitempty"` // that issue's title (the feature)
 	Branch   string `json:"branch"`
 	SHA      string `json:"sha"`
