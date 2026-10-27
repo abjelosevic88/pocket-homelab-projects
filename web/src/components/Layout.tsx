@@ -27,6 +27,20 @@ export function keysBusy(e: KeyboardEvent): boolean {
 
 export default function Layout() {
   const navigate = useNavigate()
+  // Installed app: a Projects link opened from elsewhere (Pocket AI's sidebar,
+  // a notification) focuses this window (manifest launch_handler) and lands
+  // here, so the issue opens as a tab instead of in a second window.
+  useEffect(() => {
+    const lq = (window as unknown as { launchQueue?: { setConsumer: (f: (p: { targetURL?: string }) => void) => void } }).launchQueue
+    if (!lq || window.self !== window.top) return
+    lq.setConsumer(p => {
+      if (!p.targetURL) return
+      const u = new URL(p.targetURL)
+      const path = u.pathname + u.search + u.hash
+      if (u.origin === location.origin && path !== location.pathname + location.search + location.hash) navigate(path)
+      window.focus()
+    })
+  }, [navigate])
   const loc = useLocation()
   const app = useApp()
   const mobile = useIsMobile()
