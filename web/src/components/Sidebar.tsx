@@ -53,7 +53,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       <div className="sb-brand">
         <img src="/favicon.svg" alt="" className="sb-logo" />
         <span className="sb-title">{title !== 'Pocket Projects' ? title : <>Pocket <b>Projects</b></>}</span>
-        {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^\d/.test(status.version) ? 'v' + status.version : status.version}</span>}
+        {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^v?\d+\.\d+/.test(status.version) ? 'v' + status.version.replace(/^v/, '').replace(/[-+].*$/, '') : status.version}</span>}
       </div>
       <button type="button" className="btn primary create-btn" onClick={() => { onNavigate(); openCreateIssue() }} title="New issue (C)">
         <Icon name="edit" size={16} strokeWidth={2.1} />New issue<kbd className="kbd-on-primary">C</kbd>
