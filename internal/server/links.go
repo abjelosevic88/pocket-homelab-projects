@@ -70,7 +70,11 @@ func (s *Server) linkUser(ctx context.Context, tok string, r *http.Request) (*st
 	if !linkAllows(strings.Fields(in.Scope), r) {
 		return nil, errLinkScope
 	}
-	s.linkApps.Store(tok, in.App)
+	app := "link"
+	if in.App != nil && in.App.Slug != "" {
+		app = in.App.Slug
+	}
+	s.linkApps.Store(tok, app) // the slug: Core's introspection names the app as an object
 	return s.coreIdentityUser(ctx, in)
 }
 
@@ -85,7 +89,9 @@ func (s *Server) linkApp(r *http.Request) string {
 		return ""
 	}
 	if v, ok := s.linkApps.Load(tok); ok {
-		return v.(string)
+		if app, ok := v.(string); ok {
+			return app
+		}
 	}
 	return "link"
 }
