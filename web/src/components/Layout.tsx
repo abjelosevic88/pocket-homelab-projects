@@ -171,7 +171,7 @@ function TopBar({ onMenu, onPalette, mobile, compact, sidebarOpen }: { onMenu: (
     <header className="topbar">
       <button type="button" className="btn ghost icon-only" onClick={onMenu} aria-label={sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'} title="Menu ([)"><Icon name={mobile || compact ? 'menu' : 'sidebar'} size={18} /></button>
       <h1 className="range-title">
-        {crumbs.map((c, i) => <span key={i} className="crumb-part">{i > 0 && <Icon name="chevron-right" size={16} className="crumb-sep" />}
+        {crumbs.map((c, i) => <span key={i} className="crumb-part">{i > 0 && <><Icon name="chevron-right" size={16} className="crumb-sep" /><span className="sr-only"> › </span></>}
           {c.to && i < crumbs.length - 1 ? <a href={c.to} className="ellipsis crumb" onClick={e => { e.preventDefault(); navigate(c.to!) }}>{c.label}</a> : <span className={`ellipsis ${i < crumbs.length - 1 ? 'crumb' : ''}`}>{c.label}</span>}
         </span>)}
       </h1>

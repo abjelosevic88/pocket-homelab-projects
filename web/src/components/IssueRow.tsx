@@ -78,11 +78,14 @@ export function useIssueActions(issue: Issue, onUpdated?: (is: Issue) => void) {
   const canEdit = app.canEdit(issue.team_id)
   const openProp = (p: Prop, at?: Anchor) => setProp({ p, at: at || menu || { x: window.innerWidth / 2 - 130, y: 120, w: 0, h: 0 } })
   const items = issueMenu(issue, { openProp: p => openProp(p, menu || undefined), navigate, toast, canEdit, base: window.location.origin })
-  const ui = (
-    <>
+  // The menu and pickers are portals, but React still bubbles their events to the
+  // row/card that renders them — without this, picking a status opens the issue.
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation()
+  const ui = (menu || prop) && (
+    <span hidden onClick={stop} onDoubleClick={stop} onContextMenu={stop} onMouseDown={stop} onPointerDown={stop} onKeyDown={stop}>
       {menu && <Menu anchor={menu} items={items} onClose={() => setMenu(null)} width={220} />}
       {prop && <PropertyPicker prop={prop.p} issue={issue} anchor={prop.at} onClose={() => setProp(null)} onPatch={p => patch(issue, p)} />}
-    </>
+    </span>
   )
   return { ui, openMenu: (a: Anchor) => setMenu(a), openProp, patch: (p: Record<string, unknown>) => patch(issue, p), canEdit }
 }
