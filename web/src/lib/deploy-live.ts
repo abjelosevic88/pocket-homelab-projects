@@ -7,7 +7,7 @@ import { api, V1 } from './api'
 export type DeployLive = {
   team_key: string; host_name: string; url: string
   state: 'live' | 'running' | 'replaced' | 'none'
-  ref: string; branch: string; sha: string; now?: string; since?: string
+  ref: string; title?: string; branch: string; sha: string; now?: string; since?: string
 }
 
 let list: DeployLive[] = []

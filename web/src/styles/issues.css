@@ -535,7 +535,10 @@ button.ic-chip:hover { background: var(--hover); }
 .deploy-mark.running { color: #7c3aed; background: color-mix(in srgb, #7c3aed 12%, transparent); animation: ai-glow 1.6s ease-in-out infinite; }
 [data-theme="dark"] .deploy-mark { color: #86efac; } [data-theme="dark"] .deploy-mark.running { color: #c4b5fd; }
 .sb-deploy { cursor: pointer; }
-.sb-deploy-what { margin-left: auto; padding-left: 6px; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.sb-team .sb-nested .sb-nav-item.sb-deploy { height: auto; min-height: 30px; padding-top: 4px; padding-bottom: 4px; align-items: center; }
+.sb-deploy-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.sb-deploy-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+.sb-deploy-what.mono { font-family: var(--mono, ui-monospace, monospace); font-size: 11px; }
 .sb-deploy-what.live { color: #15803d; } .sb-deploy-what.running { color: #7c3aed; }
 [data-theme="dark"] .sb-deploy-what.live { color: #86efac; } [data-theme="dark"] .sb-deploy-what.running { color: #c4b5fd; }
 .sb-deploy-open { display: none; color: var(--muted); padding-left: 4px; }

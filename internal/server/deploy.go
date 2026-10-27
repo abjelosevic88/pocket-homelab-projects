@@ -252,6 +252,7 @@ type deployLive struct {
 	URL      string `json:"url"`
 	State    string `json:"state"` // live | running | replaced | none
 	Ref      string `json:"ref"`   // the issue on it (live) or being deployed (running)
+	Title    string `json:"title,omitempty"` // that issue's title (the feature)
 	Branch   string `json:"branch"`
 	SHA      string `json:"sha"`
 	Now      string `json:"now,omitempty"` // replaced: what the server says runs
@@ -330,6 +331,13 @@ func (s *Server) handleDeploysLive(w http.ResponseWriter, r *http.Request) {
 			d.State, d.Ref, d.Branch, d.SHA, d.Since = "live", a.Current.Ref, a.Current.Branch, a.Current.SHA, a.Current.FinishedAt
 		case a.Current != nil:
 			d.State, d.Branch, d.SHA, d.Now, d.Since = "replaced", a.Current.Branch, a.Current.SHA, a.Live.Now, a.Current.FinishedAt
+		}
+		if d.Ref != "" {
+			if iid, err := s.store.IssueIDByIdentifier(ctx, d.Ref); err == nil {
+				if is, err := s.store.GetIssue(ctx, iid, uid); err == nil && s.accessOf(r).can(is.TeamID, needRead) {
+					d.Title = is.Title
+				}
+			}
 		}
 		out = append(out, d)
 	}

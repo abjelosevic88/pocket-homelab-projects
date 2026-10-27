@@ -37,8 +37,11 @@ function DeployItem({ teamKey, onNavigate }: { teamKey: string; onNavigate: () =
   const d = useTeamDeploy(teamKey)
   const navigate = useNavigate()
   if (!d) return null
-  const what = d.state === 'running' ? `Deploying ${d.ref || d.branch}…` : d.state === 'live' ? (d.ref || d.branch) : d.state === 'replaced' ? (d.now ? `${d.now.slice(0, 8)} (not from here)` : 'replaced') : 'nothing yet'
-  const tip = d.state === 'live' ? `${d.host_name} runs ${d.ref ? d.ref + ' · ' : ''}${d.branch} @ ${d.sha.slice(0, 8)}`
+  // the feature: the issue's title when it came from an issue, else the branch
+  const feature = d.ref ? `${d.ref} · ${d.title || d.branch}` : d.branch
+  const what = d.state === 'running' ? `Deploying ${feature}…` : d.state === 'live' ? feature
+    : d.state === 'replaced' ? (d.now ? `${d.now.slice(0, 8)} — not from here` : 'replaced since') : 'nothing deployed yet'
+  const tip = d.state === 'live' || d.state === 'running' ? `${d.host_name}${d.state === 'running' ? ' (deploying)' : ''}: ${d.ref ? d.ref + (d.title ? ' ' + d.title : '') + '\n' : ''}${d.branch} @ ${d.sha.slice(0, 8)}`
     : d.state === 'replaced' ? `${d.host_name}: ${d.branch} was deployed from here; something else runs there since` : `${d.host_name}: ${what}`
   const openIssue = d.ref && (d.state === 'live' || d.state === 'running')
   return (
@@ -46,8 +49,10 @@ function DeployItem({ teamKey, onNavigate }: { teamKey: string; onNavigate: () =
       onClick={() => { if (openIssue) { onNavigate(); navigate(`/issue/${d.ref}`) } else if (d.url) window.open(d.url, '_blank', 'noopener') }}
       onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLElement).click() }}>
       <span className="sb-ico"><Icon name="server" size={15} /></span>
-      <span className="ellipsis">{d.host_name || 'Deploy'}</span>
-      <span className={`sb-deploy-what ${d.state}`}>{what}</span>
+      <span className="sb-deploy-text">
+        <span className="ellipsis">{d.host_name || 'Deploy'}</span>
+        <small className={`sb-deploy-what ${d.state} ${d.ref ? '' : 'mono'}`}>{what}</small>
+      </span>
       {d.url && <a className="sb-deploy-open" href={d.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} aria-label={`Open ${d.url}`} title={`Open ${d.url}`}><Icon name="external" size={12} /></a>}
     </div>
   )
