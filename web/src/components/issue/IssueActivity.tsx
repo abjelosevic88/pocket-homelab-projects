@@ -68,6 +68,7 @@ export function historySentence(h: History, isMe: (id: number | null) => boolean
       return <>marked the issue {word[h.to_value] || 'related to'} <B>{to}</B></>
     }
     case 'attachment_added': return <>attached <B>{to}</B></>
+    case 'slack_sent': return <>sent it to Slack{to ? <> in <B>{to}</B></> : ''}</>
     case 'attachment_removed': return <>removed the attachment <B>{from}</B></>
     case 'event_scheduled': return <>scheduled <B>{to}</B> in Pocket Calendar</>
     case 'contact_added': return <>added the contact <B>{to}</B></>

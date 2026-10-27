@@ -17,6 +17,7 @@ export function IntegrationsTab({ team, admin }: TabProps) {
   )
   return (
     <div className="stack loose">
+      <Slack teamKey={team.key} />
       <Webhooks teamKey={team.key} />
       <GitHook teamKey={team.key} />
       <PRStatus teamKey={team.key} />
@@ -213,6 +214,58 @@ function PRStatus({ teamKey }: { teamKey: string }) {
           </Field>
         </div>
       )}
+    </Section>
+  )
+}
+
+interface SlackEntry { id: number; kind: 'channel' | 'person'; name: string; value: string }
+
+/** Slack: channels (one incoming webhook each) and people to @mention, for "Send to Slack" on pull requests. */
+function Slack({ teamKey }: { teamKey: string }) {
+  const { toast } = useToast()
+  const list = useAsync(() => api.get<SlackEntry[]>(`${V1}/teams/${teamKey}/slack`), [teamKey])
+  const [add, setAdd] = useState<{ kind: 'channel' | 'person'; name: string; value: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    if (!add) return
+    setBusy(true)
+    try { list.setData(await api.post<SlackEntry[]>(`${V1}/teams/${teamKey}/slack`, add)); toast(add.kind === 'channel' ? 'Channel added' : 'Person added'); setAdd(null) }
+    catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
+  }
+  const remove = async (e: SlackEntry) => {
+    try { list.setData(await api.del<SlackEntry[]>(`${V1}/teams/${teamKey}/slack/${e.id}`)) } catch (err) { toast(errMsg(err), 'err') }
+  }
+  const channels = (list.data || []).filter(e => e.kind === 'channel'), people = (list.data || []).filter(e => e.kind === 'person')
+  const rows = (items: SlackEntry[], empty: string) => items.length ? items.map(e => (
+    <div key={e.id} className="row small" style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+      <b>{e.name}</b><code className="muted">{e.value}</code><span style={{ flex: 1 }} />
+      <button className="btn ghost sm" onClick={() => remove(e)}>Remove</button>
+    </div>
+  )) : <p className="muted small">{empty}</p>
+  return (
+    <Section title="Slack" sub={'"Send to Slack" on a pull request posts a short Pocket AI summary and the link to one of these channels, after you check it. Members pick the channel and who to mention.'}
+      actions={<><button className="btn sm" onClick={() => setAdd({ kind: 'channel', name: '', value: '' })}><Icon name="plus" size={14} />Channel</button><button className="btn sm" onClick={() => setAdd({ kind: 'person', name: '', value: '' })}><Icon name="user-plus" size={14} />Person</button></>}>
+      {list.error ? <div className="callout danger"><Icon name="alert" size={15} /><span>{list.error}</span></div> : !list.data ? <Loading /> : (
+        <div className="stack">
+          <div><div className="small" style={{ fontWeight: 600, marginBottom: 2 }}>Channels</div>{rows(channels, 'No channel yet: add one with its incoming-webhook URL.')}</div>
+          <div><div className="small" style={{ fontWeight: 600, marginBottom: 2 }}>People to mention</div>{rows(people, 'Nobody yet. Without people, messages just post without @mentions.')}</div>
+        </div>
+      )}
+      {add && <Modal title={add.kind === 'channel' ? 'Add a Slack channel' : 'Add a person to mention'} size="sm" onClose={() => setAdd(null)} footer={<>
+        <button className="btn" onClick={() => setAdd(null)}>Cancel</button>
+        <button className="btn primary" disabled={busy || !add.name.trim() || !add.value.trim()} onClick={save}>{busy && <Spinner />}Add</button>
+      </>}>
+        <div className="stack">
+          <Field label="Name"><input autoFocus value={add.name} onChange={e => setAdd({ ...add, name: e.target.value })} placeholder={add.kind === 'channel' ? '#athena-dev' : 'Jasenko Rakovic'} maxLength={80} /></Field>
+          {add.kind === 'channel'
+            ? <Field label="Incoming-webhook URL" help={<>In Slack: <b>Apps → Incoming WebHooks</b> (or your own app → Incoming Webhooks) → <b>Add to Slack</b> → pick the channel → copy the URL. It is kept here and never shown again.</>}>
+                <input type="password" value={add.value} onChange={e => setAdd({ ...add, value: e.target.value })} placeholder="https://hooks.slack.com/services/…" autoComplete="off" spellCheck={false} />
+              </Field>
+            : <Field label="Slack member ID" help={<>In Slack, open their profile → <b>⋮</b> → <b>Copy member ID</b> (looks like U01AB2CD3EF).</>}>
+                <input value={add.value} onChange={e => setAdd({ ...add, value: e.target.value })} placeholder="U01AB2CD3EF" autoComplete="off" spellCheck={false} />
+              </Field>}
+        </div>
+      </Modal>}
     </Section>
   )
 }

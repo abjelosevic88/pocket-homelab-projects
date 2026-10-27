@@ -12,6 +12,7 @@ import { openCreateIssue } from '../CreateIssue'
 import { IssueSearchPicker } from '../issues/IssueSearch'
 import { NoteSearch } from '../project/Resources'
 import { type Anchor, Menu, type MenuItem, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
+import { SlackSend } from './SlackSend'
 
 const changed = (is: IssueDetail) => emitChange({ kind: 'issue', team_ids: [is.team_id], ids: [is.id] })
 
@@ -161,6 +162,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const { toast } = useToast()
   const file = useRef<HTMLInputElement>(null)
   const [link, setLink] = useState(false)
+  const [slack, setSlack] = useState<Attachment | null>(null)
   const list = issue.attachment_list.filter(a => a.kind !== 'ai_thread') // conversations are listed on their own
   const remove = async (a: Attachment) => { try { await api.del(`${V1}/attachments/${a.id}`); changed(issue); onChanged() } catch (e) { toast((e as Error).message, 'err') } }
   const addLink = async (url: string) => {
@@ -186,12 +188,14 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
               <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
               {a.kind === 'pull_request' && (a.meta as { status_error?: string } | null)?.status_error && <span className="att-warn" title={`Status not updated: ${(a.meta as { status_error?: string }).status_error}`}><Icon name="alert-triangle" size={13} /></span>}
+              {canEdit && a.kind === 'pull_request' && a.url && <button type="button" className="btn ghost sm att-slack" title="Send this pull request to Slack with a short summary" onClick={() => setSlack(a)}><Icon name="message" size={13} />Slack</button>}
               {canEdit && <button type="button" className="btn ghost icon-only xs x-btn" aria-label="Remove the attachment" title="Remove" onClick={() => remove(a)}><Icon name="x" size={13} /></button>}
             </div>
           )
         })}
       </div> : <div className="drop-zone">Drop files here, paste images into the description, or link commits by mentioning {issue.identifier} in git.</div>}
       {link && <Prompt title="Add a link" placeholder="https://…" button="Add" onDone={addLink} onClose={() => setLink(false)} />}
+      {slack && <SlackSend issue={issue} pr={slack} onClose={() => setSlack(null)} onSent={onChanged} />}
     </section>
   )
 }
