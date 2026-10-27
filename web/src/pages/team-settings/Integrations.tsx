@@ -249,6 +249,7 @@ function Slack({ teamKey }: { teamKey: string }) {
         <div className="stack">
           <div><div className="small" style={{ fontWeight: 600, marginBottom: 2 }}>Channels</div>{rows(channels, 'No channel yet: add one with its incoming-webhook URL.')}</div>
           <div><div className="small" style={{ fontWeight: 600, marginBottom: 2 }}>People to mention</div>{rows(people, 'Nobody yet. Without people, messages just post without @mentions.')}</div>
+          <SlackPrompt teamKey={teamKey} />
         </div>
       )}
       {add && <Modal title={add.kind === 'channel' ? 'Add a Slack channel' : 'Add a person to mention'} size="sm" onClose={() => setAdd(null)} footer={<>
@@ -267,5 +268,29 @@ function Slack({ teamKey }: { teamKey: string }) {
         </div>
       </Modal>}
     </Section>
+  )
+}
+
+/** How Pocket AI writes the summary (length, tone, what to include). */
+function SlackPrompt({ teamKey }: { teamKey: string }) {
+  const { toast } = useToast()
+  const cur = useAsync(() => api.get<{ prompt: string; default: string }>(`${V1}/teams/${teamKey}/slack/prompt`), [teamKey])
+  const [value, setValue] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (!cur.data) return null
+  const v = value ?? cur.data.prompt
+  const save = async () => {
+    setBusy(true)
+    try { cur.setData(await api.put<{ prompt: string; default: string }>(`${V1}/teams/${teamKey}/slack/prompt`, { prompt: v })); setValue(null); toast('Summary instructions saved') }
+    catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Field label="Summary instructions" help={<>How Pocket AI writes the message: length, tone, what to mention. It always gets the issue, the pull request and the latest comments, and never adds a greeting, link or emoji. Empty = the default: <i>{cur.data.default}</i></>}>
+      <textarea rows={3} value={v} onChange={e => setValue(e.target.value)} placeholder={cur.data.default} maxLength={2000} />
+      {value !== null && value !== cur.data.prompt && <div className="row" style={{ marginTop: 6 }}>
+        <button className="btn primary sm" disabled={busy} onClick={save}>{busy && <Spinner />}Save</button>
+        <button className="btn ghost sm" onClick={() => setValue(null)}>Cancel</button>
+      </div>}
+    </Field>
   )
 }

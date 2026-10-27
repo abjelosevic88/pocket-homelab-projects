@@ -27,6 +27,8 @@ func (s *Server) slackRoutes(r chi.Router) {
 	r.Get("/teams/{ref}/slack", s.handleSlackList)
 	r.Post("/teams/{ref}/slack", s.handleSlackAdd)
 	r.Delete("/teams/{ref}/slack/{id}", s.handleSlackDelete)
+	r.Get("/teams/{ref}/slack/prompt", s.handleSlackPrompt)
+	r.Put("/teams/{ref}/slack/prompt", s.handlePutSlackPrompt)
 	r.Post("/issues/{ref}/slack/draft", s.handleSlackDraft)
 	r.Post("/issues/{ref}/slack", s.handleSlackSend)
 }
@@ -180,9 +182,11 @@ func (s *Server) handleSlackDraft(w http.ResponseWriter, r *http.Request) {
 	for i := max(0, len(comments)-4); i < len(comments); i++ {
 		fmt.Fprintf(&b, "[%s] %s\n\n", comments[i].CreatedAt[:10], comments[i].Body)
 	}
-	prompt := fmt.Sprintf(`Write a short Slack message announcing this pull request to teammates who will review or test it.
-2 or 3 sentences, plain text (Slack *bold* at most once): what changed and why, and how to check it if the input says so.
-No greeting, no sign-off, no link (it is added after your text), no headings, no bullet lists, no emoji.
+	prompt := fmt.Sprintf(`Write a Slack message announcing this pull request to teammates.
+How to write it (the team's instructions):
+%s
+
+Always: plain text (Slack *bold* at most once), no greeting, no sign-off, no link (it is added after your text), no headings, no lists, no emoji. Answer with the message only.
 
 Pull request: %s
 Issue %s: %s
@@ -190,7 +194,7 @@ Issue description:
 %s
 
 Latest comments (the newest usually summarises the work):
-%s`, firstNonEmpty(title, "(none linked)"), is.Identifier, is.Title, clip(is.Description, 3000), clip(b.String(), 6000))
+%s`, s.slackPrompt(ctx, is.TeamID), firstNonEmpty(title, "(none linked)"), is.Identifier, is.Title, clip(is.Description, 3000), clip(b.String(), 6000))
 	c, st := s.aiClient(ctx, me(r))
 	text := fallback
 	note := ""
@@ -277,4 +281,50 @@ func (s *Server) handleSlackSend(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: ptr(me(r)), Field: "slack_sent", ToLabel: channel})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "channel": channel})
+}
+
+// The team's instructions for summaries; the default keeps them to one sentence.
+const slackDefaultPrompt = "One sentence: what changed and why, for teammates who will review or test it."
+
+func (s *Server) slackPrompt(ctx context.Context, teamID int64) string {
+	var p string
+	_ = s.store.DB.QueryRowContext(ctx, `SELECT prompt FROM team_slack_prompt WHERE team_id = ?`, teamID).Scan(&p)
+	return firstNonEmpty(strings.TrimSpace(p), slackDefaultPrompt)
+}
+
+func (s *Server) handleSlackPrompt(w http.ResponseWriter, r *http.Request) {
+	t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "team")
+		return
+	}
+	var p string
+	_ = s.store.DB.QueryRowContext(r.Context(), `SELECT prompt FROM team_slack_prompt WHERE team_id = ?`, t.ID).Scan(&p)
+	writeJSON(w, http.StatusOK, map[string]string{"prompt": p, "default": slackDefaultPrompt})
+}
+
+func (s *Server) handlePutSlackPrompt(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), needAdmin)
+	if err != nil {
+		s.fail(w, err, "team")
+		return
+	}
+	p := strings.TrimSpace(in.Prompt)
+	if len(p) > 2000 {
+		writeErr(w, http.StatusBadRequest, "keep the instructions under 2000 characters")
+		return
+	}
+	if _, err := s.store.DB.ExecContext(r.Context(), `INSERT INTO team_slack_prompt (team_id, prompt) VALUES (?, ?)
+		ON CONFLICT(team_id) DO UPDATE SET prompt = excluded.prompt, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`, t.ID, p); err != nil {
+		s.fail(w, err, "slack prompt")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"prompt": p, "default": slackDefaultPrompt})
 }

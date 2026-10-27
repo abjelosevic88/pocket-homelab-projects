@@ -75,7 +75,7 @@ export function SlackSend({ issue, pr, onClose, onSent }: { issue: IssueDetail; 
                 })}
               </div>
             </Field>}
-            <Field label="Message" help={draft?.note || (draft ? 'Written by Pocket AI from the issue and its latest comments: check it before sending.' : undefined)}>
+            <Field label="Message" help={draft?.note || (draft ? <>Written by Pocket AI from the issue and its latest comments: check it before sending. <Link to={`/team/${team}/settings/integrations`} onClick={onClose}>Change how it writes</Link></> : undefined)}>
               {!draft ? <div className="row muted small"><Spinner />Pocket AI is writing a summary…</div>
                 : <textarea value={text} onChange={e => setText(e.target.value)} rows={5} maxLength={3000} autoFocus />}
             </Field>

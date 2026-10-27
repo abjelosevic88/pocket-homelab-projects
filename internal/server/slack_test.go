@@ -74,6 +74,16 @@ func TestSlackChannelsPeopleAndSend(t *testing.T) {
 	if c := ben.status("POST", "/api/v1/issues/WEB-1/slack", map[string]any{"channel_id": 999, "text": "x"}); c != 400 {
 		t.Fatalf("unknown channel: %d", c)
 	}
+	// summary instructions: admins set them, members read, empty = default
+	if c := ben.status("PUT", "/api/v1/teams/WEB/slack/prompt", map[string]any{"prompt": "x"}); c != 403 {
+		t.Fatalf("member changed the prompt: %d", c)
+	}
+	var pr struct{ Prompt, Default string }
+	alex.do("PUT", "/api/v1/teams/WEB/slack/prompt", map[string]any{"prompt": "  Two short sentences.  "}, 200, &pr)
+	ben.do("GET", "/api/v1/teams/WEB/slack/prompt", nil, 200, &pr)
+	if pr.Prompt != "Two short sentences." || pr.Default == "" || s.slackPrompt(t.Context(), team.ID) != "Two short sentences." {
+		t.Fatalf("prompt: %+v", pr)
+	}
 	// the draft works without Pocket AI: the issue title, and says so
 	var d struct{ Text, Note string }
 	ben.do("POST", "/api/v1/issues/WEB-1/slack/draft", map[string]any{}, 200, &d)
