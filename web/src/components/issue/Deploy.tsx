@@ -6,7 +6,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import { refreshDeployLive } from '../../lib/deploy-live'
 import { ago } from '../../lib/format'
-import type { DeployBranch, DeployInfo, DeployRun, IssueDetail } from '../../lib/types'
+import type { DeployBranch, DeployCheck, DeployInfo, DeployRun, IssueDetail } from '../../lib/types'
 import { Icon } from '../icons'
 import { errMsg, useToast } from '../ui'
 
@@ -16,6 +16,25 @@ const hostOf = (u: string) => { try { return new URL(u).host } catch { return u 
 function elapsed(from: string, to?: string) {
   const s = Math.max(0, Math.round(((to ? Date.parse(to) : Date.now()) - Date.parse(from)) / 1000))
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
+}
+
+/** What deploying the branch would do (the project's check, e.g. migrations), under its row. */
+function BranchCheck({ issueId, branch, version }: { issueId: number; branch: string; version: string }) {
+  const [c, setC] = useState<DeployCheck | null>(null)
+  useEffect(() => {
+    let live = true
+    setC(null)
+    api.get<DeployCheck>(`${V1}/issues/${issueId}/deploy/check?branch=${encodeURIComponent(branch)}`).then(r => { if (live) setC(r) }).catch(() => {})
+    return () => { live = false }
+  }, [issueId, branch, version])
+  if (!c) return null
+  if (!c.lines.length && !c.error) return null
+  return (
+    <span className="dp-check">
+      {c.lines.map((l, i) => <small key={i} className={l.warn ? 'dp-warn' : 'muted'}>{l.warn && <Icon name="alert-triangle" size={11} />}{l.text}</small>)}
+      {c.error && <small className="faint">Could not check: {c.error}</small>}
+    </span>
+  )
 }
 
 export function useIssueDeploy(issue: IssueDetail | null) {
@@ -118,6 +137,7 @@ export function IssueDeploy({ issue, deploy }: { issue: IssueDetail; deploy: Ret
               <span className="dp-main">
                 <span className="mono ellipsis">{b.branch}</span>
                 <small className="ellipsis muted">{b.subject}{b.committed_at ? ` · ${ago(b.committed_at)}` : ''}{facts.length ? <> · <span className={b.dirty ? 'dp-warn' : ''}>{facts.join(' · ')}</span></> : null}</small>
+                {info.config.check && <BranchCheck issueId={issue.id} branch={b.branch} version={`${b.sha}|${latest?.id || 0}|${latest?.status || ''}`} />}
               </span>
               {isLive && !running ? <span className="cc-state ok">Live</span> : null}
               {info.can_deploy && <button type="button" className="btn sm" disabled={running || !!starting}

@@ -136,7 +136,7 @@ function DeploySettings({ team, admin, hostOpts }: { team: Team; admin: boolean;
   const info = useAsync(() => api.get<DeployInfo>(`${V1}/teams/${team.key}/deploy`), [team.key])
   const [f, setF] = useState<DeployConfig & { runText: string } | null>(null)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { if (info.data) setF({ ...info.data.config, current: info.data.config.current || '', runText: (info.data.config.run || []).join('\n') }) }, [info.data])
+  useEffect(() => { if (info.data) setF({ ...info.data.config, current: info.data.config.current || '', check: info.data.config.check || '', runText: (info.data.config.run || []).join('\n') }) }, [info.data])
   const sub = <>The <b>Deploy</b> button on an issue puts the issue’s branch on one server — a staging box with one slot, so the newest deploy is what runs there.
     Pocket AI pushes the branch first if origin lacks commits of it, then runs these commands on that server with <code>$POCKET_BRANCH</code>, <code>$POCKET_SHA</code> and <code>$POCKET_REF</code> (the issue) set.</>
   if (info.error) return <Section title="Deploy" sub={sub}><div className="callout"><Icon name="info" size={15} /><span>{info.error}</span></div></Section>
@@ -146,11 +146,11 @@ function DeploySettings({ team, admin, hostOpts }: { team: Team; admin: boolean;
   const deployHosts = hostOpts.some(h => h.value === String(f.host_id || 0)) ? hostOpts
     : [...hostOpts, { value: String(f.host_id), label: info.data.host_name || `Machine #${f.host_id}` }]
   const run = f.runText.split('\n').map(l => l.trim()).filter(Boolean)
-  const dirty = f.host_id !== savedCfg.host_id || f.dir !== savedCfg.dir || f.url !== savedCfg.url || (f.current || '') !== (savedCfg.current || '') || run.join('\n') !== (savedCfg.run || []).join('\n')
+  const dirty = f.host_id !== savedCfg.host_id || f.dir !== savedCfg.dir || f.url !== savedCfg.url || (f.current || '') !== (savedCfg.current || '') || (f.check || '') !== (savedCfg.check || '') || run.join('\n') !== (savedCfg.run || []).join('\n')
   const save = async (clear = false) => {
     setBusy(true)
     try {
-      await api.put(`${V1}/teams/${team.key}/deploy`, { config: clear ? null : { host_id: f.host_id, dir: f.dir, run, url: f.url, current: f.current } })
+      await api.put(`${V1}/teams/${team.key}/deploy`, { config: clear ? null : { host_id: f.host_id, dir: f.dir, run, url: f.url, current: f.current, check: f.check } })
       info.reload(); toast(clear ? 'Deploy removed' : 'Deploy saved')
     } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
   }
@@ -171,6 +171,9 @@ function DeploySettings({ team, admin, hostOpts }: { team: Team; admin: boolean;
           <Field label="What runs now" group help="Optional: prints the commit or branch on the server, so a deploy replaced since isn’t shown as live.">
             <input value={f.current || ''} onChange={e => set({ current: e.target.value })} disabled={!admin} placeholder="git -C /srv/app rev-parse HEAD" className="mono" /></Field>
         </div>
+        <Field label="Check before deploy" help={<>Optional: says what deploying <code>$POCKET_BRANCH</code> would do, shown on the issue before the click. Lines starting with <code>!</code> show as warnings (“! resets the database…”).</>}>
+          <input value={f.check || ''} onChange={e => set({ check: e.target.value })} disabled={!admin} placeholder={'check-staging "$POCKET_BRANCH"'} className="mono" />
+        </Field>
         {admin && <div className="row">
           {info.data.configured && <button type="button" className="btn ghost" disabled={busy} onClick={() => save(true)}>Remove</button>}
           <span className="spacer" style={{ flex: 1 }} />

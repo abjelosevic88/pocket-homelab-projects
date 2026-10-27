@@ -237,7 +237,10 @@ export interface DeployRun {
   mine: boolean
 }
 
-export interface DeployConfig { host_id: number; dir: string; run: string[]; url: string; current?: string }
+export interface DeployConfig { host_id: number; dir: string; run: string[]; url: string; current?: string; check?: string }
+
+/** What deploying a branch would do (the project's check command); warn lines start with "!" there. */
+export interface DeployCheck { lines: { text: string; warn: boolean }[]; error?: string }
 
 export interface DeployInfo {
   configured: boolean

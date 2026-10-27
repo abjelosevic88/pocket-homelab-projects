@@ -28,6 +28,8 @@ func TestDeployIssue(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		q := r.URL.Query()
 		switch {
+		case r.Method == "GET" && r.URL.Path == "/api/v1/link/deploy" && q.Get("check") != "":
+			w.Write([]byte(`{"lines":[{"text":"Resets the database to last night's copy first: ` + q.Get("check") + `","warn":true}]}`))
 		case r.Method == "GET" && r.URL.Path == "/api/v1/link/deploy":
 			if q.Get("cwd") != "/work/web" || q.Get("host_id") != "3" {
 				w.WriteHeader(400)
@@ -97,6 +99,16 @@ func TestDeployIssue(t *testing.T) {
 		t.Fatalf("history: %+v", hist)
 	}
 
+	var chk struct {
+		Lines []struct {
+			Text string
+			Warn bool
+		}
+	}
+	alex.do("GET", "/api/v1/issues/WEB-1/deploy/check?branch=web-1-fix-login", nil, 200, &chk)
+	if len(chk.Lines) != 1 || !chk.Lines[0].Warn || !strings.HasSuffix(chk.Lines[0].Text, "web-1-fix-login") {
+		t.Fatalf("check: %+v", chk)
+	}
 	// lists and the sidebar: what each team's deploy server runs
 	var live struct {
 		Teams     []deployLive `json:"teams"`

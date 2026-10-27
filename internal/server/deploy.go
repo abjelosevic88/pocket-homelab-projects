@@ -24,6 +24,7 @@ import (
 func (s *Server) deployRoutes(r chi.Router) {
 	r.Get("/issues/{ref}/deploy", s.handleIssueDeploy)
 	r.Post("/issues/{ref}/deploy", s.handleStartDeploy)
+	r.Get("/issues/{ref}/deploy/check", s.handleDeployCheck)
 	r.Get("/issues/{ref}/deploy/{id}", s.handleGetDeploy)
 	r.Get("/deploys/live", s.handleDeploysLive)
 	r.Get("/teams/{ref}/deploy", s.handleTeamDeploy)
@@ -153,6 +154,42 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, raw)
 }
 
+// handleDeployCheck: what deploying one of the issue's branches would do
+// (the project's check command on the deploy server, e.g. "resets the database").
+func (s *Server) handleDeployCheck(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	branch := r.URL.Query().Get("branch")
+	if branch == "" {
+		writeErr(w, http.StatusBadRequest, "branch is required")
+		return
+	}
+	host, cwd, err := s.deployWhere(ctx, is)
+	if err != nil || cwd == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"lines": []any{}})
+		return
+	}
+	sb, err := s.aiSibling(ctx)
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	q := url.Values{"host_id": {strconv.FormatInt(host, 10)}, "cwd": {cwd}, "check": {branch}}
+	var out map[string]any
+	if err := sb.call(ctx, http.MethodGet, "/api/v1/link/deploy?"+q.Encode(), nil, &out); err != nil {
+		aiFail(w, err)
+		return
+	}
+	if out["lines"] == nil {
+		out["lines"] = []any{} // an older Pocket AI: no check
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 func (s *Server) handleGetDeploy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if _, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead); err != nil {
@@ -224,6 +261,7 @@ func (s *Server) handlePutTeamDeploy(w http.ResponseWriter, r *http.Request) {
 			Run     []string `json:"run"`
 			URL     string   `json:"url"`
 			Current string   `json:"current"`
+			Check   string   `json:"check"`
 		} `json:"config"`
 	}
 	if err := decode(r, &in); err != nil {
