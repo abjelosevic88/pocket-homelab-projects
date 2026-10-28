@@ -62,21 +62,25 @@ export function PRSummary({ d, open, onToggle }: { d: PRDetails; open: boolean; 
 
 export function PRDetailsList({ d }: { d: PRDetails }) {
   const [showBots, setShowBots] = useState(false)
+  const [showSkipped, setShowSkipped] = useState(false)
+  const skipped = d.checks.filter(c => c.state === 'skipped').length
+  const checks = d.checks.filter(c => showSkipped || c.state !== 'skipped')
   const comments = d.comments.filter(c => showBots || !c.bot)
   const bots = d.comments.filter(c => c.bot).length
   return (
     <div className="pr-details">
       {d.checks.length > 0 && <div className="pr-block">
         <h4>Checks</h4>
-        {d.checks.map((c, i) => (
+        {checks.map((c, i) => (
           <a key={i} className={`pr-check ${c.state}`} href={c.url || d.url + '/checks'} target="_blank" rel="noreferrer">
             {c.state === 'pending' ? <span className="code-pulse running" /> : <Icon name={CHECK_ICON[c.state] || 'circle'} size={13} />}
             <span className="ellipsis">{c.name}</span><small>{c.state}</small>
           </a>
         ))}
+        {skipped > 0 && <button type="button" className="btn ghost pr-toggle pr-more" onClick={() => setShowSkipped(v => !v)}>{showSkipped ? 'Hide' : 'Show'} {skipped} skipped</button>}
       </div>}
       <div className="pr-block">
-        <h4>Comments{bots > 0 && <button type="button" className="btn ghost xs" onClick={() => setShowBots(v => !v)}>{showBots ? 'Hide' : 'Show'} {bots} from bots</button>}</h4>
+        <h4>Comments{bots > 0 && <button type="button" className="btn ghost pr-toggle" onClick={() => setShowBots(v => !v)}>{showBots ? 'Hide' : 'Show'} {bots} from bots</button>}</h4>
         {!comments.length && <small className="faint">{d.comments.length ? 'Only bots have commented.' : 'No comments yet.'}</small>}
         {comments.map((c, i) => (
           <div key={i} className={`pr-comment ${c.bot ? 'bot' : ''}`}>

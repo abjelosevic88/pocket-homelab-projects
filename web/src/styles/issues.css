@@ -548,7 +548,7 @@ button.ic-chip:hover { background: var(--hover); }
 .dp-check small svg { flex-shrink: 0; margin-top: 2px; }
 
 /* pull request checks + comments (PRDetails.tsx) */
-.pr-sum { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; max-width: 100%; margin-top: 3px; padding: 1px 6px 1px 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; border-radius: 6px; white-space: nowrap; overflow: hidden; }
+.pr-sum { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; max-width: 100%; min-width: 0; margin-top: 3px; padding: 1px 6px 1px 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; border-radius: 6px; white-space: nowrap; overflow: hidden; }
 .pr-sum:hover { color: var(--text-2); }
 .pr-sum > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .pr-checks.passed { color: var(--success); }
@@ -558,12 +558,17 @@ button.ic-chip:hover { background: var(--hover); }
 .pr-verdict { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .pr-verdict.approved { background: var(--success-soft); color: var(--success); }
 .pr-verdict.changes_requested { background: var(--danger-soft); color: var(--danger); }
-.pr-details { border-top: 1px solid var(--hairline); padding: 6px 12px 10px 46px; display: grid; gap: 10px; }
-.pr-block { display: grid; gap: 2px; }
+.pr-details { border-top: 1px solid var(--hairline); padding: 6px 12px 10px 46px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.pr-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; min-width: 0; }
 .pr-block h4 { display: flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 .pr-check { display: flex; align-items: center; gap: 7px; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; font-size: 12.5px; color: var(--text); text-decoration: none; min-width: 0; }
-.pr-check:hover { background: var(--hover); }
-.pr-check small { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+.pr-check:hover { background: var(--hover); text-decoration: none; }
+.pr-check > svg, .pr-check > .code-pulse { flex-shrink: 0; }
+.pr-check .ellipsis { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-check small { flex-shrink: 0; margin-left: auto; padding-left: 8px; color: var(--muted); font-size: 11.5px; text-decoration: none; }
+.pr-toggle { width: auto; height: auto; padding: 2px 8px; margin-left: -8px; font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text-2); white-space: nowrap; }
+.pr-block h4 .pr-toggle { margin-left: auto; }
+.pr-more { justify-self: start; margin-top: 2px; }
 .pr-check.passed svg { color: var(--success); }
 .pr-check.failed svg, .pr-check.failed small { color: var(--danger); }
 .pr-check.pending small { color: #b45309; }
