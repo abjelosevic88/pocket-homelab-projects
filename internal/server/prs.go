@@ -49,6 +49,7 @@ func (p prRef) fullName() string { return p.Owner + "/" + p.Repo }
 
 func (s *Server) prRoutes(r chi.Router) {
 	r.Post("/issues/{ref}/pull-requests", s.handleLinkPR)
+	r.Get("/issues/{ref}/pull-requests", s.handlePRDetails)
 	r.Get("/teams/{ref}/git-token", s.handleGetGitToken)
 	r.Put("/teams/{ref}/git-token", s.handlePutGitToken)
 	r.Post("/teams/{ref}/pr-status/refresh", s.handleRefreshPRStatus)

@@ -1,6 +1,6 @@
 // Sections of the issue page: sub-issues (with Pocket AI break-down),
 // relations, attachments (files, links, git, calendar, tasks), notes and contacts.
-import React, { useEffect, useRef, useState } from 'react'
+import React, { Fragment, useEffect, useRef, useState } from 'react'
 import { api, upload, V1 } from '../../lib/api'
 import { emitChange, useApp } from '../../lib/app-context'
 import { ago, bytes } from '../../lib/format'
@@ -12,6 +12,7 @@ import { openCreateIssue } from '../CreateIssue'
 import { IssueSearchPicker } from '../issues/IssueSearch'
 import { NoteSearch } from '../project/Resources'
 import { type Anchor, Menu, type MenuItem, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
+import { PRDetailsList, PRSummary, usePRDetails } from './PRDetails'
 import { SlackSend } from './SlackSend'
 
 const changed = (is: IssueDetail) => emitChange({ kind: 'issue', team_ids: [is.team_id], ids: [is.id] })
@@ -163,6 +164,8 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const file = useRef<HTMLInputElement>(null)
   const [link, setLink] = useState(false)
   const [slack, setSlack] = useState<Attachment | null>(null)
+  const prs = usePRDetails(issue)
+  const [prOpen, setPrOpen] = useState<number | null>(null)
   const list = issue.attachment_list.filter(a => a.kind !== 'ai_thread') // conversations are listed on their own
   const remove = async (a: Attachment) => { try { await api.del(`${V1}/attachments/${a.id}`); changed(issue); onChanged() } catch (e) { toast((e as Error).message, 'err') } }
   const addLink = async (url: string) => {
@@ -182,15 +185,20 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
       {list.length > 0 ? <div className="ip-box">
         {list.map(a => {
           const sub = [ATT_KIND[a.kind], a.subtitle && a.kind !== 'event' ? a.subtitle : a.kind === 'event' && a.subtitle ? a.subtitle.replace('T', ' ').slice(0, 16) : '', a.kind === 'file' && a.size ? bytes(a.size) : '', ago(a.created_at)].filter(Boolean).join(' · ')
+          const pr = prs[a.id]
           return (
-            <div key={a.id} className="att-row">
+            <Fragment key={a.id}>
+            <div className="att-row">
               <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
-              <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
+              <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small>
+                {pr && <PRSummary d={pr} open={prOpen === a.id} onToggle={() => setPrOpen(v => v === a.id ? null : a.id)} />}</span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
               {a.kind === 'pull_request' && (a.meta as { status_error?: string } | null)?.status_error && <span className="att-warn" title={`Status not updated: ${(a.meta as { status_error?: string }).status_error}`}><Icon name="alert-triangle" size={13} /></span>}
               {canEdit && a.kind === 'pull_request' && a.url && <button type="button" className="btn ghost sm att-slack" title="Send this pull request to Slack with a short summary" onClick={() => setSlack(a)}><Icon name="message" size={13} />Slack</button>}
               {canEdit && <button type="button" className="btn ghost icon-only xs x-btn" aria-label="Remove the attachment" title="Remove" onClick={() => remove(a)}><Icon name="x" size={13} /></button>}
             </div>
+            {pr && prOpen === a.id && <PRDetailsList d={pr} />}
+            </Fragment>
           )
         })}
       </div> : <div className="drop-zone">Drop files here, paste images into the description, or link commits by mentioning {issue.identifier} in git.</div>}

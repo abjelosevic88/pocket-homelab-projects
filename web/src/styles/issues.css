@@ -546,3 +546,33 @@ button.ic-chip:hover { background: var(--hover); }
 .dp-check { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
 .dp-check small { display: flex; align-items: flex-start; gap: 4px; font-size: 12px; line-height: 1.35; }
 .dp-check small svg { flex-shrink: 0; margin-top: 2px; }
+
+/* pull request checks + comments (PRDetails.tsx) */
+.pr-sum { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; max-width: 100%; margin-top: 3px; padding: 1px 6px 1px 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; border-radius: 6px; white-space: nowrap; overflow: hidden; }
+.pr-sum:hover { color: var(--text-2); }
+.pr-sum > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.pr-checks.passed { color: var(--success); }
+.pr-checks.failed { color: var(--danger); font-weight: 600; }
+.pr-checks.pending { color: #b45309; }
+.pr-sum .code-pulse, .pr-check .code-pulse { width: 7px; height: 7px; }
+.pr-verdict { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
+.pr-verdict.approved { background: var(--success-soft); color: var(--success); }
+.pr-verdict.changes_requested { background: var(--danger-soft); color: var(--danger); }
+.pr-details { border-top: 1px solid var(--hairline); padding: 6px 12px 10px 46px; display: grid; gap: 10px; }
+.pr-block { display: grid; gap: 2px; }
+.pr-block h4 { display: flex; align-items: center; gap: 8px; margin: 2px 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.pr-check { display: flex; align-items: center; gap: 7px; padding: 3px 6px; margin: 0 -6px; border-radius: 6px; font-size: 12.5px; color: var(--text); text-decoration: none; min-width: 0; }
+.pr-check:hover { background: var(--hover); }
+.pr-check small { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+.pr-check.passed svg { color: var(--success); }
+.pr-check.failed svg, .pr-check.failed small { color: var(--danger); }
+.pr-check.pending small { color: #b45309; }
+.pr-check.skipped { color: var(--muted); }
+.pr-comment { padding: 6px 0; border-top: 1px solid var(--hairline); }
+.pr-block h4 + .pr-comment { border-top: 0; }
+.pr-comment.bot { opacity: .75; }
+.pr-comment-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+.pr-comment-head a { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; white-space: nowrap; text-decoration: none; }
+.pr-comment-body { font-size: 13px; margin-top: 2px; max-height: 260px; overflow: auto; overflow-wrap: anywhere; }
+.pr-comment-body img { max-width: 100%; }
+@media (max-width: 640px) { .pr-details { padding-left: 12px; } .pr-sum { flex-wrap: wrap; row-gap: 2px; white-space: normal; } }
