@@ -163,11 +163,11 @@ function TeamGroup({ team, onNavigate }: { team: Team; onNavigate: () => void })
         {menu && <Menu anchor={menu} items={items} onClose={() => setMenu(null)} width={200} />}
       </div>
       {open && <div className="sb-nav sb-nested">
+        <DeployItem teamKey={team.key} onNavigate={onNavigate} />
         {team.triage_enabled && <Item to={`${base}/triage`} icon={<Icon name="inbox" size={15} />} label="Triage" count={team.counts?.triage} warn onNavigate={onNavigate} />}
         <Item to={`${base}/issues`} icon={<Icon name="layers" size={15} />} label="Issues" onNavigate={onNavigate} />
         <Item to={`${base}/active`} icon={<Icon name="zap" size={15} />} label="Active" count={team.counts?.started} onNavigate={onNavigate} />
         <WithAIItem to={`${base}/ai`} teamKey={team.key} onNavigate={onNavigate} />
-        <DeployItem teamKey={team.key} onNavigate={onNavigate} />
         <Item to={`${base}/backlog`} icon={<StatusIcon type="backlog" size={15} />} label="Backlog" onNavigate={onNavigate} />
         {team.cycles_enabled && <Item to={`${base}/cycles`} icon={<Icon name="cycle" size={15} />} label="Cycles" onNavigate={onNavigate} />}
         <Item to={`${base}/projects`} icon={<Icon name="briefcase" size={15} />} label="Projects" onNavigate={onNavigate} />
