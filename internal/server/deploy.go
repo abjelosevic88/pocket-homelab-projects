@@ -2,10 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,7 +90,7 @@ func (s *Server) handleIssueDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := url.Values{"host_id": {strconv.FormatInt(host, 10)}, "cwd": {cwd}, "source": {"projects"}, "ref": {is.Identifier},
-		"branch": {s.branchName(ctx, me(r), is)}}
+		"branch": {s.branchName(ctx, me(r), is)}, "pr_branch": s.prBranches(ctx, is.ID)}
 	var out map[string]any
 	if err := sb.call(ctx, http.MethodGet, "/api/v1/link/deploy?"+q.Encode(), nil, &out); err != nil {
 		// an older Pocket AI has no deploys, or it is restarting: no section
@@ -97,6 +99,33 @@ func (s *Server) handleIssueDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	out["can_deploy"] = s.accessOf(r).check(is.TeamID, needWrite) == nil
 	writeJSON(w, http.StatusOK, out)
+}
+
+// prBranches are the head branches of the issue's open pull requests, newest
+// first: what the issue's work is on, ahead of whatever a conversation's folder
+// has checked out.
+func (s *Server) prBranches(ctx context.Context, issueID int64) []string {
+	atts, err := s.store.Attachments(ctx, issueID, 0)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	seen := map[string]bool{}
+	for i := len(atts) - 1; i >= 0; i-- {
+		a := atts[i]
+		if a.Kind != "pull_request" || (a.State != "open" && a.State != "draft") {
+			continue
+		}
+		var meta struct {
+			Branch string `json:"branch"`
+		}
+		_ = json.Unmarshal(a.Meta, &meta)
+		if b := strings.TrimSpace(meta.Branch); b != "" && !seen[b] {
+			seen[b] = true
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {

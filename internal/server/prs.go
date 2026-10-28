@@ -290,7 +290,7 @@ func (s *Server) checkPRs(ctx context.Context, teamID, issueID int64) (checked, 
 		if tok == "" {
 			continue
 		}
-		state, title, err := githubPRState(ctx, tok, ref)
+		state, title, head, err := githubPRState(ctx, tok, ref)
 		checked++
 		var meta map[string]any
 		_ = json.Unmarshal(p.Meta, &meta)
@@ -310,8 +310,12 @@ func (s *Server) checkPRs(ctx context.Context, teamID, issueID int64) (checked, 
 		}
 		_, hadErr := meta["status_error"]
 		delete(meta, "status_error")
+		noBranch := false
+		if b, _ := meta["branch"].(string); b == "" && head != "" {
+			meta["branch"], noBranch = head, true // pasted links and adopted PRs come without one
+		}
 		if state == p.State {
-			if hadErr {
+			if hadErr || noBranch {
 				p.Meta, _ = json.Marshal(meta)
 				_ = s.store.SaveAttachment(ctx, &p.Attachment)
 			}
@@ -350,11 +354,11 @@ func prClosesIssue(a store.Attachment, ident string) bool {
 	return ident != "" && strings.Contains(strings.ToLower(meta.Branch), strings.ToLower(ident))
 }
 
-// githubPRState asks GitHub: draft | open | merged | closed.
-func githubPRState(ctx context.Context, token string, ref prRef) (state, title string, err error) {
+// githubPRState asks GitHub: draft | open | merged | closed, the title and the head branch.
+func githubPRState(ctx context.Context, token string, ref prRef) (state, title, head string, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/repos/%s/%s/pulls/%d", githubAPI, url.PathEscape(ref.Owner), url.PathEscape(ref.Repo), ref.Number), nil)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -362,26 +366,29 @@ func githubPRState(ctx context.Context, token string, ref prRef) (state, title s
 	req.Header.Set("User-Agent", "PocketProjects/"+Version)
 	res, err := prHTTP.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer res.Body.Close()
 	switch res.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized:
-		return "", "", fmt.Errorf("GitHub refused the team's token (401)")
+		return "", "", "", fmt.Errorf("GitHub refused the team's token (401)")
 	case http.StatusForbidden, http.StatusNotFound:
-		return "", "", fmt.Errorf("GitHub answered %d: the token cannot read %s", res.StatusCode, ref.fullName())
+		return "", "", "", fmt.Errorf("GitHub answered %d: the token cannot read %s", res.StatusCode, ref.fullName())
 	default:
-		return "", "", fmt.Errorf("GitHub answered %d", res.StatusCode)
+		return "", "", "", fmt.Errorf("GitHub answered %d", res.StatusCode)
 	}
 	var pr struct {
 		Title  string `json:"title"`
 		State  string `json:"state"`
 		Merged bool   `json:"merged"`
 		Draft  bool   `json:"draft"`
+		Head   struct {
+			Ref string `json:"ref"`
+		} `json:"head"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&pr); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	switch {
 	case pr.Merged:
@@ -393,5 +400,5 @@ func githubPRState(ctx context.Context, token string, ref prRef) (state, title s
 	default:
 		state = "open"
 	}
-	return state, pr.Title, nil
+	return state, pr.Title, pr.Head.Ref, nil
 }
