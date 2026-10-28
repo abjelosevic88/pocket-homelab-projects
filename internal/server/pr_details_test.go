@@ -13,11 +13,12 @@ func TestPRDetails(t *testing.T) {
 	gh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, ok := map[string]string{
 			"/repos/acme/web/pulls/12":               `{"title":"Fix","state":"open","head":{"sha":"abc","ref":"fix-login"}}`,
-			"/repos/acme/web/commits/abc/check-runs": `{"check_runs":[{"name":"test","status":"completed","conclusion":"success","html_url":"https://ci/1"},{"name":"lint","status":"completed","conclusion":"failure"},{"name":"e2e","status":"in_progress"}]}`,
+			"/repos/acme/web/commits/abc/check-runs": `{"check_runs":[{"name":"test","status":"completed","conclusion":"success","html_url":"https://ci/1"},{"name":"lint","status":"completed","conclusion":"failure","output":{"title":"3 problems"}},{"name":"e2e","status":"in_progress"}]}`,
 			"/repos/acme/web/commits/abc/status":     `{"statuses":[{"context":"vercel","state":"success","target_url":"https://v"}]}`,
 			"/repos/acme/web/issues/12/comments":     `[{"user":{"login":"ben","type":"User"},"body":"Looks good","html_url":"https://c/1","created_at":"2026-10-28T10:00:00Z"},{"user":{"login":"codecov[bot]","type":"Bot"},"body":"<!-- x -->cov","html_url":"https://c/2","created_at":"2026-10-28T09:00:00Z"}]`,
 			"/repos/acme/web/pulls/12/reviews":       `[{"user":{"login":"cara","type":"User"},"state":"APPROVED","body":"","html_url":"https://r/1","submitted_at":"2026-10-28T11:00:00Z"},{"user":{"login":"cara","type":"User"},"state":"COMMENTED","body":"","html_url":"https://r/0","submitted_at":"2026-10-28T08:00:00Z"}]`,
-			"/repos/acme/web/pulls/12/comments":      `[{"user":{"login":"cara","type":"User"},"body":"rename this","path":"a.go","html_url":"https://i/1","created_at":"2026-10-28T08:00:00Z"}]`,
+			"/repos/acme/web/pulls/12/comments":      `[{"id":7,"user":{"login":"cara","type":"User"},"body":"rename this","path":"a.go","line":4,"html_url":"https://i/1","created_at":"2026-10-28T08:00:00Z"}]`,
+			"/graphql":                               `{"data":{"repository":{"pullRequest":{"reviewThreads":{"nodes":[{"isResolved":true,"isOutdated":false,"comments":{"nodes":[{"databaseId":7}]}}]}}}}}`,
 		}[r.URL.Path]
 		if !ok {
 			w.WriteHeader(404)
@@ -49,8 +50,11 @@ func TestPRDetails(t *testing.T) {
 	if d.Error != "" || d.ChecksState != "failed" || len(d.Checks) != 4 || d.Checks[0].Name != "lint" || d.Checks[1].State != "pending" {
 		t.Fatalf("checks: %+v", d)
 	}
+	if d.Branch != "fix-login" || d.Checks[0].Summary != "3 problems" {
+		t.Fatalf("branch/summary: %+v", d)
+	}
 	// empty COMMENTED review shells are dropped; oldest first
-	if len(d.Comments) != 4 || d.Comments[0].Kind != "inline" || !d.Comments[1].Bot || d.Comments[3].Review != "approved" {
+	if len(d.Comments) != 4 || d.Comments[0].Kind != "inline" || !d.Comments[1].Bot || d.Comments[3].Review != "approved" || !d.Comments[0].Resolved || d.Comments[0].Line != 4 {
 		t.Fatalf("comments: %+v", d.Comments)
 	}
 	// the status check fills in the branch the link came without

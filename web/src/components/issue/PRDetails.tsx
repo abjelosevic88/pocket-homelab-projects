@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import { ago } from '../../lib/format'
 import { Markdown } from '../../lib/markdown'
-import type { IssueDetail, PRDetails } from '../../lib/types'
+import type { IssueDetail, PRComment, PRDetails } from '../../lib/types'
 import { Icon } from '../icons'
+import { copyText, useToast } from '../ui'
 
 /** Checks and comments of the issue's GitHub pull requests, by attachment id. */
 export function usePRDetails(issue: IssueDetail) {
@@ -40,6 +41,68 @@ function checksLabel(d: PRDetails) {
 
 // GitHub bodies carry HTML (bots' <details>, comments, images) the markdown renderer would show raw.
 const plain = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '').replace(/<\/?(details|summary|div|p|br|img|sub|sup|picture|source|a|b|i|strong|em|code|table|tr|td|th|thead|tbody|h\d)\b[^>]*>/gi, ' ').replace(/\n{3,}/g, '\n\n').trim()
+
+// ---------- fix prompt ----------
+
+/** What still needs fixing: failing checks, open (unresolved, top-level) inline threads, and
+ *  reviewers whose latest verdict is "changes requested". */
+export function prProblems(d: PRDetails) {
+  const failed = d.checks.filter(c => c.state === 'failed')
+  const threads = d.comments.filter(c => c.kind === 'inline' && !c.reply_to && !c.resolved)
+  const latest = new Map<string, PRComment>()
+  for (const c of d.comments) if (c.kind === 'review' && c.review !== 'commented') latest.set(c.author, c)
+  const changes = [...latest.values()].filter(c => c.review === 'changes_requested')
+  return { failed, threads, changes, any: failed.length + threads.length + changes.length > 0 }
+}
+
+const clip = (s: string, n: number) => s.length > n ? s.slice(0, n).trimEnd() + ' …' : s
+
+/** A prompt for a coding agent: everything on the pull request that still needs fixing, with links. */
+export function fixPrompt(d: PRDetails, issue: IssueDetail) {
+  const p = prProblems(d)
+  const pending = d.checks.filter(c => c.state === 'pending')
+  const num = d.url.match(/\/pull\/(\d+)/)?.[1]
+  const replies = (c: PRComment) => d.comments.filter(x => x.reply_to === c.id).length
+  const out = [
+    `Fix what's still open on pull request ${d.url}${d.title ? ` ("${d.title}")` : ''} for issue ${issue.identifier} (${issue.url}).`,
+    d.branch ? `Branch: \`${d.branch}\`. Check it out and pull first.` : '',
+  ]
+  if (p.failed.length) {
+    out.push('', '## Failing checks')
+    for (const c of p.failed) out.push(`- ${c.name}${c.summary ? ` — ${c.summary}` : ''}${c.url ? ` (${c.url})` : ''}`)
+    out.push('', `Read each failure's log (\`gh pr checks ${num || d.url}\`, \`gh run view <run-id> --log-failed\`), find the cause and fix it. Reproduce it locally where you can. If a check fails for a reason outside this change (flaky, infra, a bot that only comments), say so instead of changing code.`)
+  }
+  if (pending.length) out.push('', `Still running: ${pending.map(c => c.name).join(', ')}.`)
+  if (p.changes.length) {
+    out.push('', '## Changes requested')
+    for (const c of p.changes) out.push(`- ${c.author}: ${clip(plain(c.body), 2000) || '(no text — see the inline comments)'} (${c.url})`)
+  }
+  if (p.threads.length) {
+    out.push('', '## Unresolved review comments')
+    for (const c of p.threads) {
+      const n = replies(c)
+      const where = c.path ? `\`${c.path}${c.line ? `:${c.line}` : ''}\`` : ''
+      out.push(`- ${where}${c.outdated ? ' (outdated: the code has changed since)' : ''} — ${c.author}${n ? ` (+${n} repl${n === 1 ? 'y' : 'ies'} on the thread)` : ''}: ${c.url}`)
+      out.push(...clip(plain(c.body), 2000).split('\n').map(l => '  > ' + l))
+    }
+    out.push('', 'For each comment: fix it, or reply on GitHub with why not. Read the whole thread first (`gh api` or the link); some may already be answered. Resolve the threads you fixed.')
+  }
+  out.push('', 'Then run the affected tests, commit with the issue id in the message, push, and watch CI until it is green. Tell me what you changed and anything you left alone.')
+  return out.filter((l, i) => l !== '' || out[i - 1] !== '').join('\n').trim()
+}
+
+/** "Fix prompt" on a pull request row: copies the prompt; only shown while something needs fixing. */
+export function FixPromptButton({ d, issue }: { d: PRDetails; issue: IssueDetail }) {
+  const { toast } = useToast()
+  const p = prProblems(d)
+  if (!p.any) return null
+  const what = [p.failed.length && `${p.failed.length} failing check${p.failed.length === 1 ? '' : 's'}`, p.threads.length && `${p.threads.length} open comment${p.threads.length === 1 ? '' : 's'}`, p.changes.length && 'changes requested'].filter(Boolean).join(', ')
+  return (
+    <button type="button" className="btn ghost sm att-fix" title={`Copy a prompt for a coding agent: ${what}`}
+      onClick={async () => { const ok = await copyText(fixPrompt(d, issue)); toast(ok ? 'Fix prompt copied' : 'Could not copy', ok ? 'ok' : 'err') }}>
+      <Icon name="copy" size={13} />Fix prompt</button>
+  )
+}
 
 /** The summary line; `open` toggles the list (rendered by PRDetailsList under the row). */
 export function PRSummary({ d, open, onToggle }: { d: PRDetails; open: boolean; onToggle: () => void }) {
@@ -83,11 +146,13 @@ export function PRDetailsList({ d }: { d: PRDetails }) {
         <h4>Comments{bots > 0 && <button type="button" className="btn ghost pr-toggle" onClick={() => setShowBots(v => !v)}>{showBots ? 'Hide' : 'Show'} {bots} from bots</button>}</h4>
         {!comments.length && <small className="faint">{d.comments.length ? 'Only bots have commented.' : 'No comments yet.'}</small>}
         {comments.map((c, i) => (
-          <div key={i} className={`pr-comment ${c.bot ? 'bot' : ''}`}>
+          <div key={i} className={`pr-comment ${c.bot ? 'bot' : ''} ${c.resolved ? 'resolved' : ''}`}>
             <div className="pr-comment-head">
               <b>{c.author}</b>
               {c.kind === 'review' && <span className={`pr-verdict ${c.review}`}>{REVIEW[c.review || ''] || c.review}</span>}
-              {c.kind === 'inline' && c.path && <span className="mono faint ellipsis">{c.path}</span>}
+              {c.kind === 'inline' && c.path && <span className="mono faint ellipsis">{c.path}{c.line ? `:${c.line}` : ''}</span>}
+              {c.resolved && <span className="pr-verdict">resolved</span>}
+              {!c.resolved && c.outdated && <span className="pr-verdict">outdated</span>}
               <a className="faint" href={c.url} target="_blank" rel="noreferrer" title="Open on GitHub">{ago(c.at)}<Icon name="external" size={11} /></a>
             </div>
             {plain(c.body) && <div className="pr-comment-body"><Markdown text={plain(c.body)} /></div>}

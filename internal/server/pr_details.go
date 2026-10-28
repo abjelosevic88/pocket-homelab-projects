@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,25 +21,33 @@ import (
 // issue page asks, kept a minute per pull request.
 
 type prCheck struct {
-	Name  string `json:"name"`
-	State string `json:"state"` // passed | failed | pending | skipped
-	URL   string `json:"url,omitempty"`
+	Name    string `json:"name"`
+	State   string `json:"state"` // passed | failed | pending | skipped
+	URL     string `json:"url,omitempty"`
+	Summary string `json:"summary,omitempty"` // check runs: their output title ("2 tests failed")
 }
 
 type prComment struct {
-	Author string `json:"author"`
-	Bot    bool   `json:"bot,omitempty"`
-	Kind   string `json:"kind"`             // comment | review | inline
-	Review string `json:"review,omitempty"` // approved | changes_requested | commented (reviews)
-	Path   string `json:"path,omitempty"`   // inline: the file
-	Body   string `json:"body"`
-	URL    string `json:"url"`
-	At     string `json:"at"`
+	Author   string `json:"author"`
+	Bot      bool   `json:"bot,omitempty"`
+	Kind     string `json:"kind"`             // comment | review | inline
+	Review   string `json:"review,omitempty"` // approved | changes_requested | commented (reviews)
+	Path     string `json:"path,omitempty"`   // inline: the file
+	Line     int    `json:"line,omitempty"`   // inline: the line (in the newest diff, else the original)
+	ID       int64  `json:"id,omitempty"`
+	ReplyTo  int64  `json:"reply_to,omitempty"` // inline: the thread's first comment
+	Resolved bool   `json:"resolved,omitempty"` // inline: its thread is resolved
+	Outdated bool   `json:"outdated,omitempty"` // inline: the code it was on has changed
+	Body     string `json:"body"`
+	URL      string `json:"url"`
+	At       string `json:"at"`
 }
 
 type prDetails struct {
 	AttachmentID int64       `json:"attachment_id"`
 	URL          string      `json:"url"`
+	Title        string      `json:"title,omitempty"`
+	Branch       string      `json:"branch,omitempty"`
 	Checks       []prCheck   `json:"checks"`
 	ChecksState  string      `json:"checks_state"` // passed | failed | pending | none
 	Comments     []prComment `json:"comments"`
@@ -129,14 +138,17 @@ func githubPRDetails(ctx context.Context, token string, ref prRef) prDetails {
 	d := prDetails{Checks: []prCheck{}, Comments: []prComment{}, ChecksState: "none"}
 	repo := "/repos/" + url.PathEscape(ref.Owner) + "/" + url.PathEscape(ref.Repo)
 	var pr struct {
-		Head struct {
+		Title string `json:"title"`
+		Head  struct {
 			SHA string `json:"sha"`
+			Ref string `json:"ref"`
 		} `json:"head"`
 	}
 	if err := githubGet(ctx, token, fmt.Sprintf("%s/pulls/%d", repo, ref.Number), &pr); err != nil {
 		d.Error = err.Error()
 		return d
 	}
+	d.Title, d.Branch = pr.Title, pr.Head.Ref
 	var errs []string
 	if pr.Head.SHA != "" {
 		var runs struct {
@@ -146,6 +158,9 @@ func githubPRDetails(ctx context.Context, token string, ref prRef) prDetails {
 				Conclusion string `json:"conclusion"`
 				HTMLURL    string `json:"html_url"`
 				DetailsURL string `json:"details_url"`
+				Output     struct {
+					Title string `json:"title"`
+				} `json:"output"`
 			} `json:"check_runs"`
 		}
 		if err := githubGet(ctx, token, repo+"/commits/"+pr.Head.SHA+"/check-runs?per_page=100", &runs); err != nil {
@@ -156,13 +171,14 @@ func githubPRDetails(ctx context.Context, token string, ref prRef) prDetails {
 			if c.Status == "completed" {
 				st = checkConclusion(c.Conclusion)
 			}
-			d.Checks = append(d.Checks, prCheck{Name: c.Name, State: st, URL: firstNonEmpty(c.HTMLURL, c.DetailsURL)})
+			d.Checks = append(d.Checks, prCheck{Name: c.Name, State: st, URL: firstNonEmpty(c.HTMLURL, c.DetailsURL), Summary: c.Output.Title})
 		}
 		var status struct {
 			Statuses []struct {
-				Context   string `json:"context"`
-				State     string `json:"state"`
-				TargetURL string `json:"target_url"`
+				Context     string `json:"context"`
+				State       string `json:"state"`
+				TargetURL   string `json:"target_url"`
+				Description string `json:"description"`
 			} `json:"statuses"`
 		}
 		if err := githubGet(ctx, token, repo+"/commits/"+pr.Head.SHA+"/status", &status); err != nil {
@@ -173,7 +189,7 @@ func githubPRDetails(ctx context.Context, token string, ref prRef) prDetails {
 			if st == "" {
 				st = "pending"
 			}
-			d.Checks = append(d.Checks, prCheck{Name: c.Context, State: st, URL: c.TargetURL})
+			d.Checks = append(d.Checks, prCheck{Name: c.Context, State: st, URL: c.TargetURL, Summary: c.Description})
 		}
 	}
 	rank := map[string]int{"failed": 0, "pending": 1, "passed": 2, "skipped": 3}
@@ -215,23 +231,85 @@ func githubPRDetails(ctx context.Context, token string, ref prRef) prDetails {
 		d.Comments = append(d.Comments, prComment{Author: c.User.Login, Bot: c.User.Type == "Bot", Kind: "review", Review: st, Body: c.Body, URL: c.HTMLURL, At: c.SubmittedAt})
 	}
 	var inline []struct {
-		User      ghUser `json:"user"`
-		Body      string `json:"body"`
-		Path      string `json:"path"`
-		HTMLURL   string `json:"html_url"`
-		CreatedAt string `json:"created_at"`
+		ID           int64  `json:"id"`
+		InReplyTo    int64  `json:"in_reply_to_id"`
+		User         ghUser `json:"user"`
+		Body         string `json:"body"`
+		Path         string `json:"path"`
+		Line         int    `json:"line"`
+		OriginalLine int    `json:"original_line"`
+		HTMLURL      string `json:"html_url"`
+		CreatedAt    string `json:"created_at"`
 	}
 	if err := githubGet(ctx, token, fmt.Sprintf("%s/pulls/%d/comments?per_page=100", repo, ref.Number), &inline); err != nil {
 		errs = append(errs, "review comments: "+err.Error())
 	}
+	threads := githubThreadStates(ctx, token, ref) // nil when GraphQL can't be read: nothing shows as resolved
 	for _, c := range inline {
-		d.Comments = append(d.Comments, prComment{Author: c.User.Login, Bot: c.User.Type == "Bot", Kind: "inline", Path: c.Path, Body: c.Body, URL: c.HTMLURL, At: c.CreatedAt})
+		line := c.Line
+		if line == 0 {
+			line = c.OriginalLine
+		}
+		t := threads[c.ID]
+		d.Comments = append(d.Comments, prComment{Author: c.User.Login, Bot: c.User.Type == "Bot", Kind: "inline", Path: c.Path, Line: line,
+			ID: c.ID, ReplyTo: c.InReplyTo, Resolved: t.resolved, Outdated: t.outdated, Body: c.Body, URL: c.HTMLURL, At: c.CreatedAt})
 	}
 	sort.SliceStable(d.Comments, func(i, j int) bool { return d.Comments[i].At < d.Comments[j].At })
 	if len(errs) > 0 {
 		d.Error = strings.Join(errs, "; ")
 	}
 	return d
+}
+
+type threadState struct{ resolved, outdated bool }
+
+// githubThreadStates maps each inline review comment id to its thread's
+// resolved/outdated state. The REST API doesn't say; GraphQL does.
+func githubThreadStates(ctx context.Context, token string, ref prRef) map[int64]threadState {
+	const q = `query($owner:String!,$repo:String!,$n:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$n){
+reviewThreads(first:100){nodes{isResolved isOutdated comments(first:100){nodes{databaseId}}}}}}}`
+	body, _ := json.Marshal(map[string]any{"query": q, "variables": map[string]any{"owner": ref.Owner, "repo": ref.Repo, "n": ref.Number}})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, githubAPI+"/graphql", bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "PocketProjects/"+Version)
+	res, err := prHTTP.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer res.Body.Close()
+	var out struct {
+		Data struct {
+			Repository struct {
+				PullRequest struct {
+					ReviewThreads struct {
+						Nodes []struct {
+							IsResolved bool `json:"isResolved"`
+							IsOutdated bool `json:"isOutdated"`
+							Comments   struct {
+								Nodes []struct {
+									DatabaseID int64 `json:"databaseId"`
+								} `json:"nodes"`
+							} `json:"comments"`
+						} `json:"nodes"`
+					} `json:"reviewThreads"`
+				} `json:"pullRequest"`
+			} `json:"repository"`
+		} `json:"data"`
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&out) != nil {
+		return nil
+	}
+	m := map[int64]threadState{}
+	for _, t := range out.Data.Repository.PullRequest.ReviewThreads.Nodes {
+		for _, c := range t.Comments.Nodes {
+			m[c.DatabaseID] = threadState{t.IsResolved, t.IsOutdated}
+		}
+	}
+	return m
 }
 
 func checkConclusion(c string) string {

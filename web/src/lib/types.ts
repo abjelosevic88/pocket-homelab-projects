@@ -85,10 +85,10 @@ export interface Attachment {
   title: string; subtitle: string; url: string; file_name: string; mime: string; size: number; ext_app: string; ext_id: string; state: string
   meta: Record<string, unknown>; created_by: number | null; created_at: string; updated_at: string
 }
-export interface PRCheck { name: string; state: 'passed' | 'failed' | 'pending' | 'skipped'; url?: string }
-export interface PRComment { author: string; bot?: boolean; kind: 'comment' | 'review' | 'inline'; review?: string; path?: string; body: string; url: string; at: string }
+export interface PRCheck { name: string; state: 'passed' | 'failed' | 'pending' | 'skipped'; url?: string; summary?: string }
+export interface PRComment { author: string; bot?: boolean; kind: 'comment' | 'review' | 'inline'; review?: string; path?: string; line?: number; id?: number; reply_to?: number; resolved?: boolean; outdated?: boolean; body: string; url: string; at: string }
 export interface PRDetails {
-  attachment_id: number; url: string; checks: PRCheck[]; checks_state: 'passed' | 'failed' | 'pending' | 'none'; comments: PRComment[]; error?: string
+  attachment_id: number; url: string; title?: string; branch?: string; checks: PRCheck[]; checks_state: 'passed' | 'failed' | 'pending' | 'none'; comments: PRComment[]; error?: string
 }
 export interface History {
   id: number; issue_id: number | null; project_id: number | null; actor_id: number | null; actor_app: string; field: string
