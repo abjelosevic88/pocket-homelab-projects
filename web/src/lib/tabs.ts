@@ -5,8 +5,8 @@
 import { useSyncExternalStore } from 'react'
 import type { StateType } from './types'
 
-/** One tab of the panel beside an issue: a Pocket AI conversation or a note. */
-export type DockTabSaved = { kind: 'ai' | 'note'; url: string; title: string; id?: string }
+/** One tab of the panel beside an issue: a Pocket AI conversation, a note or a shared note. */
+export type DockTabSaved = { kind: 'ai' | 'note' | 'shared'; url: string; title: string; id?: string }
 export type IssueTab = { ref: string; title: string; type?: StateType; dock?: { url: string; title: string } | null; docks?: DockTabSaved[]; dockActive?: number }
 
 const KEY = 'pp-tabs'

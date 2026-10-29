@@ -147,7 +147,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	hits, _ := s.store.Search(ctx, a.ids(), q, limit)
 	var docs, comments []store.SearchHit
 	for _, h := range hits {
-		if h.Kind == "doc" {
+		if h.Kind == "doc" || h.Kind == "shared_note" {
 			docs = append(docs, h)
 		} else {
 			comments = append(comments, h)

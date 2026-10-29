@@ -1,5 +1,6 @@
-// What a Pocket AI conversation in the panel can add with "@": the issue's notes (sent as
-// Markdown files), uploaded files (the files themselves) and other attachments (their links).
+// What a Pocket AI conversation in the panel can add with "@": the person's notes and the
+// team's shared notes (sent as Markdown files), uploaded files (the files themselves) and
+// other attachments (their links).
 // The frame asks with postMessage; the answer goes back to that frame only.
 import { api, V1 } from '../../lib/api'
 import { bytes } from '../../lib/format'
@@ -13,6 +14,7 @@ export async function contextItems(issue: IssueDetail): Promise<ContextItem[]> {
   const out: ContextItem[] = []
   const notes = await api.get<RelatedSection<{ id: string; title: string; folder: string }>>(`${V1}/issues/${issue.id}/notes`).catch(() => null)
   for (const n of notes?.status === 'ok' ? notes.items : []) out.push({ id: `note:${n.id}`, kind: 'note', title: n.title || 'Untitled', sub: n.folder })
+  for (const n of issue.shared_notes) out.push({ id: `shared:${n.id}`, kind: 'note', title: n.title || 'Untitled', sub: 'Shared with the team' })
   for (const a of issue.attachment_list) {
     if (a.kind === 'file') out.push({ id: `file:${a.id}`, kind: 'file', title: a.file_name || a.title, sub: a.size ? bytes(a.size) : undefined })
     else if (a.url) out.push({ id: `link:${a.id}`, kind: 'link', title: a.title || a.url, sub: LINK_KIND[a.kind] || a.subtitle })
@@ -27,6 +29,10 @@ export async function contextItem(issue: IssueDetail, id: string): Promise<{ fil
   if (kind === 'note') {
     const n = await api.get<{ title: string; content: string; url: string }>(`${V1}/issues/${issue.id}/notes/${encodeURIComponent(ref)}/content`)
     return { file: new File([n.content], `${safeName(n.title)}.md`, { type: 'text/markdown' }) }
+  }
+  if (kind === 'shared') {
+    const n = await api.get<{ title: string; body?: string }>(`${V1}/issues/${issue.id}/shared-notes/${encodeURIComponent(ref)}`)
+    return { file: new File([`# ${n.title}\n\n${n.body || ''}`], `${safeName(n.title)}.md`, { type: 'text/markdown' }) }
   }
   const a = issue.attachment_list.find(x => String(x.id) === ref)
   if (!a) throw new Error('That attachment is not on the issue any more')

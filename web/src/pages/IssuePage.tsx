@@ -21,7 +21,8 @@ import { Select } from '../components/Select'
 import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyText, rectOf, useIsMobile, useToast } from '../components/ui'
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
-import { Attachments, Contacts, IssueNotes, Relations, SubIssues, useUploader } from '../components/issue/IssueSections'
+import { Attachments, Contacts, IssueNotes, Relations, SharedNotes, SubIssues, useUploader } from '../components/issue/IssueSections'
+import { sharedNoteURL } from './SharedNotePage'
 import { type DockTab, IssueDock, newDockKey } from '../components/issue/IssueDock'
 import { openTab, setTabDocks, tabDocks } from '../lib/tabs'
 import { IssueDeploy, useIssueDeploy } from '../components/issue/Deploy'
@@ -66,7 +67,7 @@ export default function IssuePage() {
   // opens a conversation or a note in a tab: the one it already has, else a new one
   const openDock = useCallback((t: Omit<DockTab, 'key'>) => {
     const list = docksRef.current
-    const had = list.find(x => x.kind === t.kind && (t.kind === 'note' ? x.id === t.id || x.url === t.url : sameConversation(x.url, t.url)))
+    const had = list.find(x => x.kind === t.kind && (t.kind !== 'ai' ? x.id === t.id || x.url === t.url : sameConversation(x.url, t.url)))
     if (had) { setActiveDock(had.key); return }
     const tab = { ...t, key: newDockKey() }
     docksRef.current = [...list, tab]
@@ -91,6 +92,11 @@ export default function IssuePage() {
     version: dockVersion,
   }), [dockVersion, openDock, closeDock])
   const noteOpen = docks.find(t => t.key === activeDock && t.kind === 'note')?.id
+  const sharedOpen = docks.find(t => t.key === activeDock && t.kind === 'shared')?.id
+  const openShared = useCallback((n: { id: number; title: string }) => {
+    if (!d) return
+    openDock({ kind: 'shared', url: sharedNoteURL(d.identifier, n.id), title: n.title, id: String(n.id) })
+  }, [d, openDock])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -199,12 +205,17 @@ export default function IssuePage() {
           <TitleEditor issue={d} canEdit={canEdit} onSave={async t => { const f = await patchIssue(d.id, { title: t }).catch(e => { toast((e as Error).message, 'err'); return null }); if (f) { merge(f); emitChange({ kind: 'issue', team_ids: [d.team_id], ids: [d.id] }) } }} />
           {mobile && <MobileChips issue={d} onOpen={openProp} canEdit={canEdit} />}
           <Description issue={d} canEdit={canEdit} onSaved={merge} />
-          <CodeConversations issue={d} code={code} openUrls={docks.filter(t => t.kind === 'ai').map(t => t.url)} />
+          {!d.deleted_at && <SharedNotes issue={d} canEdit={canEdit} openId={sharedOpen} onOpen={openShared} />}
+          {!d.deleted_at && <div className="ip-private">
+            <div className="ip-private-label"><Icon name="lock" size={12} />Only you<span className="faint">· nobody else on the team sees your conversations and notes</span></div>
+            <CodeConversations issue={d} code={code} openUrls={docks.filter(t => t.kind === 'ai').map(t => t.url)} />
+            <IssueNotes issue={d} openId={noteOpen} onOpen={n => openDock({ kind: 'note', url: n.url, title: n.title, id: n.id })} onUnlinked={id => { const t = docksRef.current.find(x => x.kind === 'note' && x.id === id); if (t) closeDock(t.key) }}
+              canShare={canEdit} onShared={n => openShared(n)} />
+          </div>}
           <IssueDeploy issue={d} deploy={deploy} />
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
-          {!d.deleted_at && <IssueNotes issue={d} openId={noteOpen} onOpen={n => openDock({ kind: 'note', url: n.url, title: n.title, id: n.id })} onUnlinked={id => { const t = docksRef.current.find(x => x.kind === 'note' && x.id === id); if (t) closeDock(t.key) }} />}
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
           {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />

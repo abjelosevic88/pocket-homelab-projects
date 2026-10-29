@@ -68,6 +68,10 @@ export function historySentence(h: History, isMe: (id: number | null) => boolean
       return <>marked the issue {word[h.to_value] || 'related to'} <B>{to}</B></>
     }
     case 'attachment_added': return <>attached <B>{to}</B></>
+    case 'shared_note_created': return <>added the shared note <B>{to}</B></>
+    case 'shared_note_added': return <>shared the note <B>{to}</B></>
+    case 'shared_note_updated': return <>shared the note <B>{to}</B> again</>
+    case 'shared_note_removed': return <>removed the shared note <B>{from}</B></>
     case 'slack_sent': return <>sent it to Slack{to ? <> in <B>{to}</B></> : ''}</>
     case 'attachment_removed': return <>removed the attachment <B>{from}</B></>
     case 'event_scheduled': return <>scheduled <B>{to}</B> in Pocket Calendar</>

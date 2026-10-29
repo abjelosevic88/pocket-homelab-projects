@@ -93,6 +93,7 @@ func (s *Server) handleExportTeam(w http.ResponseWriter, r *http.Request) {
 		Comments  []store.Comment  `json:"comments"`
 		Relations []store.Relation `json:"relations"`
 		History   []store.History  `json:"history"`
+		Shared    []store.IssueDoc `json:"shared_notes"`
 	}
 	var out []issueOut
 	for _, is := range issues {
@@ -103,7 +104,8 @@ func (s *Server) handleExportTeam(w http.ResponseWriter, r *http.Request) {
 		c, _ := s.store.Comments(ctx, is.ID, 0)
 		rel, _ := s.store.IssueRelations(ctx, is.ID)
 		h, _ := s.store.IssueHistory(ctx, is.ID)
-		out = append(out, issueOut{Issue: full, Comments: c, Relations: rel, History: h})
+		sn, _ := s.store.IssueDocs(ctx, is.ID, true)
+		out = append(out, issueOut{Issue: full, Comments: c, Relations: rel, History: h, Shared: sn})
 	}
 	projects, _ := s.store.ListProjects(ctx, store.ProjectFilter{AllowedTeamIDs: []int64{t.ID}})
 	for _, p := range projects {

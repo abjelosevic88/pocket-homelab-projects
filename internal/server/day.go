@@ -174,6 +174,14 @@ func (s *Server) dayWork(ctx context.Context, r *http.Request, uid int64, teams 
 			e.Kind, e.Text = "edit", "Renamed"
 		case "description":
 			e.Kind, e.Text = "edit", "Edited the description"
+		case "shared_note_created":
+			e.Kind, e.Text = "edit", "Added the shared note "+toL
+		case "shared_note_added":
+			e.Kind, e.Text = "edit", "Shared the note "+toL
+		case "shared_note_updated":
+			e.Kind, e.Text = "edit", "Shared the note "+toL+" again"
+		case "shared_note_removed":
+			e.Kind, e.Text = "edit", "Removed the shared note "+fromL
 		case "attachment_added":
 			e.Kind, e.Text = "attachment", "Attached "+toL
 		case "git_commit", "git_pull_request":

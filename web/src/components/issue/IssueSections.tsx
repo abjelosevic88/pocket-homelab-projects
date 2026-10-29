@@ -1,17 +1,19 @@
 // Sections of the issue page: sub-issues (with Pocket AI break-down),
-// relations, attachments (files, links, git, calendar, tasks), notes and contacts.
+// relations, attachments (files, links, git, calendar, tasks), the team's shared
+// notes, the person's own notes and contacts.
 import React, { Fragment, useEffect, useRef, useState } from 'react'
 import { api, upload, V1 } from '../../lib/api'
 import { emitChange, useApp } from '../../lib/app-context'
 import { ago, bytes } from '../../lib/format'
-import type { Attachment, ContactSuggestion, Issue, IssueDetail, RelatedSection, RelationOut } from '../../lib/types'
+import type { Attachment, ContactSuggestion, Issue, IssueDetail, RelatedSection, RelationOut, SharedNote } from '../../lib/types'
 import { Icon } from '../icons'
-import { IssueLink, ProgressRing, StatusIcon } from '../issue-bits'
+import { IssueLink, personName, ProgressRing, StatusIcon } from '../issue-bits'
 import { IssueRow } from '../IssueRow'
 import { openCreateIssue } from '../CreateIssue'
 import { IssueSearchPicker } from '../issues/IssueSearch'
 import { NoteSearch } from '../project/Resources'
-import { type Anchor, Menu, type MenuItem, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
+import { type Anchor, Confirm, Menu, type MenuItem, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
+import { sharedNoteURL } from '../../pages/SharedNotePage'
 import { FixPromptButton, PRDetailsList, PRSummary, usePRDetails } from './PRDetails'
 import { SlackSend } from './SlackSend'
 
@@ -216,8 +218,12 @@ interface IssueNote { id: string; title: string; folder: string; snippet: string
 /** The person's notes in Pocket Notes that link to the issue. Nothing is stored here: a note is
  *  linked when its text links to the issue, so New note starts one with the link in it and Link a
  *  note adds the link to the end of one. */
-export function IssueNotes({ issue, openId, onOpen, onUnlinked }: { issue: IssueDetail; openId?: string; onOpen?: (n: { id: string; title: string; url: string }) => void; onUnlinked?: (id: string) => void }) {
+export function IssueNotes({ issue, openId, onOpen, onUnlinked, canShare, onShared }: {
+  issue: IssueDetail; openId?: string; onOpen?: (n: { id: string; title: string; url: string }) => void; onUnlinked?: (id: string) => void
+  canShare?: boolean; onShared?: (n: SharedNote) => void
+}) {
   const { toast } = useToast()
+  const { user } = useApp()
   const [data, setData] = useState<RelatedSection<IssueNote> | null>(null)
   const [at, setAt] = useState<Anchor | null>(null)
   const [menu, setMenu] = useState<{ n: IssueNote; anchor: Anchor } | null>(null)
@@ -251,8 +257,21 @@ export function IssueNotes({ issue, openId, onOpen, onUnlinked }: { issue: Issue
       onUnlinked?.(n.id)
     } catch (e) { toast((e as Error).message, 'err') }
   }
+  // the copy of a note this person shared on the issue (Share again replaces it)
+  const copyOf = (n: IssueNote) => issue.shared_notes.find(x => x.source_note === n.id && x.created_by === user?.id)
+  const share = async (n: IssueNote) => {
+    try {
+      const r = await api.post<{ note: SharedNote; replaced: boolean }>(`${V1}/issues/${issue.id}/notes/${n.id}/share`)
+      toast(r.replaced ? `Updated the shared copy of “${r.note.title}”` : `Shared “${r.note.title}” with the team — your note stays private`)
+      changed(issue)
+      onShared?.(r.note)
+    } catch (e) { toast((e as Error).message, 'err') }
+  }
   const menuItems = (n: IssueNote): MenuItem[] => [
     ...(onOpen ? [{ label: 'Open beside the issue', icon: 'sidebar', onSelect: () => onOpen(n) }] : []),
+    ...(canShare ? [copyOf(n)
+      ? { label: 'Share again', icon: 'share', hint: 'replaces the copy', onSelect: () => share(n) }
+      : { label: 'Share to issue', icon: 'share', hint: 'a copy for the team', onSelect: () => share(n) }] : []),
     { label: 'Open in Pocket Notes', icon: 'external', onSelect: () => window.open(n.url, '_blank', 'noopener') },
     { label: 'Copy link to the note', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(n.url); toast('Link copied') } },
     'sep',
@@ -277,11 +296,72 @@ export function IssueNotes({ issue, openId, onOpen, onUnlinked }: { issue: Issue
             <span className="att-ico note"><Icon name="note" size={15} /></span>
             <span className="att-main"><a href={n.url} target="_blank" rel="noreferrer" title={onOpen ? 'Open beside the issue (⌘-click: new tab)' : undefined}
               onClick={e => { if (onOpen && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); onOpen(n) } }}>{n.title || 'Untitled'}</a><small>{[n.folder || 'Pocket Notes', n.modified ? ago(n.modified) : ''].filter(Boolean).join(' · ')}</small></span>
+            {copyOf(n) && <span className="shared-pill" title="A copy is shared with the team (right-click: Share again)"><Icon name="users" size={11} />Shared</span>}
           </div>
         ))}
       </div> : data && <p className="muted small ip-note-empty">{ok ? `Your notes in Pocket Notes that link to ${issue.identifier} show up here.` : data.detail}</p>}
       {at && <NoteSearch anchor={at} onClose={() => setAt(null)} onPick={link} />}
       {menu && <Menu items={menuItems(menu.n)} anchor={menu.anchor} onClose={() => setMenu(null)} width={240} />}
+    </section>
+  )
+}
+
+// ---------- shared notes ----------
+
+/** The team's notes on the issue: everyone on the team sees and edits them (stored here, with the issue). */
+export function SharedNotes({ issue, canEdit, openId, onOpen }: { issue: IssueDetail; canEdit: boolean; openId?: string; onOpen: (n: SharedNote) => void }) {
+  const app = useApp()
+  const { toast } = useToast()
+  const [menu, setMenu] = useState<{ n: SharedNote; anchor: Anchor } | null>(null)
+  const [deleting, setDeleting] = useState<SharedNote | null>(null)
+  const [busy, setBusy] = useState(false)
+  const list = issue.shared_notes
+  const create = async () => {
+    setBusy(true)
+    try {
+      const n = await api.post<SharedNote>(`${V1}/issues/${issue.id}/shared-notes`, { title: 'Untitled' })
+      changed(issue)
+      onOpen(n)
+    } catch (e) { toast((e as Error).message, 'err') } finally { setBusy(false) }
+  }
+  const remove = async (n: SharedNote) => {
+    try {
+      await api.del(`${V1}/issues/${issue.id}/shared-notes/${n.id}`)
+      toast(`Deleted “${n.title}”`)
+      changed(issue)
+    } catch (e) { toast((e as Error).message, 'err') }
+  }
+  const sub = (n: SharedNote) => {
+    const by = app.person(n.source_note ? n.created_by : n.updated_by || n.created_by)
+    if (n.source_note) return `${by ? personName(by) : 'Someone'} shared it from their notes · ${ago(n.shared_at || n.updated_at)}`
+    return `${by ? `${personName(by)} · ` : ''}edited ${ago(n.updated_at)}`
+  }
+  const href = (n: SharedNote) => sharedNoteURL(issue.identifier, n.id)
+  const menuItems = (n: SharedNote): MenuItem[] => [
+    { label: 'Open beside the issue', icon: 'sidebar', onSelect: () => onOpen(n) },
+    { label: 'Open as a page', icon: 'external', onSelect: () => window.open(href(n), '_blank', 'noopener') },
+    { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(location.origin + href(n)); toast('Link copied') } },
+    'sep',
+    { label: 'Delete…', icon: 'trash', danger: true, disabled: !canEdit, onSelect: () => setDeleting(n) },
+  ]
+  return (
+    <section className="ip-sec">
+      <div className="ip-sec-head"><h3>Shared notes {list.length > 0 && <span className="count">{list.length}</span>}<span className="team-tag" title="Everyone on the team sees and edits these"><Icon name="users" size={12} />Team</span></h3><span className="spacer" />
+        {canEdit && <button type="button" className="btn ghost sm" disabled={busy} onClick={create}><Icon name="plus" size={14} />New shared note</button>}
+      </div>
+      {list.length > 0 ? <div className="ip-box">
+        {list.map(n => (
+          <div key={n.id} className={`att-row ${openId === String(n.id) ? 'open' : ''} ${menu?.n.id === n.id ? 'menu-open' : ''}`}
+            onContextMenu={e => { e.preventDefault(); setMenu({ n, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}>
+            <span className="att-ico shared"><Icon name="users" size={15} /></span>
+            <span className="att-main"><a href={href(n)} title="Open beside the issue (⌘-click: new tab)"
+              onClick={e => { if (!e.metaKey && !e.ctrlKey && !e.shiftKey && e.button === 0) { e.preventDefault(); onOpen(n) } }}>{n.title || 'Untitled'}</a><small>{sub(n)}</small></span>
+          </div>
+        ))}
+      </div> : <p className="muted small ip-note-empty">Notes for everyone on the team. Write one here, or share one of your own notes from Notes below (right-click → Share to issue).</p>}
+      {menu && <Menu items={menuItems(menu.n)} anchor={menu.anchor} onClose={() => setMenu(null)} width={220} />}
+      {deleting && <Confirm title="Delete this shared note?" message={<>“{deleting.title}” will be deleted for everyone on the team. Notes it was shared from stay as they are.</>} confirmLabel="Delete"
+        onCancel={() => setDeleting(null)} onConfirm={() => { const n = deleting; setDeleting(null); remove(n) }} />}
     </section>
   )
 }

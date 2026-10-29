@@ -23,6 +23,7 @@ import Projects from './pages/Projects'
 import ProjectPage from './pages/ProjectPage'
 import Roadmap from './pages/Roadmap'
 import DocPage from './pages/DocPage'
+import SharedNotePage from './pages/SharedNotePage'
 import Inbox from './pages/Inbox'
 import Cycles from './pages/Cycles'
 import CyclePage from './pages/CyclePage'
@@ -58,11 +59,13 @@ function App() {
       <Route path="/login" element={<Login mode="login" />} />
       <Route path="/setup" element={<Login mode="setup" />} />
       <Route path="/settings/:tab?" element={<Gate><ErrorBoundary where="settings"><Settings /></ErrorBoundary></Gate>} />
+      <Route path="/embed/issue/:ref/shared/:id" element={<Gate><ErrorBoundary where="shared note"><SharedNotePage embed /></ErrorBoundary></Gate>} />
       <Route element={<Gate><Layout /></Gate>}>
         <Route path="/" element={<Home />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/my-issues/:tab?" element={<MyIssues />} />
         <Route path="/issue/:ref" element={<IssuePage />} />
+        <Route path="/issue/:ref/shared/:id" element={<SharedNotePage />} />
         <Route path="/team/:key" element={<Navigate to="issues" replace />} />
         <Route path="/team/:key/:tab" element={<TeamIssues />} />
         <Route path="/team/:key/ai" element={<TeamAI />} />

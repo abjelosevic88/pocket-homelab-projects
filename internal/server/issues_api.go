@@ -218,6 +218,7 @@ type IssueDetail struct {
 	SubIssues   []*store.Issue      `json:"sub_issues"`
 	Relations   []relationOut       `json:"relations"`
 	Attachments []store.Attachment  `json:"attachment_list"`
+	SharedNotes []store.IssueDoc    `json:"shared_notes"` // without their text
 	Contacts    []store.ContactLink `json:"contacts"`
 	Comments    []store.Comment     `json:"comment_list"`
 	History     []store.History     `json:"history"`
@@ -256,6 +257,9 @@ func (s *Server) handleGetIssue(w http.ResponseWriter, r *http.Request) {
 	d.SubIssues, _, _ = s.store.ListIssues(ctx, store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include", Sort: "manual"})
 	d.Relations = s.relationsOut(ctx, a, is.ID)
 	d.Attachments, _ = s.store.Attachments(ctx, is.ID, 0)
+	if d.SharedNotes, _ = s.store.IssueDocs(ctx, is.ID, false); d.SharedNotes == nil {
+		d.SharedNotes = []store.IssueDoc{}
+	}
 	d.Contacts, _ = s.store.ContactLinks(ctx, 0, is.ID)
 	d.Comments, _ = s.store.Comments(ctx, is.ID, 0)
 	d.History, _ = s.store.IssueHistory(ctx, is.ID)

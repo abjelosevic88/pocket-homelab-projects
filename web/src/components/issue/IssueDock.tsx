@@ -1,5 +1,6 @@
 // The panel beside an issue, with tabs: Pocket AI conversations (Pocket AI
-// with ?embed=1) and notes (Pocket Notes' /embed/note/:id). Every tab keeps
+// with ?embed=1), notes (Pocket Notes' /embed/note/:id) and the issue's shared
+// notes (this app's /embed/issue/:ref/shared/:id). Every tab keeps
 // its frame while another one shows, so switching back is instant and a
 // running conversation carries on. + starts another conversation.
 import { useEffect, useRef, useState } from 'react'
@@ -11,7 +12,11 @@ import { noteEmbedURL } from '../NoteDock'
 import { embedURL, type IssueCode, NewTabButton, sameConversation } from './CodeWithAI'
 import { contextItem, contextItems } from './dockContext'
 
-export interface DockTab { key: string; kind: 'ai' | 'note'; url: string; title: string; send?: boolean; id?: string }
+export interface DockTab { key: string; kind: 'ai' | 'note' | 'shared'; url: string; title: string; send?: boolean; id?: string }
+
+const KIND_NAME = { ai: 'Pocket AI', note: 'Note', shared: 'Shared note' }
+const KIND_ICON = { ai: 'sparkles', note: 'note', shared: 'users' }
+const OPEN_IN = { ai: 'Open in Pocket AI', note: 'Open in Pocket Notes', shared: 'Open as a page' }
 
 const DOCK_W = 'pp-ai-dock-w'
 const clampW = (w: number) => Math.round(Math.max(360, Math.min(w, window.innerWidth - 420, 1100)))
@@ -21,7 +26,7 @@ export const newDockKey = () => Date.now().toString(36) + Math.random().toString
 /** One tab's frame. Its address is set once: changing it would reload the conversation. */
 function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown: boolean; issue: IssueDetail; onMoved: (key: string, threadId: string, status: string) => void; onOpen: (url: string, title: string) => void }) {
   const ref = useRef<HTMLIFrameElement>(null)
-  const [src] = useState(() => tab.kind === 'ai' ? embedURL(tab.url, !!tab.send) : noteEmbedURL(tab.url))
+  const [src] = useState(() => tab.kind === 'ai' ? embedURL(tab.url, !!tab.send) : tab.kind === 'shared' ? `/embed${tab.url}` : noteEmbedURL(tab.url))
   const moved = useRef(onMoved)
   moved.current = onMoved
   const open = useRef(onOpen)
@@ -55,7 +60,7 @@ function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown
     window.addEventListener('message', h)
     return () => window.removeEventListener('message', h)
   }, [tab.key, tab.kind])
-  return <iframe ref={ref} src={src} data-dock={tab.key} title={tab.title || (tab.kind === 'ai' ? 'Pocket AI' : 'Note')} className={shown ? '' : 'dock-hidden'}
+  return <iframe ref={ref} src={src} data-dock={tab.key} title={tab.title || KIND_NAME[tab.kind]} className={shown ? '' : 'dock-hidden'}
     allow="clipboard-read; clipboard-write; camera; microphone" />
 }
 
@@ -72,6 +77,22 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
   const [renaming, setRenaming] = useState<DockTab | null>(null)
   const cur = tabs.find(t => t.key === active) || tabs[0]
   useEffect(() => { strip.current?.querySelector('.dock-tab.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' }) }, [active, tabs.length])
+  // a shared note renamed in its tab names the tab; deleted, the tab goes with it
+  const closeRef = useRef(onCloseTab)
+  closeRef.current = onCloseTab
+  const renameRef = useRef(onRename)
+  renameRef.current = onRename
+  useEffect(() => {
+    const h = (e: MessageEvent) => {
+      if (e.origin !== location.origin || e.data?.type !== 'pocket-projects-shared') return
+      const t = tabs.find(x => x.kind === 'shared' && x.id === String(e.data.closed || e.data.id))
+      if (!t) return
+      if (e.data.closed) closeRef.current(t.key)
+      else if (e.data.title) renameRef.current(t.key, `${issue.identifier} · ${e.data.title}`)
+    }
+    window.addEventListener('message', h)
+    return () => window.removeEventListener('message', h)
+  }, [tabs, issue.identifier])
 
   const resize = (e: React.PointerEvent) => {
     e.preventDefault()
@@ -89,7 +110,7 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
   }
   // a conversation's state, from the issue's list (working pulses, waiting is amber)
   const stateOf = (t: DockTab) => t.kind === 'ai' ? code.list.find(c => sameConversation(c.url, t.url) || (c.thread_id && t.url.includes('/t/' + c.thread_id)))?.status || '' : ''
-  const name = (t: DockTab) => t.title.replace(`${issue.identifier} · `, '') || (t.kind === 'ai' ? 'Pocket AI' : 'Note')
+  const name = (t: DockTab) => t.title.replace(`${issue.identifier} · `, '') || KIND_NAME[t.kind]
   const openUrls = tabs.filter(t => t.kind === 'ai').map(t => t.url)
   const out = cur ? cur.url : ''
   // renames the tab, and a conversation in Pocket AI too (its frame does it, signed in there)
@@ -107,7 +128,7 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
     const i = tabs.findIndex(x => x.key === t.key)
     return [
       { label: 'Rename…', icon: 'edit', onSelect: () => setRenaming(t) },
-      { label: t.kind === 'ai' ? 'Open in Pocket AI' : 'Open in Pocket Notes', icon: 'external', onSelect: () => window.open(t.url, '_blank', 'noopener') },
+      { label: OPEN_IN[t.kind], icon: 'external', onSelect: () => window.open(t.url, '_blank', 'noopener') },
       { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(t.url).then(() => toast('Link copied'), () => toast('Could not copy', 'err')) } },
       'sep',
       { label: 'Close', icon: 'x', onSelect: () => onCloseTab(t.key) },
@@ -131,7 +152,7 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
                 onContextMenu={e => { e.preventDefault(); setMenu({ t, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}
                 onDoubleClick={() => setRenaming(t)}>
                 {st === 'running' || st === 'waiting' ? <span className={`code-pulse ${st}`} />
-                  : <Icon name={t.kind === 'ai' ? 'sparkles' : 'note'} size={13} className={t.kind === 'ai' ? 'ai-dock-ico' : 'note-dock-ico'} />}
+                  : <Icon name={KIND_ICON[t.kind]} size={13} className={t.kind === 'ai' ? 'ai-dock-ico' : 'note-dock-ico'} />}
                 <span className="ellipsis">{name(t)}</span>
                 <button type="button" className="dock-tab-x" onClick={e => { e.stopPropagation(); onCloseTab(t.key) }} aria-label={`Close ${name(t)}`} title="Close tab"><Icon name="x" size={12} /></button>
               </div>
@@ -139,7 +160,7 @@ export function IssueDock({ issue, code, tabs, active, mobile, onActivate, onClo
           })}
           <NewTabButton issue={issue} code={code} openUrls={openUrls} onStarted={onStarted} />
         </div>
-        {out && <a className="btn ghost icon-only sm" href={out} target="_blank" rel="noreferrer" title={cur?.kind === 'note' ? 'Open in Pocket Notes' : 'Open in Pocket AI'} aria-label="Open in a new tab"><Icon name="external" size={15} /></a>}
+        {out && <a className="btn ghost icon-only sm" href={out} target="_blank" rel="noreferrer" title={cur ? OPEN_IN[cur.kind] : ''} aria-label="Open in a new tab"><Icon name="external" size={15} /></a>}
         <button type="button" className="btn ghost icon-only sm" onClick={onCloseAll} title="Close the panel" aria-label="Close the panel"><Icon name="x" size={15} /></button>
       </div>
       {menu && <Menu items={menuItems(menu.t)} anchor={menu.anchor} onClose={() => setMenu(null)} width={220} />}

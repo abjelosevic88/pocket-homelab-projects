@@ -452,3 +452,12 @@ input.doc-title-input:disabled { opacity: 1; }
 .popover.icon-pop { z-index: 450; }
 .sheet-backdrop:has(> .icon-pop) { z-index: 450; }
 .props-more { width: 100%; color: var(--muted); margin-top: 2px; }
+
+/* shared note on an issue (page, and the panel beside the issue) */
+.shared-tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 550; color: var(--accent); }
+.doc-body > .shared-tag { margin-bottom: 10px; }
+.shared-conflict { display: flex; align-items: center; gap: 10px; margin: 0 auto; max-width: 780px; padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  background: var(--warning-soft); color: var(--text); }
+.shared-embed { height: 100vh; }
+.shared-embed .doc-head { padding: 8px 14px; }
+.shared-embed .doc-body { padding: 18px 20px 80px; }

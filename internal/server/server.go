@@ -170,6 +170,7 @@ func (s *Server) Router() http.Handler {
 			s.deployServerRoutes(r)
 			s.prRoutes(r)
 			s.integrationRoutes(r)
+			s.sharedNoteRoutes(r)
 			s.slackRoutes(r)
 			s.importRoutes(r)
 			for _, add := range extraRoutes {

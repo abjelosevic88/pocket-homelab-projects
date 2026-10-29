@@ -46,7 +46,7 @@ func (f *fakeNotes) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode([]map[string]any{{"path": "Athena", "count": 0}, {"path": "Athena/Plans", "count": 1}})
 	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/api/v1/notes/"):
 		id := strings.TrimPrefix(r.URL.Path, "/api/v1/notes/")
-		json.NewEncoder(w).Encode(map[string]any{"id": json.Number(id), "content": f.notes[id], "etag": "e" + strconv.Itoa(len(f.notes[id]))})
+		json.NewEncoder(w).Encode(map[string]any{"id": json.Number(id), "title": "Plan", "content": f.notes[id], "etag": "e" + strconv.Itoa(len(f.notes[id]))})
 	case r.Method == "PUT" && strings.HasPrefix(r.URL.Path, "/api/v1/notes/"):
 		id := strings.TrimPrefix(r.URL.Path, "/api/v1/notes/")
 		var in struct{ Content, ETag string }

@@ -597,7 +597,8 @@ type codeIssue struct {
 	Comments                                                               []string // "Name (date): body"
 	Git                                                                    []string // "commit abc123 on branch x: title"
 	Links                                                                  []string // other attachments: "Title — URL"
-	NotesFolder                                                            string   // the team's folder in Pocket Notes
+	SharedNotes                                                            []store.IssueDoc
+	NotesFolder                                                            string // the team's folder in Pocket Notes
 	Files                                                                  []codeFile
 	Team, Cwd                                                              string
 	ID                                                                     int64
@@ -796,6 +797,7 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 		}
 		ci.Comments = append(ci.Comments, fmt.Sprintf("%s (%s): %s", who, strings.SplitN(c.CreatedAt, "T", 2)[0], clip(strings.TrimSpace(c.Body), 3000)))
 	}
+	ci.SharedNotes, _ = s.store.IssueDocs(ctx, is.ID, true)
 	atts, _ := s.store.Attachments(ctx, is.ID, 0)
 	total := int64(0)
 	for _, att := range atts {
@@ -915,6 +917,12 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 	section("Attached files not sent", left)
 	section("Links", ci.Links)
 	section("Latest comments", ci.Comments)
+	if len(ci.SharedNotes) > 0 {
+		b.WriteString("### Shared notes (the team's)\n")
+		for _, n := range ci.SharedNotes {
+			b.WriteString("#### " + n.Title + "\n" + clip(strings.TrimSpace(n.Body), 6000) + "\n\n")
+		}
+	}
 	text = strings.TrimSpace(b.String())
 
 	var sys strings.Builder
