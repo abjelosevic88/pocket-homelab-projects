@@ -58,8 +58,8 @@ export function PriorityIcon({ priority, size = 14 }: { priority: number; size?:
 
 export function LabelPill({ name, color, onRemove }: { name: string; color?: string; onRemove?: () => void }) {
   return (
-    <span className="label-pill" style={{ ['--lc' as string]: color || '#94a3b8' }}>
-      <span className="label-dot" />{name}
+    <span className="label-pill" title={name} style={{ ['--lc' as string]: color || '#94a3b8' }}>
+      <span className="label-dot" /><span className="label-name">{name}</span>
       {onRemove && <button type="button" aria-label={`Remove ${name}`} onClick={e => { e.stopPropagation(); onRemove() }}><Icon name="x" size={11} /></button>}
     </span>
   )
