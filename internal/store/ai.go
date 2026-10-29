@@ -110,3 +110,90 @@ func (s *Store) SetProjectAICwd(ctx context.Context, projectID int64, cwd string
 		ON CONFLICT(project_id) DO UPDATE SET cwd=excluded.cwd, updated_at=excluded.updated_at`, projectID, cwd, Now())
 	return err
 }
+
+// PersonAI is a person's own setup for a team's code conversations; what
+// they leave empty is the team's.
+type PersonAI struct {
+	TeamID    int64  `json:"team_id"`
+	UserID    int64  `json:"user_id"`
+	HostID    *int64 `json:"host_id"`    // nil = the team's machine
+	Cwd       string `json:"cwd"`        // "" = the team's (or the project's) folder
+	Provider  string `json:"provider"`   // "" = the team's
+	AccountID *int64 `json:"account_id"` // nil = the team's, -1 = the person's default login
+	Model     string `json:"model"`
+	Effort    string `json:"effort"`
+	Mode      string `json:"mode"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+// GetPersonAI returns a person's setup in a team (an empty one when never saved).
+func (s *Store) GetPersonAI(ctx context.Context, teamID, userID int64) (*PersonAI, error) {
+	p := PersonAI{TeamID: teamID, UserID: userID}
+	var host, acc sql.NullInt64
+	err := s.DB.QueryRowContext(ctx, `SELECT host_id, cwd, provider, account_id, model, effort, mode, updated_at FROM person_ai WHERE team_id = ? AND user_id = ?`, teamID, userID).
+		Scan(&host, &p.Cwd, &p.Provider, &acc, &p.Model, &p.Effort, &p.Mode, &p.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return &p, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if host.Valid {
+		p.HostID = &host.Int64
+	}
+	if acc.Valid {
+		p.AccountID = &acc.Int64
+	}
+	return &p, nil
+}
+
+// Empty: nothing of the person's own (the team's setup as it is).
+func (p *PersonAI) Empty() bool {
+	return p.HostID == nil && p.Cwd == "" && p.Provider == "" && p.AccountID == nil && p.Model == "" && p.Effort == "" && p.Mode == ""
+}
+
+// SavePersonAI stores a person's setup; an empty one is removed.
+func (s *Store) SavePersonAI(ctx context.Context, p *PersonAI) error {
+	if p.Empty() {
+		_, err := s.DB.ExecContext(ctx, `DELETE FROM person_ai WHERE team_id = ? AND user_id = ?`, p.TeamID, p.UserID)
+		return err
+	}
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO person_ai(team_id, user_id, host_id, cwd, provider, account_id, model, effort, mode, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(team_id, user_id) DO UPDATE SET host_id=excluded.host_id, cwd=excluded.cwd, provider=excluded.provider, account_id=excluded.account_id,
+		model=excluded.model, effort=excluded.effort, mode=excluded.mode, updated_at=excluded.updated_at`,
+		p.TeamID, p.UserID, p.HostID, p.Cwd, p.Provider, p.AccountID, p.Model, p.Effort, p.Mode, Now())
+	return err
+}
+
+// With is the team's setup with the person's on top. Own: the person works
+// in a folder of their own (their machine or their folder), so a project's
+// folder — a path on the team's machine — doesn't apply to them.
+func (t *TeamAI) With(p *PersonAI) (out *TeamAI, own bool) {
+	c := *t
+	if p == nil {
+		return &c, false
+	}
+	if p.HostID != nil && *p.HostID != c.HostID {
+		c.HostID, c.Cwd, own = *p.HostID, p.Cwd, true // the team's folder is a path on another machine
+	} else if p.Cwd != "" {
+		c.Cwd, own = p.Cwd, true
+	}
+	for _, f := range []struct {
+		dst *string
+		v   string
+	}{{&c.Provider, p.Provider}, {&c.Model, p.Model}, {&c.Effort, p.Effort}, {&c.Mode, p.Mode}} {
+		if f.v != "" {
+			*f.dst = f.v
+		}
+	}
+	if p.AccountID != nil {
+		c.AccountID = p.AccountID
+		if *p.AccountID < 0 {
+			c.AccountID = nil
+		}
+	}
+	if c.HostID != 0 {
+		c.AccountID = nil // another machine signs in with its own login
+	}
+	return &c, own
+}

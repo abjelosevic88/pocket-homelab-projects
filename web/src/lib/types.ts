@@ -191,6 +191,13 @@ export interface TeamAI {
   instructions: string; memory: string; send_now: boolean; link_refs: boolean; updated_at: string
 }
 
+/** A person's own setup for a team's code conversations (null / '' = the team's), and what it comes to. */
+export interface PersonAI { host_id: number | null; cwd: string; provider: '' | 'claude' | 'codex'; account_id: number | null; model: string; effort: string; mode: string; updated_at: string }
+export interface MyAI {
+  mine: PersonAI
+  uses: { host_id: number; cwd: string; provider: string; account_id: number | null; model: string; effort: string; mode: string; own_folder: boolean }
+}
+
 export type AgentChoice = string | { id: string; name?: string; label?: string }
 /** What Pocket AI can run for the person (GET /ai/agent-options). */
 export interface AgentOptions {
@@ -300,4 +307,8 @@ export interface DeployInfo {
   current?: DeployRun | null
   live?: { checked: boolean; now: string; live: boolean }
   can_deploy?: boolean
+  /** the config in use is the person's own (their staging box), not the team's */
+  mine?: boolean
+  shared?: { config: DeployConfig; host_name?: string } | null
+  own?: { config: DeployConfig; host_name?: string } | null
 }

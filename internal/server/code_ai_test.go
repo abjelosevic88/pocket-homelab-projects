@@ -352,3 +352,90 @@ func TestReadonlyModeAndCwd(t *testing.T) {
 		t.Fatal("~user accepted")
 	}
 }
+
+// Every member picks their own server, folder, login and agent; what they
+// leave empty is the team's, and only their own conversations use it.
+func TestPersonAISetup(t *testing.T) {
+	s, h := apiServer(t)
+	alex := person(t, s, h, "alex@example.com", "Alex", "admin")
+	ben := person(t, s, h, "ben@example.com", "Ben", "member")
+	var team store.Team
+	alex.do("POST", "/api/v1/teams", map[string]any{"name": "Web", "key": "web", "preset": "software"}, 201, &team)
+	alex.do("POST", "/api/v1/teams/WEB/members", map[string]any{"user_id": ben.user.ID, "role": "member"}, 200, nil)
+	alex.do("POST", "/api/v1/issues", map[string]any{"team_id": team.ID, "title": "Fix login"}, 201, nil)
+	var p store.Project
+	alex.do("POST", "/api/v1/projects", map[string]any{"name": "Site", "team_ids": []int64{team.ID}}, 201, &p)
+	alex.do("POST", "/api/v1/issues", map[string]any{"team_id": team.ID, "title": "In a project", "project_id": p.ID}, 201, nil)
+	alex.do("PUT", "/api/v1/projects/"+strconv.FormatInt(p.ID, 10)+"/ai", map[string]any{"cwd": "~/Projects/site"}, 200, nil)
+	alex.do("PUT", "/api/v1/teams/WEB/ai", map[string]any{"cwd": "~/Projects/web", "provider": "claude", "model": "opus", "account_id": 3}, 200, nil)
+
+	ai := &fakeAI{}
+	srv := ai.server(t)
+	connectAI(t, s, alex.user.ID, srv.URL)
+	connectAI(t, s, ben.user.ID, srv.URL)
+
+	type view struct {
+		Mine store.PersonAI `json:"mine"`
+		Uses struct {
+			HostID    int64  `json:"host_id"`
+			Cwd       string `json:"cwd"`
+			Provider  string `json:"provider"`
+			Model     string `json:"model"`
+			AccountID *int64 `json:"account_id"`
+			OwnFolder bool   `json:"own_folder"`
+		} `json:"uses"`
+	}
+	var v view
+	ben.do("GET", "/api/v1/teams/WEB/ai/mine", nil, 200, &v)
+	if v.Mine.HostID != nil || v.Uses.Cwd != "~/Projects/web" || v.Uses.Model != "opus" || v.Uses.OwnFolder {
+		t.Fatalf("nothing of ben's own: %+v", v)
+	}
+	// another machine needs a folder there
+	if code, body := ben.raw("PUT", "/api/v1/teams/WEB/ai/mine", "application/json", []byte(`{"host_id":7}`)); code != 400 || !strings.Contains(string(body), "folder") {
+		t.Fatalf("machine without a folder: %d %s", code, body)
+	}
+	ben.do("PUT", "/api/v1/teams/WEB/ai/mine", map[string]any{"host_id": 7, "cwd": "/home/ben/web", "model": "sonnet"}, 200, &v)
+	if v.Mine.HostID == nil || *v.Mine.HostID != 7 || v.Uses.HostID != 7 || v.Uses.Cwd != "/home/ben/web" || v.Uses.Model != "sonnet" ||
+		v.Uses.Provider != "claude" || v.Uses.AccountID != nil || !v.Uses.OwnFolder {
+		t.Fatalf("ben's machine: %+v", v)
+	}
+
+	draft := func(c *apiClient, ref string) map[string]any {
+		t.Helper()
+		c.do("POST", "/api/v1/issues/"+ref+"/code", map[string]any{"action": "chat"}, 201, nil)
+		ai.mu.Lock()
+		defer ai.mu.Unlock()
+		return ai.drafts[len(ai.drafts)-1]
+	}
+	// ben's conversations run on his machine, in his folder (a project's folder is a path on the team's machine)
+	for _, ref := range []string{"WEB-1", "WEB-2"} {
+		d := draft(ben, ref)
+		if d["host_id"] != float64(7) || d["cwd"] != "/home/ben/web" || d["model"] != "sonnet" || d["account_id"] != nil {
+			t.Fatalf("ben %s: %v", ref, d)
+		}
+	}
+	// alex's stay the team's
+	if d := draft(alex, "WEB-1"); d["host_id"] != nil || d["cwd"] != "~/Projects/web" || d["model"] != "opus" || d["account_id"] != float64(3) {
+		t.Fatalf("alex: %v", d)
+	}
+	if d := draft(alex, "WEB-2"); d["cwd"] != "~/Projects/site" {
+		t.Fatalf("alex in the project: %v", d)
+	}
+
+	// same machine as the team, own login (-1 = my default) and own folder
+	ben.do("PUT", "/api/v1/teams/WEB/ai/mine", map[string]any{"host_id": 0, "cwd": "~/mine", "account_id": -1}, 200, &v)
+	if v.Mine.HostID != nil || v.Uses.HostID != 0 || v.Uses.Cwd != "~/mine" || v.Uses.AccountID != nil || v.Uses.Model != "opus" {
+		t.Fatalf("same machine: %+v", v)
+	}
+	if d := draft(ben, "WEB-2"); d["host_id"] != nil || d["cwd"] != "~/mine" || d["account_id"] != nil {
+		t.Fatalf("ben own folder: %v", d)
+	}
+	// back to the team's: the row goes
+	ben.do("PUT", "/api/v1/teams/WEB/ai/mine", map[string]any{}, 200, &v)
+	if v.Mine.UpdatedAt != "" || v.Uses.Cwd != "~/Projects/web" || v.Uses.AccountID == nil {
+		t.Fatalf("reset: %+v", v)
+	}
+	if d := draft(ben, "WEB-2"); d["cwd"] != "~/Projects/site" {
+		t.Fatalf("ben back on the team's: %v", d)
+	}
+}

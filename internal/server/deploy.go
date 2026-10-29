@@ -33,19 +33,14 @@ func (s *Server) deployRoutes(r chi.Router) {
 	r.Put("/teams/{ref}/deploy", s.handlePutTeamDeploy)
 }
 
-// deployWhere is the machine + folder whose repository an issue deploys from.
-func (s *Server) deployWhere(ctx context.Context, is *store.Issue) (int64, string, error) {
-	tai, err := s.store.GetTeamAI(ctx, is.TeamID)
+// deployWhere is the machine + folder whose repository an issue deploys
+// from: the person's (their own server and folder, else the team's).
+func (s *Server) deployWhere(ctx context.Context, is *store.Issue, uid int64) (int64, string, error) {
+	tai, own, err := s.aiFor(ctx, is.TeamID, uid)
 	if err != nil {
 		return 0, "", err
 	}
-	cwd := tai.Cwd
-	if is.ProjectID != nil {
-		if pc := s.store.ProjectAICwd(ctx, *is.ProjectID); pc != "" {
-			cwd = pc
-		}
-	}
-	return tai.HostID, cwd, nil
+	return tai.HostID, s.codeCwd(ctx, tai, own, is.ProjectID), nil
 }
 
 var aiAnswered = regexp.MustCompile(`^\S+ answered (\d{3}) ?`)
@@ -75,7 +70,7 @@ func (s *Server) handleIssueDeploy(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
-	host, cwd, err := s.deployWhere(ctx, is)
+	host, cwd, err := s.deployWhere(ctx, is, me(r))
 	if err != nil {
 		s.fail(w, err, "team ai")
 		return
@@ -142,7 +137,7 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
-	host, cwd, err := s.deployWhere(ctx, is)
+	host, cwd, err := s.deployWhere(ctx, is, me(r))
 	if err != nil {
 		s.fail(w, err, "team ai")
 		return
@@ -197,7 +192,7 @@ func (s *Server) handleDeployCheck(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "branch is required")
 		return
 	}
-	host, cwd, err := s.deployWhere(ctx, is)
+	host, cwd, err := s.deployWhere(ctx, is, me(r))
 	if err != nil || cwd == "" {
 		writeJSON(w, http.StatusOK, map[string]any{"lines": []any{}})
 		return
@@ -243,21 +238,23 @@ func (s *Server) handleGetDeploy(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// The team's deploy (Team settings → Pocket AI): the commands of the team
-// code folder's repository, kept in Pocket AI for the project.
+// The team's deploy (Team settings → Pocket AI): the commands of the code
+// folder's repository, kept in Pocket AI for the project — the shared ones,
+// and a person's own (their staging box). The repository is found through
+// the person's setup (their server and folder, else the team's).
 func (s *Server) teamDeploySibling(w http.ResponseWriter, r *http.Request, need int) (*sibling, *store.TeamAI, bool) {
 	t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), need)
 	if err != nil {
 		s.fail(w, err, "team")
 		return nil, nil, false
 	}
-	tai, err := s.store.GetTeamAI(r.Context(), t.ID)
+	tai, _, err := s.aiFor(r.Context(), t.ID, me(r))
 	if err != nil {
 		s.fail(w, err, "team ai")
 		return nil, nil, false
 	}
 	if tai.Cwd == "" {
-		writeErr(w, http.StatusBadRequest, "Set the team's code folder first")
+		writeErr(w, http.StatusBadRequest, "Set the code folder first (the team's, or your own)")
 		return nil, nil, false
 	}
 	sb, err := s.aiSibling(r.Context())
@@ -292,17 +289,24 @@ func (s *Server) handlePutTeamDeploy(w http.ResponseWriter, r *http.Request) {
 			Current string   `json:"current"`
 			Check   string   `json:"check"`
 		} `json:"config"`
+		Scope string `json:"scope"` // "mine" = the caller's own deploy (any member); "" = the team's (admins)
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	sb, tai, ok := s.teamDeploySibling(w, r, needAdmin)
+	need := needAdmin
+	if in.Scope == "mine" {
+		need = needRead
+	} else {
+		in.Scope = ""
+	}
+	sb, tai, ok := s.teamDeploySibling(w, r, need)
 	if !ok {
 		return
 	}
 	var out map[string]any
-	err := sb.call(r.Context(), http.MethodPut, "/api/v1/link/deploy/config", map[string]any{"host_id": tai.HostID, "cwd": tai.Cwd, "config": in.Config}, &out)
+	err := sb.call(r.Context(), http.MethodPut, "/api/v1/link/deploy/config", map[string]any{"host_id": tai.HostID, "cwd": tai.Cwd, "config": in.Config, "scope": in.Scope}, &out)
 	if err != nil {
 		aiFail(w, err)
 		return
@@ -373,7 +377,7 @@ func (s *Server) handleDeploysLive(w http.ResponseWriter, r *http.Request) {
 		if err != nil || team.ArchivedAt != nil {
 			continue
 		}
-		tai, err := s.store.GetTeamAI(ctx, id)
+		tai, _, err := s.aiFor(ctx, id, uid)
 		if err != nil || tai.Cwd == "" {
 			continue
 		}

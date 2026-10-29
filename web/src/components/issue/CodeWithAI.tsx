@@ -89,7 +89,7 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
     } catch (e) {
       tab?.close()
       const msg = errMsg(e)
-      toast(msg, 'err', /code folder/i.test(msg) && issue.team?.role === 'admin' ? { label: 'Settings', run: () => navigate(`/team/${issue.team.key}/settings/ai`) } : undefined)
+      toast(msg, 'err', /code folder/i.test(msg) ? { label: 'Settings', run: () => navigate(`/team/${issue.team.key}/settings/ai`) } : undefined)
     } finally { setBusy(false) }
   }
   return { start, busy }

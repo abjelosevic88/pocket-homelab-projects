@@ -27,6 +27,8 @@ func (s *Server) codeRoutes(r chi.Router) {
 	r.Get("/ai/active", s.handleAIActive)
 	r.Get("/teams/{ref}/ai", s.handleGetTeamAI)
 	r.Put("/teams/{ref}/ai", s.handlePutTeamAI)
+	r.Get("/teams/{ref}/ai/mine", s.handleGetMyAI)
+	r.Put("/teams/{ref}/ai/mine", s.handlePutMyAI)
 	// where the team's attachments are kept: files.go
 	r.Get("/teams/{ref}/files", s.handleTeamFiles)
 	r.Put("/teams/{ref}/files", s.handlePutTeamFiles)
@@ -220,6 +222,130 @@ func (s *Server) handlePutTeamAI(w http.ResponseWriter, r *http.Request) {
 	}
 	ai, _ = s.store.GetTeamAI(r.Context(), t.ID)
 	writeJSON(w, http.StatusOK, ai)
+}
+
+// aiFor is the setup a person's code conversations and deploys use in a
+// team: the team's, with the person's own (their server, folder, login,
+// agent) on top. own: the folder is the person's, not the team's.
+func (s *Server) aiFor(ctx context.Context, teamID, uid int64) (*store.TeamAI, bool, error) {
+	tai, err := s.store.GetTeamAI(ctx, teamID)
+	if err != nil {
+		return nil, false, err
+	}
+	p, err := s.store.GetPersonAI(ctx, teamID, uid)
+	if err != nil {
+		return nil, false, err
+	}
+	out, own := tai.With(p)
+	return out, own, nil
+}
+
+// codeCwd is the folder an issue's conversation works in: the person's own,
+// else the project's, else the team's.
+func (s *Server) codeCwd(ctx context.Context, tai *store.TeamAI, own bool, projectID *int64) string {
+	if !own && projectID != nil {
+		if pc := s.store.ProjectAICwd(ctx, *projectID); pc != "" {
+			return pc
+		}
+	}
+	return tai.Cwd
+}
+
+// myAIView is a person's own setup and what it comes to.
+func (s *Server) myAIView(ctx context.Context, teamID, uid int64) (map[string]any, error) {
+	p, err := s.store.GetPersonAI(ctx, teamID, uid)
+	if err != nil {
+		return nil, err
+	}
+	tai, own, err := s.aiFor(ctx, teamID, uid)
+	if err != nil {
+		return nil, err
+	}
+	uses := map[string]any{"host_id": tai.HostID, "cwd": tai.Cwd, "provider": tai.Provider, "account_id": tai.AccountID,
+		"model": tai.Model, "effort": tai.Effort, "mode": tai.Mode, "own_folder": own}
+	return map[string]any{"mine": p, "uses": uses}, nil
+}
+
+func (s *Server) handleGetMyAI(w http.ResponseWriter, r *http.Request) {
+	t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "team")
+		return
+	}
+	out, err := s.myAIView(r.Context(), t.ID, me(r))
+	if err != nil {
+		s.fail(w, err, "team ai")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handlePutMyAI saves the caller's own setup (any member: it is only theirs).
+func (s *Server) handlePutMyAI(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		HostID    *int64 `json:"host_id"`
+		Cwd       string `json:"cwd"`
+		Provider  string `json:"provider"`
+		AccountID *int64 `json:"account_id"`
+		Model     string `json:"model"`
+		Effort    string `json:"effort"`
+		Mode      string `json:"mode"`
+	}
+	if err := decode(r, &in); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	if err != nil {
+		s.fail(w, err, "team")
+		return
+	}
+	cwd, err := cleanCwd(in.Cwd)
+	if err != nil {
+		s.fail(w, err, "team ai")
+		return
+	}
+	if in.Provider != "" && in.Provider != "claude" && in.Provider != "codex" {
+		writeErr(w, http.StatusBadRequest, "the agent is claude or codex")
+		return
+	}
+	for _, v := range []string{in.Model, in.Effort, in.Mode} {
+		if len(v) > 100 {
+			writeErr(w, http.StatusBadRequest, "model, effort and mode are short names")
+			return
+		}
+	}
+	if in.HostID != nil && *in.HostID < 0 {
+		in.HostID = nil
+	}
+	if in.AccountID != nil && *in.AccountID < -1 {
+		in.AccountID = nil
+	}
+	tai, err := s.store.GetTeamAI(r.Context(), t.ID)
+	if err != nil {
+		s.fail(w, err, "team ai")
+		return
+	}
+	if in.HostID != nil && *in.HostID == tai.HostID {
+		in.HostID = nil // the team's machine anyway
+	}
+	if in.HostID != nil && cwd == "" {
+		writeErr(w, http.StatusBadRequest, "pick your code folder on that machine")
+		return
+	}
+	p := &store.PersonAI{TeamID: t.ID, UserID: me(r), HostID: in.HostID, Cwd: cwd, Provider: in.Provider, AccountID: in.AccountID,
+		Model: strings.TrimSpace(in.Model), Effort: strings.TrimSpace(in.Effort), Mode: strings.TrimSpace(in.Mode)}
+	if err := s.store.SavePersonAI(r.Context(), p); err != nil {
+		s.fail(w, err, "team ai")
+		return
+	}
+	deployLiveByUser.Delete(me(r))
+	out, err := s.myAIView(r.Context(), t.ID, me(r))
+	if err != nil {
+		s.fail(w, err, "team ai")
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleGetTeamMemory(w http.ResponseWriter, r *http.Request) {
@@ -513,19 +639,14 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "team")
 		return
 	}
-	tai, err := s.store.GetTeamAI(ctx, team.ID)
+	tai, own, err := s.aiFor(ctx, team.ID, me(r))
 	if err != nil {
 		s.fail(w, err, "team ai")
 		return
 	}
-	cwd := tai.Cwd
-	if is.ProjectID != nil {
-		if pc := s.store.ProjectAICwd(ctx, *is.ProjectID); pc != "" {
-			cwd = pc
-		}
-	}
+	cwd := s.codeCwd(ctx, tai, own, is.ProjectID)
 	if cwd == "" {
-		writeErr(w, http.StatusBadRequest, "Set the team's code folder in Team settings → Pocket AI")
+		writeErr(w, http.StatusBadRequest, "Set the code folder in Team settings → Pocket AI (the team's, or your own)")
 		return
 	}
 	sb, err := s.aiSibling(ctx)

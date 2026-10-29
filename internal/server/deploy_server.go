@@ -77,7 +77,7 @@ func (s *Server) handleTeamServer(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "team")
 		return
 	}
-	tai, err := s.store.GetTeamAI(ctx, t.ID)
+	tai, _, err := s.aiFor(ctx, t.ID, me(r))
 	if err != nil {
 		s.fail(w, err, "team ai")
 		return
