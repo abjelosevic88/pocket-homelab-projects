@@ -256,19 +256,19 @@ func (s *Server) notesAbout(ctx context.Context, u *store.User, page, title, lab
 }
 
 // issueNoteLink is the line that makes a note about an issue.
-func issueNoteLink(is *store.Issue, page string) string {
-	label := strings.NewReplacer("[", "(", "]", ")", "\n", " ").Replace(is.Identifier + " · " + is.Title)
+func issueNoteLink(ident, title, page string) string {
+	label := strings.NewReplacer("[", "(", "]", ")", "\n", " ").Replace(ident + " · " + title)
 	return "[" + label + "](" + page + ")"
 }
 
 // handleIssueNotes: the person's notes that link to the issue.
 func (s *Server) handleIssueNotes(w http.ResponseWriter, r *http.Request) {
-	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	is, err := s.issueInfoOf(r, needRead)
 	if err != nil {
 		s.fail(w, err, "issue")
 		return
 	}
-	writeJSON(w, http.StatusOK, s.notesAbout(r.Context(), userFrom(r.Context()), s.issueURL(r, is.Identifier), is.Identifier+" "+is.Title, is.Identifier+" · "+is.Title, s.teamNotesFolder(r.Context(), is.TeamID)))
+	writeJSON(w, http.StatusOK, s.notesAbout(r.Context(), userFrom(r.Context()), is.URL, is.Ident+" "+is.Title, is.Ident+" · "+is.Title, is.NotesFolder))
 }
 
 // handleIssueLinkNote links one of the person's notes to the issue by adding
@@ -281,7 +281,7 @@ func (s *Server) handleIssueLinkNote(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "note_id is required")
 		return
 	}
-	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	is, err := s.issueInfoOf(r, needRead)
 	if err != nil {
 		s.fail(w, err, "issue")
 		return
@@ -297,7 +297,7 @@ func (s *Server) handleIssueLinkNote(w http.ResponseWriter, r *http.Request) {
 		ID    flexID `json:"id"`
 		Title string `json:"title"`
 	}
-	if err := sb.call(c, http.MethodPost, "/api/v1/notes/"+string(in.NoteID)+"/append", map[string]string{"text": issueNoteLink(is, s.issueURL(r, is.Identifier))}, &n); err != nil {
+	if err := sb.call(c, http.MethodPost, "/api/v1/notes/"+string(in.NoteID)+"/append", map[string]string{"text": issueNoteLink(is.Ident, is.Title, is.URL)}, &n); err != nil {
 		writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
 		return
 	}
@@ -312,7 +312,7 @@ func (s *Server) handleIssueUnlinkNote(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "not a note id")
 		return
 	}
-	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+	is, err := s.issueInfoOf(r, needRead)
 	if err != nil {
 		s.fail(w, err, "issue")
 		return
@@ -324,7 +324,7 @@ func (s *Server) handleIssueUnlinkNote(w http.ResponseWriter, r *http.Request) {
 	}
 	c, cancel := context.WithTimeout(r.Context(), siblingTimeout)
 	defer cancel()
-	page := s.issueURL(r, is.Identifier)
+	page := is.URL
 	for try := 0; ; try++ {
 		var n struct {
 			Content string `json:"content"`
@@ -336,7 +336,7 @@ func (s *Server) handleIssueUnlinkNote(w http.ResponseWriter, r *http.Request) {
 		}
 		content, ok := unlinkFromNote(n.Content, page)
 		if !ok {
-			writeErr(w, http.StatusConflict, "this note doesn't link to "+is.Identifier+" in a way that can be taken out here; open the note and remove the link there")
+			writeErr(w, http.StatusConflict, "this note doesn't link to "+is.Ident+" in a way that can be taken out here; open the note and remove the link there")
 			return
 		}
 		err := sb.call(c, http.MethodPut, "/api/v1/notes/"+noteID, map[string]any{"content": content, "etag": n.ETag}, nil)
@@ -361,7 +361,7 @@ func (s *Server) handleIssueNoteContent(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusBadRequest, "not a note id")
 		return
 	}
-	if _, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead); err != nil {
+	if _, err := s.issueInfoOf(r, needRead); err != nil {
 		s.fail(w, err, "issue")
 		return
 	}

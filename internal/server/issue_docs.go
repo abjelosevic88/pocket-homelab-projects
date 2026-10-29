@@ -8,6 +8,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,7 @@ func (s *Server) sharedNoteRoutes(r chi.Router) {
 	r.Patch("/issues/{ref}/shared-notes/{id}", s.handlePatchSharedNote)
 	r.Delete("/issues/{ref}/shared-notes/{id}", s.handleDeleteSharedNote)
 	r.Post("/issues/{ref}/notes/{note}/share", s.handleShareNote)
+	r.Post("/issues/{ref}/shared-notes/import", s.handleImportSharedNote)
 }
 
 func (s *Server) handleSharedNotes(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +161,7 @@ func (s *Server) handleDeleteSharedNote(w http.ResponseWriter, r *http.Request) 
 // handleShareNote copies one of the person's own notes onto the issue as a
 // shared note, or replaces the copy they shared from it before. The link
 // back to this issue is left out of the copy (it is on the issue already).
+// On a connected instance's issue the copy goes there (import below).
 func (s *Server) handleShareNote(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	noteID := chi.URLParam(r, "note")
@@ -166,7 +169,7 @@ func (s *Server) handleShareNote(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "not a note id")
 		return
 	}
-	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needWrite)
+	is, err := s.issueInfoOf(r, needWrite)
 	if err != nil {
 		s.fail(w, err, "issue")
 		return
@@ -186,19 +189,66 @@ func (s *Server) handleShareNote(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, siblingErr("Pocket Notes", err))
 		return
 	}
-	body, _ := unlinkFromNote(n.Content, s.issueURL(r, is.Identifier))
+	body, _ := unlinkFromNote(n.Content, is.URL)
 	body = strings.TrimSpace(stripTitleLine(body, n.Title))
+	title := firstNonEmpty(strings.TrimSpace(n.Title), "Untitled")
+	if rem := remoteFrom(ctx); rem != nil {
+		var out map[string]any
+		if err := s.remoteCall(ctx, rem, http.MethodPost, "/api/v1/issues/"+url.PathEscape(is.Ident)+"/shared-notes/import",
+			map[string]string{"source_note": noteID, "title": title, "body": body}, &out); err != nil {
+			s.fail(w, err, "shared note")
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	d, replaced, err := s.saveSharedCopy(r, is.Local, noteID, title, body)
+	if err != nil {
+		s.fail(w, err, "shared note")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"note": d, "replaced": replaced})
+}
+
+// handleImportSharedNote: POST /issues/{ref}/shared-notes/import
+// {source_note, title, body} is the same copy sent by another Pocket Projects
+// where the person connected this instance (their notes live over there).
+func (s *Server) handleImportSharedNote(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		SourceNote string `json:"source_note"`
+		Title      string `json:"title"`
+		Body       string `json:"body"`
+	}
+	if err := decode(r, &in); err != nil || strings.TrimSpace(in.SourceNote) == "" || len(in.SourceNote) > 64 {
+		writeErr(w, http.StatusBadRequest, "source_note, title and body are required")
+		return
+	}
+	is, err := s.loadIssue(r, s.accessOf(r), chi.URLParam(r, "ref"), needWrite)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
+	d, replaced, err := s.saveSharedCopy(r, is, strings.TrimSpace(in.SourceNote), firstNonEmpty(strings.TrimSpace(in.Title), "Untitled"), in.Body)
+	if err != nil {
+		s.fail(w, err, "shared note")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"note": d, "replaced": replaced})
+}
+
+// saveSharedCopy makes the person's copy of their note on the issue, or
+// replaces the one they made from it before.
+func (s *Server) saveSharedCopy(r *http.Request, is *store.Issue, noteID, title, body string) (*store.IssueDoc, bool, error) {
+	ctx := r.Context()
 	uid := me(r)
-	now := store.Now()
 	d, err := s.store.SharedCopy(ctx, is.ID, uid, noteID)
 	replaced := err == nil
 	if !replaced {
 		d = &store.IssueDoc{IssueID: is.ID, SourceNote: noteID, CreatedBy: &uid}
 	}
-	d.Title, d.Body, d.SharedAt, d.UpdatedBy = firstNonEmpty(strings.TrimSpace(n.Title), "Untitled"), body, now, &uid
+	d.Title, d.Body, d.SharedAt, d.UpdatedBy = title, body, store.Now(), &uid
 	if err := s.store.SaveIssueDoc(ctx, d); err != nil {
-		s.fail(w, err, "shared note")
-		return
+		return nil, false, err
 	}
 	field := "shared_note_added"
 	if replaced {
@@ -206,7 +256,7 @@ func (s *Server) handleShareNote(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: &uid, ActorApp: s.linkApp(r), Field: field, ToLabel: d.Title})
 	s.changed(r, "issue", []int64{is.TeamID}, is.ID)
-	writeJSON(w, http.StatusOK, map[string]any{"note": d, "replaced": replaced})
+	return d, replaced, nil
 }
 
 // stripTitleLine drops a leading "# Title" heading that repeats the note's

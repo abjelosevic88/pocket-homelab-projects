@@ -2,6 +2,7 @@
 // reorder, middle-click or ✕ to close, right-click for more.
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { appURL } from '../lib/api'
 import { useAIActive } from '../lib/ai-active'
 import { closeTabs, type IssueTab, moveTab, useClosedTabs, useIssueTabs } from '../lib/tabs'
 import { Icon } from './icons'
@@ -32,7 +33,7 @@ export function IssueTabs() {
   const tabMenu = (ref: string): MenuItem[] => {
     const at = refs.indexOf(ref)
     return [
-      { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard.writeText(`${location.origin}/issue/${ref}`).then(() => toast('Link copied'), () => toast('Could not copy', 'err')) } },
+      { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard.writeText(appURL(`/issue/${ref}`)).then(() => toast('Link copied'), () => toast('Could not copy', 'err')) } },
       'sep',
       { label: 'Close tab', icon: 'x', onSelect: () => close([ref]) },
       { label: 'Close other tabs', disabled: refs.length < 2, onSelect: () => close(refs.filter(r => r !== ref)) },

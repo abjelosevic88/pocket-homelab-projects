@@ -17,17 +17,19 @@ import { NotificationsTab } from './settings/Notifications'
 import { AppsTab } from './settings/Apps'
 import { FeedTab } from './settings/Feed'
 import { TokensTab } from './settings/Tokens'
+import { ConnectionsTab } from './settings/Connections'
 import { PeopleTab } from './settings/People'
 import { AboutTab } from './settings/About'
 import '../styles/settings-ui.css'
 
-type TabId = 'profile' | 'preferences' | 'notifications' | 'apps' | 'feed' | 'tokens' | 'people' | 'about'
+type TabId = 'profile' | 'preferences' | 'notifications' | 'apps' | 'connections' | 'feed' | 'tokens' | 'people' | 'about'
 
 const TABS: { id: TabId; label: string; icon: string; sub: string; admin?: boolean }[] = [
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email, @name, colour and password.' },
   { id: 'preferences', label: 'Preferences', icon: 'sliders', sub: 'Theme, density, time zone and where the app opens.' },
   { id: 'notifications', label: 'Notifications', icon: 'bell', sub: 'What reaches your phone, and where it is sent.' },
   { id: 'apps', label: 'Apps & AI', icon: 'grid', sub: 'Pocket Calendar, Contacts, Tasks, Notes and Pocket AI.' },
+  { id: 'connections', label: 'Connected instances', icon: 'globe', sub: 'Teams of another Pocket Projects, opened here with your token there.' },
   { id: 'feed', label: 'Calendar feed', icon: 'rss', sub: 'Your due dates, milestones and project targets in any calendar app.' },
   { id: 'tokens', label: 'API tokens', icon: 'key', sub: 'Personal tokens for scripts and other tools.' },
   { id: 'people', label: 'People', icon: 'users', sub: 'Everyone who has an account on this box.', admin: true },
@@ -101,6 +103,7 @@ export default function Settings() {
               {tab === 'preferences' && <PreferencesTab />}
               {tab === 'notifications' && <NotificationsTab />}
               {tab === 'apps' && <AppsTab />}
+              {tab === 'connections' && <ConnectionsTab />}
               {tab === 'feed' && <FeedTab />}
               {tab === 'tokens' && <TokensTab />}
               {tab === 'people' && <PeopleTab />}

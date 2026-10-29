@@ -2,7 +2,9 @@
 // favourites, and each team with its views — the Pocket Calendar sidebar.
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { REMOTE } from '../lib/api'
 import { useApp } from '../lib/app-context'
+import { useRemotes } from '../lib/remotes'
 import { useAIActiveList } from '../lib/ai-active'
 import { useTeamDeploy } from '../lib/deploy-live'
 import type { Favorite, Team } from '../lib/types'
@@ -76,6 +78,17 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const title = settings?.title || status?.title || 'Pocket Projects'
   const live = teams.filter(t => !t.archived_at)
   const favorites = boot?.favorites || []
+  const remotes = useRemotes()
+  const [wsMenu, setWsMenu] = useState<Anchor | null>(null)
+  const here = remotes.find(r => r.id === REMOTE)
+  // workspaces: this instance and the ones the person connected (a page load each)
+  const wsItems: MenuItem[] = [
+    { heading: 'Workspaces' },
+    { label: 'Your own', icon: 'home', hint: location.host, checked: !REMOTE, onSelect: () => { location.href = '/' } },
+    ...remotes.map(r => ({ label: r.name, icon: 'globe', hint: r.host, checked: r.id === REMOTE, onSelect: () => { location.href = `/r/${r.id}/` } })),
+    'sep',
+    { label: 'Connect another…', icon: 'plus', onSelect: () => { location.href = '/settings/connections' } },
+  ]
 
   return (
     <aside className="sidebar" aria-label="Projects">
@@ -84,6 +97,12 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         <span className="sb-title">{title !== 'Pocket Projects' ? title : <>Pocket <b>Projects</b></>}</span>
         {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^v?\d+\.\d+/.test(status.version) ? 'v' + status.version.replace(/^v/, '').replace(/[-+].*$/, '') : status.version}</span>}
       </div>
+      {(REMOTE > 0 || remotes.length > 0) && <button type="button" className={`sb-ws ${REMOTE ? 'remote' : ''}`} onClick={e => setWsMenu(rectOf(e.currentTarget))}
+        title={REMOTE ? `${here?.host || 'A connected instance'}: its teams, as you there. Your Pocket AI conversations and notes stay yours, here.` : 'Switch workspace'}>
+        <Icon name={REMOTE ? 'globe' : 'home'} size={14} /><span className="ellipsis">{REMOTE ? here?.name || 'Connected instance' : 'Your workspace'}</span>
+        {REMOTE > 0 && here && <span className="sb-ws-host ellipsis">{here.host}</span>}<Icon name="chevron-down" size={13} />
+      </button>}
+      {wsMenu && <Menu items={wsItems} anchor={wsMenu} onClose={() => setWsMenu(null)} width={270} />}
       <button type="button" className="btn primary create-btn" onClick={() => { onNavigate(); openCreateIssue() }} title="New issue (C)">
         <Icon name="edit" size={16} strokeWidth={2.1} />New issue<kbd className="kbd-on-primary">C</kbd>
       </button>

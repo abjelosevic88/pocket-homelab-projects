@@ -171,6 +171,7 @@ func (s *Server) Router() http.Handler {
 			s.prRoutes(r)
 			s.integrationRoutes(r)
 			s.sharedNoteRoutes(r)
+			s.remoteRoutes(r)
 			s.slackRoutes(r)
 			s.importRoutes(r)
 			for _, add := range extraRoutes {
@@ -195,6 +196,9 @@ func (s *Server) Router() http.Handler {
 			r.Get("/backup", s.handleBackup)
 		})
 	})
+
+	// a connected instance's API, as the person (remotes.go)
+	r.Mount("/r/{rid}/api/v1", s.remoteAPI())
 
 	r.NotFound(s.handleSPA)
 	return r
@@ -248,6 +252,7 @@ func errForbidden(msg string) error { return forbidden{msg} }
 func (s *Server) fail(w http.ResponseWriter, err error, context string) {
 	var ue userError
 	var fb forbidden
+	var re remoteError
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeErr(w, http.StatusNotFound, "not found")
@@ -263,6 +268,14 @@ func (s *Server) fail(w http.ResponseWriter, err error, context string) {
 		return
 	case errors.Is(err, errLinkScope):
 		writeErr(w, http.StatusForbidden, "this Pocket Core link may not change that")
+		return
+	case errors.As(err, &re):
+		// the connected instance's answer: its 404/403/409 stay what they are, the rest is its trouble
+		st := re.status
+		if st != http.StatusNotFound && st != http.StatusForbidden && st != http.StatusConflict && st != http.StatusBadRequest {
+			st = http.StatusBadGateway
+		}
+		writeErr(w, st, re.msg)
 		return
 	}
 	s.log.Error(context, "err", err)

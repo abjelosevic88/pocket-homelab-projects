@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import '../styles/projects-ui.css'
-import { api, ApiError, V1 } from '../lib/api'
+import { api, ApiError, appURL, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { ago, stamp } from '../lib/format'
 import { Markdown } from '../lib/markdown'
@@ -101,7 +101,7 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
   if (!note) return <Loading />
 
   const canEdit = note.can_edit
-  const link = `${location.origin}${sharedNoteURL(note.identifier, note.id)}`
+  const link = appURL(sharedNoteURL(note.identifier, note.id))
   const remove = async () => {
     try {
       await api.del(url)

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import '../styles/projects-ui.css'
-import { api, ApiError, V1 } from '../lib/api'
+import { api, ApiError, appURL, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { ago, stamp } from '../lib/format'
 import { Markdown } from '../lib/markdown'
@@ -88,7 +88,7 @@ export default function DocPage() {
     } catch (e) { toast((e as Error).message, 'err') }
   }
   const menu: MenuItem[] = [
-    { label: 'Copy link', icon: 'link', onSelect: async () => toast(await copyText(`${location.origin}/doc/${doc.id}`) ? 'Link copied' : 'Could not copy', 'ok') },
+    { label: 'Copy link', icon: 'link', onSelect: async () => toast(await copyText(appURL(`/doc/${doc.id}`)) ? 'Link copied' : 'Could not copy', 'ok') },
     { label: 'Copy as Markdown', icon: 'copy', onSelect: async () => toast(await copyText(`# ${title}\n\n${body}`) ? 'Copied' : 'Could not copy', 'ok') },
     'sep',
     { label: 'Delete document…', icon: 'trash', danger: true, disabled: !canEdit, onSelect: () => setConfirm(true) },

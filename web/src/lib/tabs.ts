@@ -3,14 +3,16 @@
 // going back to it shows the conversation beside the issue again. Kept per
 // browser (localStorage).
 import { useSyncExternalStore } from 'react'
+import { REMOTE } from './api'
 import type { StateType } from './types'
 
 /** One tab of the panel beside an issue: a Pocket AI conversation, a note or a shared note. */
 export type DockTabSaved = { kind: 'ai' | 'note' | 'shared'; url: string; title: string; id?: string }
 export type IssueTab = { ref: string; title: string; type?: StateType; dock?: { url: string; title: string } | null; docks?: DockTabSaved[]; dockActive?: number }
 
-const KEY = 'pp-tabs'
-const CLOSED = 'pp-tabs-closed'
+// each workspace keeps its own tabs (a connected instance's ATH-1 is not this one's)
+const KEY = REMOTE ? `pp-tabs-r${REMOTE}` : 'pp-tabs'
+const CLOSED = REMOTE ? `pp-tabs-closed-r${REMOTE}` : 'pp-tabs-closed'
 
 function read(key: string): IssueTab[] {
   try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v.filter(t => t && typeof t.ref === 'string') : [] } catch { return [] }

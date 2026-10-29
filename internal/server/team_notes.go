@@ -35,12 +35,25 @@ func cleanNotesFolder(v string) string {
 // GET /teams/{ref}/notes: the folder and the person's notes in it.
 func (s *Server) handleTeamNotes(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
-	if err != nil {
-		s.fail(w, err, "team")
-		return
+	var folder string
+	if rem := remoteFrom(ctx); rem != nil {
+		// a connected instance's team: its folder setting, the person's notes here
+		var t struct {
+			NotesFolder string `json:"notes_folder"`
+		}
+		if err := s.remoteCall(ctx, rem, http.MethodGet, "/api/v1/teams/"+url.PathEscape(chi.URLParam(r, "ref")), nil, &t); err != nil {
+			s.fail(w, err, "team")
+			return
+		}
+		folder = t.NotesFolder
+	} else {
+		t, err := s.loadTeam(r, s.accessOf(r), chi.URLParam(r, "ref"), needRead)
+		if err != nil {
+			s.fail(w, err, "team")
+			return
+		}
+		folder = s.store.TeamNotesFolder(ctx, t.ID)
 	}
-	folder := s.store.TeamNotesFolder(ctx, t.ID)
 	out := map[string]any{"folder": folder, "default_folder": defaultNotesFolder}
 	if folder == "" {
 		writeJSON(w, http.StatusOK, out)

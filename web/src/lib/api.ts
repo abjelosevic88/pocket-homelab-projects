@@ -43,7 +43,18 @@ export const api = {
   del: <T>(url: string) => request<T>('DELETE', url),
 }
 
-export const V1 = '/api/v1'
+// The workspace: this instance (/…) or another Pocket Projects the person
+// connected (/r/{id}/…), whose API this server passes on with their token
+// there. Switching workspaces is a page load, so these never change.
+const ws = location.pathname.match(/^\/r\/(\d+)(?=\/|$)/)
+export const REMOTE = ws ? Number(ws[1]) : 0
+/** The app's address prefix in this workspace ('' on this instance). */
+export const BASE = ws ? `/r/${ws[1]}` : ''
+export const V1 = `${BASE}/api/v1`
+/** This instance's own API in any workspace (its connections, the switcher). */
+export const HOME_V1 = '/api/v1'
+/** The full address of a page in this workspace (Copy link). */
+export const appURL = (path: string) => location.origin + BASE + path
 
 /** POST files as multipart/form-data. */
 export async function upload<T>(url: string, field: string, files: File | File[], extra: Record<string, string> = {}): Promise<T> {

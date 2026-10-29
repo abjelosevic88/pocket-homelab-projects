@@ -2,7 +2,7 @@
 // workflow and labels, projects, cycles, views, people…), lookups by id, the
 // theme and the live change stream.
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { api, V1 } from './api'
+import { api, type ApiError, REMOTE, V1 } from './api'
 import type { AuthStatus, Bootstrap, Change, Cycle, Label, Milestone, Person, Project, Settings, State, Team, User } from './types'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -101,14 +101,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     const st = await api.get<AuthStatus>(`${V1}/auth/status`)
+    if (REMOTE && !st.authenticated) st.remote_error = 'It no longer accepts your token: put a new one in Settings → Connected instances.'
     setStatus(st)
     setUser(st.user)
     if (st.authenticated) await reload()
   }, [reload])
 
-  useEffect(() => { refresh().catch(() => setStatus({ needs_setup: false, auth_mode: 'local', authenticated: false, user: null, version: '', title: 'Pocket Projects' })) }, [refresh])
   useEffect(() => {
-    const h = () => { setUser(null); setStatus(s => s ? { ...s, authenticated: false, user: null } : s) }
+    refresh().catch(e => {
+      // a connected instance's workspace: signed out here → this instance's login; else it is the other one's trouble
+      if (REMOTE && (e as ApiError).status === 401) { location.href = '/login'; return }
+      setStatus({ needs_setup: false, auth_mode: 'local', authenticated: false, user: null, version: '', title: 'Pocket Projects', remote_error: REMOTE ? (e as Error).message : undefined })
+    })
+  }, [refresh])
+  useEffect(() => {
+    const h = () => {
+      if (REMOTE) { location.href = '/login'; return } // the session here ended (the token there never reads as 401)
+      setUser(null); setStatus(s => s ? { ...s, authenticated: false, user: null } : s)
+    }
     window.addEventListener('pp:unauthorized', h)
     return () => window.removeEventListener('pp:unauthorized', h)
   }, [])

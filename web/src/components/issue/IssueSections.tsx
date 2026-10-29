@@ -2,7 +2,7 @@
 // relations, attachments (files, links, git, calendar, tasks), the team's shared
 // notes, the person's own notes and contacts.
 import React, { Fragment, useEffect, useRef, useState } from 'react'
-import { api, upload, V1 } from '../../lib/api'
+import { api, appURL, upload, V1 } from '../../lib/api'
 import { emitChange, useApp } from '../../lib/app-context'
 import { ago, bytes } from '../../lib/format'
 import type { Attachment, ContactSuggestion, Issue, IssueDetail, RelatedSection, RelationOut, SharedNote } from '../../lib/types'
@@ -339,8 +339,8 @@ export function SharedNotes({ issue, canEdit, openId, onOpen }: { issue: IssueDe
   const href = (n: SharedNote) => sharedNoteURL(issue.identifier, n.id)
   const menuItems = (n: SharedNote): MenuItem[] => [
     { label: 'Open beside the issue', icon: 'sidebar', onSelect: () => onOpen(n) },
-    { label: 'Open as a page', icon: 'external', onSelect: () => window.open(href(n), '_blank', 'noopener') },
-    { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(location.origin + href(n)); toast('Link copied') } },
+    { label: 'Open as a page', icon: 'external', onSelect: () => window.open(appURL(href(n)), '_blank', 'noopener') },
+    { label: 'Copy link', icon: 'link', onSelect: () => { navigator.clipboard?.writeText(appURL(href(n))); toast('Link copied') } },
     'sep',
     { label: 'Delete…', icon: 'trash', danger: true, disabled: !canEdit, onSelect: () => setDeleting(n) },
   ]

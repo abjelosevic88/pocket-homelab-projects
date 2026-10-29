@@ -5,6 +5,7 @@ import './styles/base.css'
 import './styles/app.css'
 import './styles/settings.css'
 import './styles/projects.css'
+import { BASE, REMOTE } from './lib/api'
 import { AppProvider, useApp } from './lib/app-context'
 import { Loading, ToastProvider } from './components/ui'
 import Layout from './components/Layout'
@@ -36,10 +37,23 @@ import TeamSettings from './pages/TeamSettings'
 import NewTeam from './pages/NewTeam'
 import Teams from './pages/Teams'
 
+// A connected instance that doesn't answer (or no longer takes the token).
+function RemoteDown({ msg }: { msg: string }) {
+  return (
+    <div className="boot remote-down">
+      <img src="/favicon.svg" alt="" />
+      <h2>This connected instance can't be opened</h2>
+      <p className="muted">{msg || 'It did not answer.'}</p>
+      <div className="row"><a className="btn primary" href="/">Back to your workspace</a><a className="btn" href="/settings/connections">Connected instances</a></div>
+    </div>
+  )
+}
+
 function Gate({ children }: { children: React.ReactNode }) {
   const { status, user, boot } = useApp()
   const loc = useLocation()
   if (!status) return <div className="boot"><img src="/favicon.svg" alt="" /><Loading /></div>
+  if (REMOTE && !user) return <RemoteDown msg={status.remote_error || ''} />
   if (status.needs_setup) return <Navigate to="/setup" replace />
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />
   if (!boot) return <div className="boot"><img src="/favicon.svg" alt="" /><Loading /></div>
@@ -96,7 +110,7 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={BASE || undefined}>
       <ErrorBoundary where="app"><ToastProvider><AppProvider><App /></AppProvider></ToastProvider></ErrorBoundary>
     </BrowserRouter>
   </React.StrictMode>,

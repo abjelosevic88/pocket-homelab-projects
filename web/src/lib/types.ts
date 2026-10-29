@@ -6,6 +6,8 @@ export interface Person { id: number; name: string; email: string; username: str
 export interface AuthStatus {
   needs_setup: boolean; core_configured?: boolean; auth_mode: string; authenticated: boolean; user: User | null
   version: string; title: string; oidc?: boolean; oidc_name?: string
+  /** in a connected instance's workspace: why it can't be opened */
+  remote_error?: string
 }
 
 export type StateType = 'triage' | 'backlog' | 'unstarted' | 'started' | 'completed' | 'canceled'

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -84,6 +85,22 @@ func (s *Server) handleDay(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, err, "day")
 		return
+	}
+	// the person's work on instances they connected, as those tell it
+	// (local=1: only this instance's, so two that connect each other don't loop)
+	if r.URL.Query().Get("local") != "1" {
+		remotes, _ := s.store.Remotes(ctx, uid)
+		for i := range remotes {
+			var rd dayWork
+			q := url.Values{"tz": {loc.String()}, "local": {"1"}}
+			if err := s.remoteCall(ctx, &remotes[i], http.MethodGet, "/api/v1/day/"+date+"?"+q.Encode(), nil, &rd); err != nil {
+				s.log.Warn("day: connected instance", "host", remotes[i].Host(), "err", err)
+				continue
+			}
+			out.Issues = append(out.Issues, rd.Issues...)
+			out.Projects = append(out.Projects, rd.Projects...)
+			out.Minutes += rd.Minutes
+		}
 	}
 	writeJSON(w, http.StatusOK, out)
 }

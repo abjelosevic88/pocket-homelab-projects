@@ -5,6 +5,7 @@
 // running conversation carries on. + starts another conversation.
 import { useEffect, useRef, useState } from 'react'
 import { refreshAIActive } from '../../lib/ai-active'
+import { BASE } from '../../lib/api'
 import type { IssueDetail } from '../../lib/types'
 import { Icon } from '../icons'
 import { type Anchor, Menu, type MenuItem, Prompt, useToast } from '../ui'
@@ -26,7 +27,7 @@ export const newDockKey = () => Date.now().toString(36) + Math.random().toString
 /** One tab's frame. Its address is set once: changing it would reload the conversation. */
 function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown: boolean; issue: IssueDetail; onMoved: (key: string, threadId: string, status: string) => void; onOpen: (url: string, title: string) => void }) {
   const ref = useRef<HTMLIFrameElement>(null)
-  const [src] = useState(() => tab.kind === 'ai' ? embedURL(tab.url, !!tab.send) : tab.kind === 'shared' ? `/embed${tab.url}` : noteEmbedURL(tab.url))
+  const [src] = useState(() => tab.kind === 'ai' ? embedURL(tab.url, !!tab.send) : tab.kind === 'shared' ? `${BASE}/embed${tab.url}` : noteEmbedURL(tab.url))
   const moved = useRef(onMoved)
   moved.current = onMoved
   const open = useRef(onOpen)
