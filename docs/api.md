@@ -101,8 +101,12 @@ an identifier), `sort` (manual/priority/updated/created/due/title/estimate/ident
 | `GET /calendar?from&to&scope=mine\|all&cycles=0` | dated items (issues, project starts/targets, milestones, cycles) |
 | `GET /calendar/events?from&to` | the person's Pocket Calendar events |
 | `GET /related?url=` | projects and issues linking to an address (contact pages, notes) |
+| `GET /mentions?url=…` (1–20 `url=`) | the person's issues and projects whose description or comments (for a project: its description, updates and their comments) link to the address, an address below it or with a query (`D/d/12/picture.svg` counts for `D/d/12`); host case, scheme, fragment and a trailing slash don't matter. `[{kind: issue\|project, id, identifier (issues), title, url, team, updated_at}]`, newest first, at most 50. Pocket Draw's "Used in" asks this |
 | `GET /insights?team_id\|project_id&from&to` | weekly created/completed, cumulative flow, velocity, breakdowns, lead and cycle time, totals |
 | `GET /contacts/suggest?q=` · `GET /notes/search?q=` | pickers backed by Pocket Contacts / Notes |
+| `GET /draw/drawings?q=` | the drawing picker: `{items: [{id, title, kind, detail, edited_at, picture, url, markdown}], connected, error?}` from Pocket Draw (`picture` is the proxy below, `markdown` the embed `![title](D/d/{id}/picture.svg)`) |
+| `POST /draw/drawings {kind: sketch\|mermaid, title}` | starts a drawing in Pocket Draw → 201 `{id, title, url, markdown}` |
+| `GET /draw/{id}/picture.svg` | a drawing's current picture, fetched from Pocket Draw as the person (`image/svg+xml`, a strict CSP, cached 30 s); not connected or no picture yet → a placeholder picture, not cached |
 | `GET /integrations` · `PUT /integrations/{id} {mode, url, token}` | Pocket app connections per person |
 | `GET /ai/status` · `GET /ai/models` · `POST /ai/describe\|breakdown\|summarize\|project-update\|triage\|extract\|rewrite` | Pocket AI |
 | `GET/PUT /settings` · `POST /settings/feed/rotate` · `POST /notify/test` · `GET /settings/system` | |

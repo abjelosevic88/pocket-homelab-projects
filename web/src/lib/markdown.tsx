@@ -1,9 +1,12 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
+import { drawPicture, useDrawApp } from './draw'
 
 // A small Markdown renderer for descriptions, comments, updates and docs: headings,
 // paragraphs, lists (with checkboxes), bold, italic, strike, code, fenced code, quotes,
 // rules, links, images, issue identifiers (WEB-12 → the issue) and @mentions.
+// A drawing from Pocket Draw (![title](D/d/12/picture.svg)) shows its current
+// picture through Projects and opens in Pocket Draw.
 
 let knownKeys = new Set<string>()
 /** The team keys whose identifiers become links (set by the app once teams load). */
@@ -11,7 +14,7 @@ export function setKnownKeys(keys: string[]) { knownKeys = new Set(keys.map(k =>
 
 function inline(s: string, key = 0): React.ReactNode[] {
   const out: React.ReactNode[] = []
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\s][^*]*\*)|(_[^_\s][^_]*_)|(~~[^~]+~~)|(\[([^\]]+)\]\(([^)\s]+)\))|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|(!\[([^\]]*)\]\(([^)\s]+)\))|(\b([A-Z][A-Z0-9]{0,6})-(\d{1,9})\b)|((?:^|(?<=[\s(]))@[A-Za-z0-9][\w.-]*[A-Za-z0-9_])/g
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\s][^*]*\*)|(_[^_\s][^_]*_)|(~~[^~]+~~)|(\[([^\]]+)\]\(([^)\s]+)\))|(https?:\/\/[^\s<>()]+[^\s<>().,;:!?'"])|(!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\))|(\b([A-Z][A-Z0-9]{0,6})-(\d{1,9})\b)|((?:^|(?<=[\s(]))@[A-Za-z0-9][\w.-]*[A-Za-z0-9_])/g
   let last = 0, m: RegExpExecArray | null, i = key
   while ((m = re.exec(s))) {
     if (m.index > last) out.push(s.slice(last, m.index))
@@ -22,7 +25,12 @@ function inline(s: string, key = 0): React.ReactNode[] {
     else if (m[6]) out.push(<s key={i++}>{inline(t.slice(2, -2), i * 100)}</s>)
     else if (m[7]) out.push(<a key={i++} href={m[9]} target="_blank" rel="noreferrer">{m[8]}</a>)
     else if (m[10]) out.push(<a key={i++} href={t} target="_blank" rel="noreferrer">{t}</a>)
-    else if (m[11]) out.push(<a key={i++} href={m[13]} target="_blank" rel="noreferrer" className="md-img"><img src={m[13]} alt={m[12]} loading="lazy" /></a>)
+    else if (m[11]) {
+      const d = drawPicture(m[13])
+      out.push(d
+        ? <a key={i++} href={d.page} target="_blank" rel="noopener noreferrer" className="md-img md-drawing" title="Open in Pocket Draw"><img src={d.picture} alt={m[12]} loading="lazy" /><span className="md-drawing-cap">Pocket Draw · {m[12] || `Drawing ${d.id}`}</span></a>
+        : <a key={i++} href={m[13]} target="_blank" rel="noreferrer" className="md-img"><img src={m[13]} alt={m[12]} loading="lazy" /></a>)
+    }
     else if (m[14]) out.push(knownKeys.has(m[15]) ? <Link key={i++} to={`/issue/${t}`} className="md-issue">{t}</Link> : t)
     else if (m[17]) out.push(<span key={i++} className="mention">{t}</span>)
     last = m.index + t.length
@@ -82,6 +90,7 @@ export function toggleCheckbox(md: string, line: number): string {
 }
 
 export function Markdown({ text, onToggle }: { text: string; onToggle?: (line: number) => void }) {
+  useDrawApp(text.includes('/picture.svg')) // re-render once Pocket Draw's address is known
   const bs = blocks(text)
   return (
     <div className="md">

@@ -116,7 +116,7 @@ export default function Layout() {
     { id: 'trash', label: 'Trash', icon: 'trash', keywords: 'deleted restore', run: () => navigate('/trash') },
     { id: 'settings', label: 'Settings', icon: 'settings', hint: ',', run: () => navigate('/settings') },
     { id: 'notifications', label: 'Notification settings', icon: 'bell', keywords: 'push ntfy apprise', run: () => navigate('/settings/notifications') },
-    { id: 'apps', label: 'Pocket apps (Calendar, Contacts, Tasks, Notes, AI)', icon: 'grid', keywords: 'integrations links core', run: () => navigate('/settings/apps') },
+    { id: 'apps', label: 'Pocket apps (Calendar, Contacts, Tasks, Notes, Draw, AI)', icon: 'grid', keywords: 'integrations links core', run: () => navigate('/settings/apps') },
     { id: 'shortcuts', label: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', run: () => setShortcuts(true) },
     { id: 'sidebar', label: sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar', icon: 'sidebar', hint: '[', run: toggleSidebar },
     ...app.teams.flatMap(t => [

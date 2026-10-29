@@ -71,6 +71,8 @@
 - **Pocket Contacts**: stakeholders and clients from your address book; their contact page lists their projects.
 - **Pocket Tasks**: put an issue on your personal to-do list; finishing the issue ticks it off.
 - **Pocket Notes**: notes that link to a project, one click to write a new one.
+- **Pocket Draw**: put a sketch or diagram in a description or comment; it shows as a picture that stays up to
+  date and opens in Pocket Draw, and the drawing there lists the issues and projects it is used in.
 - **Pocket AI**: write a description, break an issue into sub-issues, summarise a long thread, draft the weekly
   project update, suggest how to file an issue, turn meeting notes into issues — and every Pocket AI chat can read
   and change issues and projects through Core's tools (writes wait for your approval).

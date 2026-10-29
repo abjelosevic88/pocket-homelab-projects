@@ -153,6 +153,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/dashboard", s.handleDashboard)
 			r.Get("/search", s.handleSearch)
 			r.Get("/related", s.handleRelatedByURL)
+			r.Get("/mentions", s.handleMentions)
 			r.Get("/calendar", s.handleCalendar)
 			r.Get("/insights", s.handleInsights)
 

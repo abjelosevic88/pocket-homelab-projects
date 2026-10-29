@@ -131,12 +131,34 @@
 .md pre { margin: 0 0 10px; }
 .md .md-img { display: inline-block; margin: 4px 0; }
 .md .md-img img { max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.md .md-drawing { position: relative; max-width: 100%; text-decoration: none; }
+.md .md-drawing img { background: #fff; min-width: 120px; min-height: 60px; }
+.md .md-drawing .md-drawing-cap { position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 1; padding: 4px 7px; border-radius: 6px; background: rgba(15, 23, 42, .55); color: #fff; opacity: .8; transition: opacity .12s; pointer-events: none; }
+.md .md-drawing:hover .md-drawing-cap, .md .md-drawing:focus-visible .md-drawing-cap { opacity: 1; }
 .md .md-issue { font-weight: 600; font-size: 13px; background: var(--accent-soft); padding: 1px 6px; border-radius: 6px; text-decoration: none; }
 .md .mention { color: var(--accent-ink); font-weight: 600; }
 .md-editor { position: relative; }
 .md-editor textarea { resize: none; overflow: hidden; line-height: 1.55; }
 .md-editor textarea.bare { border: 0; box-shadow: none !important; background: transparent; padding: 4px 0; }
 .md-preview { min-height: 72px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; cursor: text; }
+.md-editor.has-corner textarea { padding-right: 30px; }
+.md-editor .md-corner { position: absolute; top: 4px; right: 4px; color: var(--faint); opacity: .7; }
+.md-editor .md-corner:hover, .md-editor:focus-within .md-corner { opacity: 1; color: var(--muted); }
+.md-draw-btn:not(.icon-only) { width: auto; padding: 0 7px; gap: 5px; font-size: 12px; color: var(--muted); }
+.md-draw-btn.is-off { opacity: .45; cursor: help; }
+.md-draw-off { padding: 12px 14px; }
+.draw-pick .modal-body { display: flex; flex-direction: column; gap: 12px; }
+.draw-pick-bar { display: flex; align-items: center; gap: 8px; }
+.draw-pick-bar .pick-search { border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.draw-pick-bar .pick-search input { height: 32px; }
+.draw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: min(60vh, 520px); overflow-y: auto; padding: 2px; }
+.draw-card { display: flex; flex-direction: column; gap: 3px; text-align: left; font: inherit; background: none; border: 1px solid var(--border); border-radius: 10px; padding: 6px; cursor: pointer; color: var(--text); min-width: 0; }
+.draw-card:hover, .draw-card:focus-visible { border-color: var(--accent); background: var(--hover); }
+.draw-thumb { display: grid; place-items: center; aspect-ratio: 16 / 10; border-radius: 6px; background: #fff; overflow: hidden; border: 1px solid var(--border); }
+.draw-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.draw-card-title { font-size: 13px; font-weight: 550; padding: 2px 2px 0; }
+.draw-card-meta { padding: 0 2px; }
+@media (max-width: 767px) { .draw-pick-bar { flex-wrap: wrap; } .draw-pick-bar .pick-search { flex-basis: 100%; } }
 .md-tools { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .md-suggest { position: absolute; left: 0; top: calc(100% - 6px); z-index: 60; min-width: 260px; max-width: 420px; background: var(--raised); border-radius: 10px; box-shadow: var(--shadow-lg); padding: 4px; display: grid; animation: pop-in .1s var(--ease); }
 .md-suggest button { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 13.5px; text-align: left; background: none; border: 0; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text); cursor: pointer; min-width: 0; }

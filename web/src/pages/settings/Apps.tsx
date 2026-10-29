@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import { useApp } from '../../lib/app-context'
+import { refreshDrawApp } from '../../lib/draw'
 import type { Integration } from '../../lib/types'
 import { Icon } from '../../components/icons'
 import { type Option, Select } from '../../components/Select'
@@ -14,6 +15,7 @@ const META: Record<string, { icon: string; color: string; what: string }> = {
   contacts: { icon: 'users', color: '#0891b2', what: 'Stakeholders of a project and contacts on an issue (client, requester), picked from your contacts.' },
   tasks: { icon: 'check-circle', color: '#16a34a', what: '“Add to my Tasks”: a personal to-do linked to the issue; completing the issue completes the to-do.' },
   notes: { icon: 'note', color: '#ca8a04', what: 'Notes that link to a project on its page, and “New note” prefilled with the project’s link.' },
+  draw: { icon: 'draw', color: '#db2777', what: '“Drawing” in a description or comment puts in one of your sketches or diagrams as a picture that stays up to date; clicking it opens Pocket Draw. Start a new one from there too.' },
   ai: { icon: 'sparkles', color: '#7c3aed', what: '“Code with Pocket AI” on an issue: a Claude Code or Codex conversation in the team’s code folder, ready for you to send.' },
 }
 
@@ -68,6 +70,7 @@ function AppCard({ app, connected, onList }: { app: Integration; connected: bool
     setBusy(true)
     try {
       onList(await api.put<Integration[]>(`${V1}/integrations/${app.id}`, body))
+      if (app.id === 'draw') refreshDrawApp()
       if (ok) toast(ok)
       setToken('')
     } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }

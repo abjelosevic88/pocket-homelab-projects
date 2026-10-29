@@ -12,6 +12,7 @@ not linked or down, only its own panel says so; nothing else breaks.
 | Pocket Contacts | `contacts:read` | Project stakeholders and issue contacts (client, requester) picked from your address book; meeting invitations go to their email | A contact's page lists the projects they are a stakeholder of and the open issues that name them (Contacts uses `projects:read` → `GET /api/v1/related?url=<contact page>`) |
 | Pocket Tasks | `tasks:read`, `tasks:write` | **Add to my Tasks** makes a personal to-do linking back to the issue (due date carried over, start today/tomorrow); completing the issue completes the to-do, reopening reopens it | The to-do's link opens the issue |
 | Pocket Notes | `notes:read`, `notes:write` | An issue and a project show your notes that link to them; **New note** opens Notes with the issue or project linked (an issue's note goes to the team's Notes folder, Team settings → Notes, else `Projects`; the team's **Notes** page in the sidebar lists that folder, each person's own notes in it); **Link a note** on an issue adds the issue's link to the end of one of your notes (`notes:write`); notes can be added as project resources. Pocket AI conversations about an issue are told to do the same (create a note with the issue's link in it) | Notes' "link to something" works with project/issue addresses |
+| Pocket Draw | `drawings:read`, `drawings:write` | **Drawing** in the Markdown editor (descriptions, comments, project descriptions and updates) picks one of your sketches or diagrams and puts it in as `![title](D/d/12/picture.svg)` (D = Draw's address). Projects shows it through `GET /api/v1/draw/12/picture.svg`, fetched from Draw as whoever looks, so it is always the current picture; without Draw (off, not linked, no picture yet) a placeholder shows. Clicking it opens the drawing in Draw. **New sketch** / **New text diagram** start one there (`drawings:write`), put it in and open it in a new tab. The button stays visible but greyed out, with why, while Draw isn't connected | A drawing's **Used in** lists the issues and projects that show or link to it (Draw uses `projects:read` → `GET /api/v1/mentions?url=<drawing page>`) |
 | Pocket AI | `inference:write` | Write a description, break an issue into sub-issues, summarise a discussion, draft the project update (with health), suggest how to file an issue, turn notes into issues, rewrite text | — |
 
 ### Pocket AI and Pocket Ask
@@ -48,8 +49,8 @@ the issue (kind `ai_thread`) and its state (draft, working, waiting, done) follo
 
 ### What Projects offers
 
-`projects:read` — teams, issues, projects, milestones, cycles, `GET /calendar`, `GET /related?url=`, search, the
-dashboard. `projects:write` — create issues and comments, post project updates, add a line to a team's AI memory
+`projects:read` — teams, issues, projects, milestones, cycles, `GET /calendar`, `GET /related?url=`,
+`GET /mentions?url=` (what links to a drawing or any address), search, the dashboard. `projects:write` — create issues and comments, post project updates, add a line to a team's AI memory
 (`POST /teams/{KEY}/memory`), change the issues that app created.
 Every other route answers 403 to a link token.
 

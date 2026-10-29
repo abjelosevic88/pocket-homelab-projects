@@ -1,14 +1,18 @@
 // A Markdown textarea that grows with its text, completes @people and
 // issue identifiers, pastes images as attachments (when it knows the issue)
-// and can show a preview. Cmd/Ctrl+Enter submits.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+// and can show a preview. Cmd/Ctrl+Enter submits. "Drawing" puts in a
+// sketch or diagram from Pocket Draw at the cursor (greyed out, with why,
+// while Pocket Draw isn't connected).
+import { type MouseEvent as ReactMouseEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { api, upload, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
+import { useDrawApp } from '../lib/draw'
 import { Markdown } from '../lib/markdown'
 import type { Attachment, Issue } from '../lib/types'
+import { DrawingOff, DrawingPicker } from './DrawingPicker'
 import { Icon } from './icons'
 import { PersonAvatar, StatusIcon } from './issue-bits'
-import { useToast } from './ui'
+import { type Anchor, Popover, rectOf, useToast } from './ui'
 
 interface Suggest { kind: '@' | '#'; start: number; query: string }
 
@@ -24,6 +28,13 @@ export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder,
   const [issues, setIssues] = useState<Issue[]>([])
   const [preview, setPreview] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const draw = useDrawApp()
+  const [picker, setPicker] = useState(false)
+  const [drawOff, setDrawOff] = useState<Anchor | null>(null)
+  const sel = useRef<[number, number]>([0, 0])
+  // While the drawing picker (or why it's greyed out) is open the textarea
+  // loses focus; that must not end editing where the page listens to onBlur.
+  const holdBlur = useRef(false)
 
   useLayoutEffect(() => {
     const el = ta.current
@@ -79,12 +90,44 @@ export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder,
     } catch (e) { toast((e as Error).message, 'err') } finally { setUploading(false) }
   }
 
+  const drawReady = !draw.loaded || draw.status === 'ok'
+  const openDrawing = (e: ReactMouseEvent<HTMLButtonElement>) => {
+    holdBlur.current = true
+    if (!drawReady) { setDrawOff(rectOf(e.currentTarget)); return }
+    const el = ta.current
+    sel.current = el ? [el.selectionStart, el.selectionEnd] : [value.length, value.length]
+    setPicker(true)
+  }
+  const backToText = (pos?: number) => {
+    requestAnimationFrame(() => {
+      const el = ta.current
+      if (el) { el.focus(); if (pos !== undefined) el.setSelectionRange(pos, pos) }
+      holdBlur.current = false
+    })
+  }
+  const insertDrawing = (md: string) => {
+    const [a, b] = sel.current
+    const before = value.slice(0, a), after = value.slice(b)
+    const text = (before && !before.endsWith('\n') ? '\n' : '') + md + (after.startsWith('\n') ? '' : '\n')
+    onChange(before + text + after)
+    setPicker(false)
+    backToText(a + text.length)
+  }
+  const drawButton = (corner: boolean) => (
+    <button type="button" className={`btn ghost xs md-draw-btn ${corner ? 'icon-only md-corner' : ''} ${drawReady ? '' : 'is-off'}`} aria-disabled={!drawReady}
+      title={drawReady ? 'Insert a drawing from Pocket Draw' : 'Insert a drawing — Pocket Draw isn’t connected'} aria-label="Insert a drawing from Pocket Draw"
+      onMouseDown={e => e.preventDefault()} onClick={openDrawing}>
+      <Icon name="draw" size={13} />{!corner && <span>Drawing</span>}
+    </button>
+  )
+  const tools = canPreview && !bare
+
   return (
-    <div className={`md-editor ${bare ? 'bare' : ''} ${className}`}>
+    <div className={`md-editor ${bare ? 'bare' : ''} ${tools ? '' : 'has-corner'} ${className}`}>
       {preview ? <div className="md-preview" onClick={() => setPreview(false)}>{value.trim() ? <Markdown text={value} /> : <p className="faint">Nothing to preview</p>}</div> :
         <textarea ref={ta} value={value} placeholder={placeholder} autoFocus={autoFocus} rows={minRows} className={bare ? 'bare' : ''}
           onChange={e => { onChange(e.target.value); detect(e.target.value, e.target.selectionStart) }}
-          onBlur={() => { window.setTimeout(() => setSug(null), 150); onBlur?.() }}
+          onBlur={() => { window.setTimeout(() => setSug(null), 150); if (!holdBlur.current) onBlur?.() }}
           onPaste={e => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); uploadFiles(files) } }}
           onDrop={e => { const files = [...e.dataTransfer.files]; if (files.length) { e.preventDefault(); uploadFiles(files) } }}
           onKeyDown={e => {
@@ -100,12 +143,22 @@ export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder,
         {sug.kind === '@' ? peopleHits.map((p, i) => <button key={p.id} type="button" className={i === hi ? 'hi' : ''} onMouseDown={e => { e.preventDefault(); pick(i) }}><PersonAvatar person={p} size={18} />{p.name || p.email}<small>@{p.username || p.email.split('@')[0]}</small></button>)
           : issues.map((is, i) => <button key={is.id} type="button" className={i === hi ? 'hi' : ''} onMouseDown={e => { e.preventDefault(); pick(i) }}><StatusIcon state={app.state(is.state_id)} /><small className="ident">{is.identifier}</small><span className="ellipsis">{is.title}</span></button>)}
       </div>}
-      {canPreview && !bare && <div className="md-tools">
+      {!tools && !preview && drawButton(true)}
+      {tools && <div className="md-tools">
         <span className="faint xsmall">Markdown · @ to mention · # for issues{issueRef ? ' · paste images' : ''}</span>
         {uploading && <span className="xsmall muted">Uploading…</span>}
         <span className="spacer" />
+        {!preview && drawButton(false)}
         <button type="button" className="btn ghost xs" title={preview ? 'Edit' : 'Preview'} aria-label={preview ? 'Edit' : 'Preview'} onClick={() => setPreview(p => !p)}><Icon name={preview ? 'edit' : 'eye'} size={13} /></button>
       </div>}
+      {picker && <DrawingPicker onPick={insertDrawing} onClose={() => { setPicker(false); backToText() }} />}
+      {drawOff && <Popover anchor={drawOff} onClose={() => {
+        // Closed by a click elsewhere: let the page see the textarea was left.
+        setDrawOff(null); holdBlur.current = false
+        requestAnimationFrame(() => { if (ta.current && document.activeElement !== ta.current) onBlur?.() })
+      }} prefer="below" width={320} label="Pocket Draw">
+        <div className="md-draw-off"><DrawingOff draw={draw} /></div>
+      </Popover>}
     </div>
   )
 }

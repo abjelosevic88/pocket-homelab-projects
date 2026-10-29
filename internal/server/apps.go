@@ -65,6 +65,9 @@ var pocketApps = []PocketApp{
 	{ID: "notes", Name: "Pocket Notes", Slug: "notes", Scopes: []string{"notes:read", "notes:write"}, ReadScopes: []string{"notes:read"},
 		Reason:      "Show the notes that link to an issue or a project, and link a note to an issue by adding the issue's link to it",
 		Description: "Notes that link to an issue or a project appear on its page; \"New note\" opens Pocket Notes with it linked, \"Link a note\" adds the link to one of your notes."},
+	{ID: "draw", Name: "Pocket Draw", Slug: "draw", Scopes: []string{"drawings:read", "drawings:write"}, ReadScopes: []string{"drawings:read"},
+		Reason:      "Show sketches and diagrams from Pocket Draw in issues and projects, and start a new one from an issue",
+		Description: "\"Drawing\" in a description or comment puts one of your drawings in as a picture that stays up to date; clicking it opens it in Pocket Draw. \"New sketch\" starts one there."},
 	{ID: "ai", Name: "Pocket AI", Slug: "ai", Scopes: []string{"threads:write"},
 		Reason:      "Prepare Claude Code / Codex conversations about issues in the team's code folder",
 		Description: "\"Code with Pocket AI\" on an issue opens Pocket AI with the issue, the team's instructions and memory ready; you read the prompt and press send."},
@@ -211,6 +214,13 @@ func (s *Server) handleIntegrations(w http.ResponseWriter, r *http.Request) {
 		go func(app PocketApp, row map[string]any, mode string) {
 			defer wg.Done()
 			status, detail, public := "off", "", ""
+			// The app's address is known even while the link is off, so pages can
+			// still recognise its links (a drawing's picture shows a placeholder).
+			resolve := func() {
+				if res, err := s.core.Resolve(ctx, app.Slug); err == nil {
+					public = firstNonEmpty(res.PublicURL, res.URL)
+				}
+			}
 			switch mode {
 			case modeDirect:
 				status, public = "ok", st.IntegrationURLs[app.ID]
@@ -222,11 +232,14 @@ func (s *Server) handleIntegrations(w http.ResponseWriter, r *http.Request) {
 					status, detail = "error", "there is no Pocket Core on this box"
 				} else if on, reason := s.core.LinkOn(ctx, u.Email, app.Slug, app.Scopes...); on {
 					status = "ok"
-					if res, err := s.core.Resolve(ctx, app.Slug); err == nil {
-						public = firstNonEmpty(res.PublicURL, res.URL)
-					}
+					resolve()
 				} else {
 					status, detail = "error", firstNonEmpty(linkReason(app.Name, reason), reason)
+					resolve()
+				}
+			default:
+				if public = st.IntegrationURLs[app.ID]; public == "" && s.core.Configured() {
+					resolve()
 				}
 			}
 			mu.Lock()
