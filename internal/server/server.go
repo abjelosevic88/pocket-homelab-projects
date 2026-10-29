@@ -167,6 +167,7 @@ func (s *Server) Router() http.Handler {
 			s.aiRoutes(r)
 			s.codeRoutes(r)
 			s.deployRoutes(r)
+			s.deployServerRoutes(r)
 			s.prRoutes(r)
 			s.integrationRoutes(r)
 			s.slackRoutes(r)

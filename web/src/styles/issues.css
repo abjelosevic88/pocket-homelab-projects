@@ -583,3 +583,44 @@ button.ic-chip:hover { background: var(--hover); }
 .pr-comment-body { font-size: 13px; margin-top: 2px; max-height: 260px; overflow: auto; overflow-wrap: anywhere; }
 .pr-comment-body img { max-width: 100%; }
 @media (max-width: 640px) { .pr-details { padding-left: 12px; } .pr-sum { flex-wrap: wrap; row-gap: 2px; white-space: normal; } }
+
+/* team deploy server page (/team/:key/server) */
+.srv-body { flex: 1; min-height: 0; overflow: auto; padding: 20px 24px 48px; }
+.srv-body > * { max-width: 920px; margin-left: auto; margin-right: auto; }
+.srv-now { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; border-left: 3px solid var(--border-strong); }
+.srv-now.live { border-left-color: #16a34a; } .srv-now.running { border-left-color: #7c3aed; } .srv-now.other { border-left-color: #d97706; }
+.srv-now-top { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.srv-now.live .srv-now-top > svg { color: #16a34a; }
+.srv-now-top .spacer { flex: 1; }
+.srv-now-branch { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; font-size: 17px; font-weight: 650; }
+.srv-now-branch > svg { color: var(--muted); }
+.srv-now-branch .faint { font-size: 12.5px; font-weight: 500; }
+.srv-now-subject { font-size: 13.5px; color: var(--text-2); }
+.srv-now-meta { font-size: 12.5px; overflow-wrap: anywhere; }
+.srv-now-label { white-space: nowrap; }
+.srv-now-actions { display: flex; gap: 8px; margin-top: 4px; }
+.srv-log { border: 1px solid var(--hairline); border-radius: 8px; margin-top: 6px; }
+.srv-issue { display: inline-flex; align-items: center; gap: 5px; max-width: 280px; min-width: 0; height: 20px; padding: 0 7px; border-radius: 6px; font-size: 11.5px; font-weight: 500;
+  color: var(--text-2); background: color-mix(in srgb, var(--text) 6%, transparent); text-decoration: none; font-family: inherit; }
+.srv-issue b { font-weight: 650; white-space: nowrap; } .srv-issue:hover { color: var(--text); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.srv-search { display: flex; align-items: center; gap: 8px; padding: 0 10px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.srv-search input { flex: 1; height: 34px; }
+.srv-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.srv-branch .dp-branch, .srv-hist { cursor: pointer; }
+.srv-branch:first-child .dp-branch { border-top: 0; }
+.srv-branch .dp-branch:hover, .srv-hist:hover, .srv-branch.picked .dp-branch, .srv-hist.open { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.srv-deploy-btn { opacity: 0; } .srv-branch .dp-branch:hover .srv-deploy-btn, .srv-deploy-btn:focus-visible { opacity: 1; }
+@media (hover: none) { .srv-deploy-btn { opacity: 1; } }
+.srv-hist-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.srv-hist-line .mono.ellipsis { min-width: 0; flex-shrink: 1; }
+.srv-hist-line .faint { font-size: 11.5px; flex-shrink: 0; }
+.srv-hist-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.srv-hist-main small { font-size: 12px; }
+.srv-confirm { padding: 4px 12px 10px 36px; display: grid; gap: 8px; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.srv-confirm-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.srv-checking { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.srv-checking .spinner { width: 11px; height: 11px; }
+.srv-more { width: 100%; padding: 9px; border: 0; border-top: 1px solid var(--hairline); background: none; color: var(--accent-ink, var(--accent)); font: inherit; font-size: 12.5px; cursor: pointer; }
+.srv-more:hover { background: color-mix(in srgb, var(--text) 3%, transparent); }
+.sb-deploy.active { background: var(--surface-3); }
+@media (max-width: 640px) { .srv-url-text, .srv-deploy-btn { display: none; } .srv-now-branch { font-size: 15px; } .srv-body { padding: 12px 10px 40px; } .srv-confirm { padding-left: 12px; } .srv-issue { max-width: 180px; } }

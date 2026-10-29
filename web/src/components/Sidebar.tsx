@@ -1,7 +1,7 @@
 // Left column: new issue, inbox and my issues, the workspace pages,
 // favourites, and each team with its views — the Pocket Calendar sidebar.
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
 import { useAIActiveList } from '../lib/ai-active'
 import { useTeamDeploy } from '../lib/deploy-live'
@@ -32,10 +32,11 @@ function WithAIItem({ to, teamKey, onNavigate }: { to: string; teamKey: string; 
 }
 
 /** The team's deploy server (Team settings → Pocket AI → Deploy): which issue runs
- *  there now. A click opens that issue; the arrow opens the server's app. */
+ *  there now. A click opens the server page (branches, redeploy); the arrow opens the server's app. */
 function DeployItem({ teamKey, onNavigate }: { teamKey: string; onNavigate: () => void }) {
   const d = useTeamDeploy(teamKey)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   if (!d) return null
   // the feature: the issue's title when it came from an issue, else the branch
   const feature = d.ref ? `${d.ref} · ${d.title || d.branch}` : d.branch
@@ -43,10 +44,10 @@ function DeployItem({ teamKey, onNavigate }: { teamKey: string; onNavigate: () =
     : d.state === 'replaced' ? (d.now ? `${d.now.slice(0, 8)} — not from here` : 'replaced since') : 'nothing deployed yet'
   const tip = d.state === 'live' || d.state === 'running' ? `${d.host_name}${d.state === 'running' ? ' (deploying)' : ''}: ${d.ref ? d.ref + (d.title ? ' ' + d.title : '') + '\n' : ''}${d.branch} @ ${d.sha.slice(0, 8)}`
     : d.state === 'replaced' ? `${d.host_name}: ${d.branch} was deployed from here; something else runs there since` : `${d.host_name}: ${what}`
-  const openIssue = d.ref && (d.state === 'live' || d.state === 'running')
+  const page = `/team/${teamKey}/server`
   return (
-    <div className={`sb-nav-item sb-deploy ${d.state}`} role="link" tabIndex={0} title={tip}
-      onClick={() => { if (openIssue) { onNavigate(); navigate(`/issue/${d.ref}`) } else if (d.url) window.open(d.url, '_blank', 'noopener') }}
+    <div className={`sb-nav-item sb-deploy ${d.state} ${pathname.toLowerCase() === page.toLowerCase() ? 'active' : ''}`} role="link" tabIndex={0} title={tip}
+      onClick={() => { onNavigate(); navigate(page) }}
       onKeyDown={e => { if (e.key === 'Enter') (e.currentTarget as HTMLElement).click() }}>
       <span className="sb-ico"><Icon name="server" size={15} /></span>
       <span className="sb-deploy-text">

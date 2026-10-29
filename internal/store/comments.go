@@ -775,3 +775,35 @@ func (s *Store) DeleteWebhook(ctx context.Context, id int64) error {
 	_, err := s.DB.ExecContext(ctx, `DELETE FROM webhooks WHERE id = ?`, id)
 	return err
 }
+
+// BranchIssue is the issue a branch's pull request is attached to.
+type BranchIssue struct {
+	Identifier string `json:"identifier"`
+	Title      string `json:"title"`
+	PRURL      string `json:"pr_url,omitempty"`
+	PRState    string `json:"pr_state,omitempty"`
+}
+
+// TeamPRBranches maps the head branches of a team's pull request attachments
+// to their issues (the newest attachment wins a branch).
+func (s *Store) TeamPRBranches(ctx context.Context, teamID int64) (map[string]BranchIssue, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT t.key || '-' || i.number, i.title, a.url, a.state, COALESCE(json_extract(a.meta, '$.branch'), '')
+		FROM attachments a JOIN issues i ON i.id = a.issue_id JOIN teams t ON t.id = i.team_id
+		WHERE i.team_id = ? AND a.kind = 'pull_request' AND i.deleted_at IS NULL ORDER BY a.id`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]BranchIssue{}
+	for rows.Next() {
+		var b BranchIssue
+		var branch string
+		if err := rows.Scan(&b.Identifier, &b.Title, &b.PRURL, &b.PRState, &branch); err != nil {
+			return nil, err
+		}
+		if branch != "" {
+			out[branch] = b
+		}
+	}
+	return out, rows.Err()
+}

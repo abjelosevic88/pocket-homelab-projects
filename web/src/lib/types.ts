@@ -247,6 +247,47 @@ export interface DeployConfig { host_id: number; dir: string; run: string[]; url
 /** What deploying a branch would do (the project's check command); warn lines start with "!" there. */
 export interface DeployCheck { lines: { text: string; warn: boolean }[]; error?: string }
 
+/** An issue a branch belongs to (by pull request or by the identifier in its name). */
+export interface BranchIssue { identifier: string; title: string; pr_url?: string; pr_state?: string }
+
+/** A branch of the team's repository on the server page. */
+export interface ServerBranch {
+  branch: string
+  sha: string
+  local: boolean
+  remote: boolean
+  ahead: number // -1 = not on origin yet
+  behind: number
+  path?: string
+  subject: string
+  committed_at: string
+  issue?: BranchIssue
+}
+
+export type ServerRun = DeployRun & { by?: string; issue?: BranchIssue }
+
+/** The team's deploy server: what runs there, every branch, recent deploys. */
+export interface ServerInfo {
+  configured: boolean
+  detail?: string
+  project?: string
+  repo?: string
+  default?: string
+  host_name?: string
+  team_key?: string
+  config: DeployConfig
+  branches: ServerBranch[]
+  fetch_error?: string
+  latest?: ServerRun | null
+  current?: ServerRun | null
+  live?: { checked: boolean; now: string; live: boolean }
+  now?: { checked: boolean; now: string; branch?: string; error?: string; issue?: BranchIssue
+    info?: { branch?: string; sha?: string; subject?: string; deployed_at?: string; by?: string; ref?: string; ref_title?: string; ref_url?: string } }
+  now_commit?: { sha: string; subject: string; committed_at: string }
+  history: ServerRun[]
+  can_deploy?: boolean
+}
+
 export interface DeployInfo {
   configured: boolean
   detail?: string
