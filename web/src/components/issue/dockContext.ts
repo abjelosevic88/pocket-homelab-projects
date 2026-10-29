@@ -14,7 +14,6 @@ export async function contextItems(issue: IssueDetail): Promise<ContextItem[]> {
   const notes = await api.get<RelatedSection<{ id: string; title: string; folder: string }>>(`${V1}/issues/${issue.id}/notes`).catch(() => null)
   for (const n of notes?.status === 'ok' ? notes.items : []) out.push({ id: `note:${n.id}`, kind: 'note', title: n.title || 'Untitled', sub: n.folder })
   for (const a of issue.attachment_list) {
-    if (a.kind === 'ai_thread') continue
     if (a.kind === 'file') out.push({ id: `file:${a.id}`, kind: 'file', title: a.file_name || a.title, sub: a.size ? bytes(a.size) : undefined })
     else if (a.url) out.push({ id: `link:${a.id}`, kind: 'link', title: a.title || a.url, sub: LINK_KIND[a.kind] || a.subtitle })
   }

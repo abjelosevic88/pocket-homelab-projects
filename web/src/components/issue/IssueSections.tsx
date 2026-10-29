@@ -141,8 +141,8 @@ export function Relations({ issue, canEdit, onChanged, addRef }: { issue: IssueD
 
 // ---------- attachments ----------
 
-const ATT_ICON: Record<string, string> = { file: 'file', link: 'link', commit: 'git-commit', pull_request: 'git-pr', event: 'calendar', task: 'check-circle', note: 'note', review: 'review', document: 'file-text', file_link: 'file', ai_thread: 'sparkles' }
-const ATT_KIND: Record<string, string> = { commit: 'Commit', pull_request: 'Pull request', event: 'Pocket Calendar', task: 'Pocket Tasks', note: 'Pocket Notes', review: 'Review', document: 'Document', ai_thread: 'Pocket AI' }
+const ATT_ICON: Record<string, string> = { file: 'file', link: 'link', commit: 'git-commit', pull_request: 'git-pr', event: 'calendar', task: 'check-circle', note: 'note', review: 'review', document: 'file-text', file_link: 'file' }
+const ATT_KIND: Record<string, string> = { commit: 'Commit', pull_request: 'Pull request', event: 'Pocket Calendar', task: 'Pocket Tasks', note: 'Pocket Notes', review: 'Review', document: 'Document' }
 
 export function useUploader(issue: IssueDetail, onChanged: () => void) {
   const { toast } = useToast()
@@ -166,7 +166,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const [slack, setSlack] = useState<Attachment | null>(null)
   const prs = usePRDetails(issue)
   const [prOpen, setPrOpen] = useState<number | null>(null)
-  const list = issue.attachment_list.filter(a => a.kind !== 'ai_thread') // conversations are listed on their own
+  const list = issue.attachment_list
   const remove = async (a: Attachment) => { try { await api.del(`${V1}/attachments/${a.id}`); changed(issue); onChanged() } catch (e) { toast((e as Error).message, 'err') } }
   const addLink = async (url: string) => {
     setLink(false)

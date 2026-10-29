@@ -81,7 +81,7 @@ export interface Comment {
 }
 export interface Attachment {
   id: number; issue_id: number | null; project_id: number | null
-  kind: 'file' | 'link' | 'commit' | 'pull_request' | 'event' | 'task' | 'note' | 'review' | 'document' | 'file_link' | 'ai_thread'
+  kind: 'file' | 'link' | 'commit' | 'pull_request' | 'event' | 'task' | 'note' | 'review' | 'document' | 'file_link'
   title: string; subtitle: string; url: string; file_name: string; mime: string; size: number; ext_app: string; ext_id: string; state: string
   meta: Record<string, unknown>; created_by: number | null; created_at: string; updated_at: string
 }

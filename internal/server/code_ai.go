@@ -533,19 +533,19 @@ func (s *Server) handleIssueCode(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []codeThread{}
 	}
-	// keep the attachments' state and address in step
+	// keep the person's own records' state and address in step
 	for i, t := range list {
-		att, err := s.store.FindAttachment(ctx, is.ID, "ai", t.DraftID)
+		th, err := s.store.FindThread(ctx, is.ID, me(r), t.DraftID)
 		if err != nil {
 			continue
 		}
-		list[i].Action = strings.TrimPrefix(att.Title, "Pocket AI · ")
-		if att.State != t.Status || (t.URL != "" && att.URL != t.URL) {
-			att.State = t.Status
+		list[i].Action = th.Action
+		if th.State != t.Status || (t.URL != "" && th.URL != t.URL) {
+			th.State = t.Status
 			if t.URL != "" {
-				att.URL = t.URL
+				th.URL = t.URL
 			}
-			_ = s.store.SaveAttachment(ctx, att)
+			_ = s.store.SaveThread(ctx, th)
 		}
 	}
 	// PRs the agent opened are attached right away (people who may edit the issue)
@@ -717,19 +717,12 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	if draft.URL != "" && !strings.HasPrefix(draft.URL, "http") {
 		draft.URL = sb.public + draft.URL
 	}
-	if a.check(is.TeamID, needWrite) == nil {
-		uid := me(r)
-		label := codeActions[in.Action]
-		if in.Worktree {
-			label += " in a worktree"
-		}
-		att := &store.Attachment{IssueID: &is.ID, Kind: "ai_thread", Title: "Pocket AI · " + label, Subtitle: shortCwd(cwd),
-			URL: draft.URL, ExtApp: "ai", ExtID: draft.ID, State: "draft", CreatedBy: &uid}
-		if err := s.store.SaveAttachment(ctx, att); err == nil {
-			_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: &uid, Field: "ai_thread", ToValue: in.Action, ToLabel: att.Title})
-			s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}})
-		}
+	// the person's own record: not on the issue's attachments or activity, nobody else sees it
+	label := codeActions[in.Action]
+	if in.Worktree {
+		label += " in a worktree"
 	}
+	_ = s.store.SaveThread(ctx, &store.IssueThread{IssueID: is.ID, UserID: me(r), DraftID: draft.ID, Action: label, Cwd: shortCwd(cwd), URL: draft.URL, State: "draft"})
 	sent, skipped := 0, []string{} // skipped: files Pocket AI could not read (an archive, a scanned PDF…) or too large
 	for _, f := range draft.Files {
 		if f.OK {
@@ -815,8 +808,6 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 			ci.Files = append(ci.Files, f)
 			continue
 		case "commit", "pull_request":
-		case "ai_thread":
-			continue
 		default:
 			if att.URL != "" {
 				ci.Links = append(ci.Links, strings.TrimSpace(firstNonEmpty(att.Title, att.Kind)+" — "+att.URL))
@@ -961,16 +952,16 @@ func teamKeyOf(ident string) string {
 // handleCodeUnlink takes one of the person's conversations off the issue
 // ("Remove from issue"); it stays in Pocket AI.
 func (s *Server) handleCodeUnlink(w http.ResponseWriter, r *http.Request) {
-	s.codeConversationAction(w, r, http.MethodPost, "/unlink", "ai_thread_removed")
+	s.codeConversationAction(w, r, http.MethodPost, "/unlink")
 }
 
 // handleCodeDelete deletes one of the person's conversations in Pocket AI
 // (its agent stops if it is working).
 func (s *Server) handleCodeDelete(w http.ResponseWriter, r *http.Request) {
-	s.codeConversationAction(w, r, http.MethodDelete, "", "ai_thread_deleted")
+	s.codeConversationAction(w, r, http.MethodDelete, "")
 }
 
-func (s *Server) codeConversationAction(w http.ResponseWriter, r *http.Request, method, suffix, field string) {
+func (s *Server) codeConversationAction(w http.ResponseWriter, r *http.Request, method, suffix string) {
 	ctx := r.Context()
 	a := s.accessOf(r)
 	is, err := s.loadIssue(r, a, chi.URLParam(r, "ref"), needRead)
@@ -989,10 +980,8 @@ func (s *Server) codeConversationAction(w http.ResponseWriter, r *http.Request, 
 		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
 		return
 	}
-	if att, err := s.store.FindAttachment(ctx, is.ID, "ai", draft); err == nil {
-		_ = s.store.DeleteAttachment(ctx, att.ID)
-		_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorID: ptr(me(r)), Field: field, FromLabel: att.Title})
+	if th, err := s.store.FindThread(ctx, is.ID, me(r), draft); err == nil {
+		_ = s.store.DeleteThread(ctx, th.ID)
 	}
-	s.changed(r, "issue", []int64{is.TeamID}, is.ID)
 	w.WriteHeader(http.StatusNoContent)
 }

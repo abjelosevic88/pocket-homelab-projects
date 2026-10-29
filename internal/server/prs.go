@@ -176,19 +176,10 @@ func (s *Server) adoptPR(ctx context.Context, u *store.User, ident, prURL string
 // agentPRJob: every few minutes, for everyone who started a code conversation
 // in the last 30 days, attach the PRs those conversations opened.
 func (s *Server) agentPRJob(ctx context.Context) {
-	rows, err := s.store.DB.QueryContext(ctx, `SELECT DISTINCT created_by FROM attachments WHERE kind = 'ai_thread' AND created_by IS NOT NULL AND created_at > ?`,
-		time.Now().AddDate(0, 0, -30).UTC().Format(time.RFC3339))
+	ids, err := s.store.ThreadUsersSince(ctx, time.Now().AddDate(0, 0, -30).UTC().Format(time.RFC3339))
 	if err != nil {
 		return
 	}
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if rows.Scan(&id) == nil {
-			ids = append(ids, id)
-		}
-	}
-	rows.Close()
 	for _, id := range ids {
 		if u, err := s.store.GetUser(ctx, id); err == nil {
 			if n := s.adoptAgentPRs(ctx, u); n > 0 {

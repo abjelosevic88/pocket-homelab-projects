@@ -176,9 +176,6 @@ func (s *Server) dayWork(ctx context.Context, r *http.Request, uid int64, teams 
 			e.Kind, e.Text = "edit", "Edited the description"
 		case "attachment_added":
 			e.Kind, e.Text = "attachment", "Attached "+toL
-		case "ai_thread":
-			e.Kind, e.Text = "ai", "Pocket AI · "+firstNonEmpty(toL, toV)
-			e.Text = strings.Replace(e.Text, "Pocket AI · Pocket AI · ", "Pocket AI · ", 1)
 		case "git_commit", "git_pull_request":
 			continue // counted from the attachments below, with their links
 		case "label_added":
@@ -193,6 +190,14 @@ func (s *Server) dayWork(ctx context.Context, r *http.Request, uid int64, teams 
 		add(iid, true, e)
 	}
 	rows.Close()
+
+	// 1b. the person's own Pocket AI conversations
+	if threads, err := s.store.ThreadsOf(ctx, uid, from, to); err == nil {
+		for _, th := range threads {
+			hm, t := clock(th.CreatedAt)
+			add(th.IssueID, true, dayEvent{Time: hm, at: t, Kind: "ai", Text: "Pocket AI · " + th.Action})
+		}
+	}
 
 	// 2. comments
 	rows, err = s.store.DB.QueryContext(ctx, `SELECT issue_id, body, created_at FROM comments

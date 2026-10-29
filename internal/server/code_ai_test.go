@@ -264,6 +264,10 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if len(ai.actions) != 2 || ai.actions[0] != "POST /api/v1/link/threads/d1/unlink" || ai.actions[1] != "DELETE /api/v1/link/threads/d1" {
 		t.Fatalf("pocket ai calls: %v", ai.actions)
 	}
+	if _, err := s.store.FindThread(context.Background(), is.ID, alex.user.ID, "d1"); err == nil {
+		t.Fatal("removed conversation still on the issue")
+	}
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "chat"}, 201, nil) // a new one (the fake hands out d1 again)
 	// after a pull request: link it, comment, follow-ups — with the issue's numeric id, either way
 	for _, i := range []int{1, 2} {
 		sys := ai.drafts[i]["system"].(string)
@@ -293,9 +297,35 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if pr, err := s.store.FindAttachment(context.Background(), is.ID, "git", "https://github.com/acme/web/pull/100"); err != nil || pr.Kind != "pull_request" {
 		t.Fatalf("PR from the sweep: %+v %v", pr, err)
 	}
-	att, err := s.store.FindAttachment(context.Background(), is.ID, "ai", "d1")
-	if err != nil || att.Kind != "ai_thread" || att.State != "running" || att.URL != "https://ai.example/t/t1" {
-		t.Fatalf("attachment: %+v %v", att, err)
+	th, err := s.store.FindThread(context.Background(), is.ID, alex.user.ID, "d1")
+	if err != nil || th.State != "running" || th.URL != "https://ai.example/t/t1" {
+		t.Fatalf("thread: %+v %v", th, err)
+	}
+	// private: no trace on the shared issue, its attachments or its activity
+	var detail struct {
+		Attachments []store.Attachment `json:"attachment_list"`
+		History     []store.History    `json:"history"`
+	}
+	ben.do("GET", "/api/v1/issues/WEB-1", nil, 200, &detail)
+	for _, at := range detail.Attachments {
+		if at.Kind == "ai_thread" || at.ExtApp == "ai" {
+			t.Fatalf("conversation on the shared issue: %+v", at)
+		}
+	}
+	for _, hi := range detail.History {
+		if strings.HasPrefix(hi.Field, "ai_thread") {
+			t.Fatalf("conversation in the shared activity: %+v", hi)
+		}
+	}
+	// nor in someone else's list or their Pocket Day
+	if _, err := s.store.FindThread(context.Background(), is.ID, ben.user.ID, "d1"); err == nil {
+		t.Fatal("ben has alex's conversation")
+	}
+	if list, _ := s.store.ThreadsOf(context.Background(), ben.user.ID, "2000", "3000"); len(list) != 0 {
+		t.Fatalf("ben's threads: %+v", list)
+	}
+	if list, _ := s.store.ThreadsOf(context.Background(), alex.user.ID, "2000", "3000"); len(list) == 0 {
+		t.Fatal("alex's own threads missing")
 	}
 	if alex.status("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "deploy"}) != 400 {
 		t.Fatal("unknown action accepted")
