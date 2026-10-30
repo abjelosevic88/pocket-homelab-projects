@@ -356,6 +356,11 @@ type TimeEntry struct {
 	Note      string `json:"note"`
 	StartedAt string `json:"started_at"`
 	CreatedAt string `json:"created_at"`
+	// Source is the Pocket app that logged it ("" = here), ExternalID its id
+	// there; BeganAt when the time began (kept after a timer stops).
+	Source     string `json:"source"`
+	ExternalID string `json:"external_id"`
+	BeganAt    string `json:"began_at"`
 }
 
 // Notification is an entry of a person's inbox.

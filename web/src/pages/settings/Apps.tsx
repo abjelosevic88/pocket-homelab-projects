@@ -17,6 +17,12 @@ const META: Record<string, { icon: string; color: string; what: string }> = {
   notes: { icon: 'note', color: '#ca8a04', what: 'Notes that link to a project on its page, and “New note” prefilled with the project’s link.' },
   draw: { icon: 'draw', color: '#db2777', what: '“Drawing” in a description or comment puts in one of your sketches or diagrams as a picture that stays up to date; clicking it opens Pocket Draw. Start a new one from there too.' },
   ai: { icon: 'sparkles', color: '#7c3aed', what: '“Code with Pocket AI” on an issue: a Claude Code or Codex conversation in the team’s code folder, ready for you to send.' },
+  time: { icon: 'timer', color: '#0d9488', what: 'The timer on an issue is your one timer in Pocket Time: start it here and it runs there, stop it in either place. Starting another offers to stop the one running.' },
+}
+
+// Notes under a card: what else makes it work.
+const MORE: Record<string, string> = {
+  time: 'Pocket Time writes the finished time onto the issue. For that, Pocket Time → Projects (“Log time on issues”) is switched on in Pocket Core → Links too. Off here: the timer runs only in Projects, as before.',
 }
 
 interface AIStatus { ready: boolean; detail: string; model: string }
@@ -63,6 +69,12 @@ function AppCard({ app, connected, onList }: { app: Integration; connected: bool
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState(false)
   const [advanced, setAdvanced] = useState(app.mode === 'direct' || !connected)
+  const [test, setTest] = useState<{ ok: boolean; detail: string } | null>(null)
+  const [testing, setTesting] = useState(false)
+  const runTest = async () => {
+    setTesting(true); setTest(null)
+    try { setTest(await api.post<{ ok: boolean; detail: string }>(`${V1}/integrations/${app.id}/test`)) } catch (e) { setTest({ ok: false, detail: errMsg(e) }) } finally { setTesting(false) }
+  }
   useEffect(() => { setUrl(app.url || '') }, [app.url])
   const meta = META[app.id] || { icon: 'layers', color: '#64748b', what: '' }
 
@@ -70,6 +82,7 @@ function AppCard({ app, connected, onList }: { app: Integration; connected: bool
     setBusy(true)
     try {
       onList(await api.put<Integration[]>(`${V1}/integrations/${app.id}`, body))
+      setTest(null)
       if (app.id === 'draw') refreshDrawApp()
       if (ok) toast(ok)
       setToken('')
@@ -101,8 +114,11 @@ function AppCard({ app, connected, onList }: { app: Integration; connected: bool
       <div className="set-app-controls">
         <Segmented size="sm" label={`${app.name} connection`} value={mode} onChange={m => put({ mode: m })} options={modes} />
         {!advanced && mode !== 'direct' && <button type="button" className="link-btn small" onClick={() => setAdvanced(true)}>Advanced</button>}
+        {mode !== 'off' && <button type="button" className="btn sm" onClick={runTest} disabled={testing || busy}>{testing ? <Spinner size={10} /> : <Icon name="check" size={13} />}Test</button>}
         {app.scopes?.length ? <span className="faint xsmall">{app.scopes.join(' · ')}</span> : null}
       </div>
+      {test && <div className={`callout ${test.ok ? 'info' : 'danger'} small`}><Icon name={test.ok ? 'check' : 'alert'} size={14} /><span>{test.detail}</span></div>}
+      {MORE[app.id] && <div className="muted xsmall">{MORE[app.id]}</div>}
       {!connected && app.mode === 'core' && <NeedsCore what={`Pocket Core for ${app.name}`} />}
       {mode === 'direct' && (
         <div className="set-app-direct">

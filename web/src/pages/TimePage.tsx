@@ -9,12 +9,13 @@ import type { Issue, IssueRef, Person, TimeEntry } from '../lib/types'
 import { Icon } from '../components/icons'
 import { PersonAvatar, StatusIcon, personName } from '../components/issue-bits'
 import { keysBusy } from '../components/Layout'
+import { useTimerControl } from '../components/TimerControl'
+import { type Current, currentOf, elapsedSecs, useTick, useTimer } from '../lib/timer'
 import { type Anchor, Empty, Field, Loading, Modal, Popover, Switch, rectOf, useDebounce, useIsMobile, useToast } from '../components/ui'
 import '../styles/planning.css'
 
 interface Row extends TimeEntry { issue: IssueRef; person: Person }
 interface Sheet { from: string; to: string; entries: Row[]; total_minutes: number }
-interface Timer { running: boolean; entry?: TimeEntry; issue?: IssueRef }
 
 /** "90", "1h30", "1h 30m", "1.5h", "45m", "1:30" → minutes. */
 function parseDuration(v: string): number | null {
@@ -38,7 +39,9 @@ export default function TimePage() {
   const [everyone, setEveryone] = useState(() => localStorage.getItem('pp-time-everyone') === '1')
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const [err, setErr] = useState('')
-  const [timer, setTimer] = useState<Timer | null>(null)
+  const timer = useTimer()
+  const cur = currentOf(timer)
+  const control = useTimerControl()
   const [adding, setAdding] = useState<{ issue?: IssueRef; day?: string } | null>(null)
   const [editing, setEditing] = useState<Row | null>(null)
   const [cell, setCell] = useState<{ rows: Row[]; at: Anchor; issue: IssueRef; day: string } | null>(null)
@@ -48,7 +51,6 @@ export default function TimePage() {
 
   const load = useCallback(() => {
     api.get<Sheet>(`${V1}/time${qs({ from, to, user: everyone ? 'all' : undefined })}`).then(s => { setSheet(s); setErr('') }).catch(e => setErr((e as Error).message))
-    api.get<Timer>(`${V1}/timer`).then(setTimer).catch(() => {})
   }, [from, to, everyone])
   useEffect(() => { load() }, [load])
   useLive(load, ['issue', 'timer'])
@@ -68,12 +70,8 @@ export default function TimePage() {
 
   const entries = (sheet?.entries || []).filter(e => !(e.started_at && !e.minutes))
   const stop = async () => {
-    try {
-      const r = await api.post<{ entry?: TimeEntry }>(`${V1}/timer/stop`, {})
-      emitChange({ kind: 'timer' })
-      toast(r.entry ? `Logged ${fmtMinutes(r.entry.minutes)}` : 'Timer stopped')
-      load(); app.reload().catch(() => {})
-    } catch (e) { toast((e as Error).message, 'err') }
+    await control.stop(cur)
+    load(); app.reload().catch(() => {})
   }
   const csv = `${V1}/time${qs({ from, to, user: everyone ? 'all' : undefined, format: 'csv' })}`
   const thisWeek = days.includes(today())
@@ -95,7 +93,8 @@ export default function TimePage() {
         </span>
       </div>
       <div className="pl-wrap">
-        {timer?.running && timer.entry && <TimerCard t={timer} onStop={stop} />}
+        {cur && <TimerCard cur={cur} shared={!!timer?.shared} onStop={stop} busy={control.busy} />}
+        {timer?.shared && timer.time_error && <div className="callout warn small"><Icon name="info" size={14} /><span>{timer.time_error}</span></div>}
         {err && <div className="callout danger">{err}</div>}
         {!sheet && !err && <Loading />}
         {sheet && <>
@@ -130,22 +129,23 @@ export default function TimePage() {
   )
 }
 
-function TimerCard({ t, onStop }: { t: Timer; onStop: () => void }) {
+function TimerCard({ cur, shared, onStop, busy }: { cur: Current; shared: boolean; onStop: () => void; busy: boolean }) {
   const app = useApp()
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => { const i = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(i) }, [])
-  const started = new Date(t.entry!.started_at).getTime()
-  const secs = Math.max(0, Math.floor((now - started) / 1000) + (t.entry!.minutes || 0) * 60)
+  const now = useTick(true, 1000)
+  const secs = elapsedSecs(cur, now)
+  const issue = cur.elsewhere ? undefined : cur.issue
   const clock = `${Math.floor(secs / 3600)}:${String(Math.floor(secs / 60) % 60).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`
   return (
     <div className="card tm-timer" data-pocket-ask>
       <span className="rec-dot" />
       <div className="grow">
-        <div className="muted small">Timer running</div>
-        {t.issue ? <Link to={`/issue/${t.issue.identifier}`} className="tm-timer-issue"><StatusIcon state={app.state(t.issue.state_id)} type={t.issue.state_type} /><span className="ident">{t.issue.identifier}</span><span className="ellipsis">{t.issue.title}</span></Link> : <span>An issue</span>}
+        <div className="muted small">{shared ? <>Timer running in Pocket Time{cur.startedIn && !['Pocket Time', 'Pocket Projects'].includes(cur.startedIn) ? ` · started in ${cur.startedIn}` : ''}</> : 'Timer running'}</div>
+        {issue ? <Link to={`/issue/${issue.identifier}`} className="tm-timer-issue"><StatusIcon state={app.state(issue.state_id)} type={issue.state_type} /><span className="ident">{issue.identifier}</span><span className="ellipsis">{issue.title}</span></Link>
+          : cur.url ? <a href={cur.url} target="_blank" rel="noreferrer" className="tm-timer-issue"><span className="ellipsis">{cur.name}</span><Icon name="external" size={12} /></a>
+            : <span>{cur.name}</span>}
       </div>
       <span className="tm-clock tnum">{clock}</span>
-      <button type="button" className="btn sm danger" onClick={onStop}><Icon name="stop" size={12} fill />Stop</button>
+      <button type="button" className="btn sm danger" onClick={onStop} disabled={busy}><Icon name="stop" size={12} fill />Stop</button>
     </div>
   )
 }

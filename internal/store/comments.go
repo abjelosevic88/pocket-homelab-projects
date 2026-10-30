@@ -285,7 +285,7 @@ func (s *Store) TimeEntriesBetween(ctx context.Context, teamIDs []int64, userID 
 }
 
 func (s *Store) timeWhere(ctx context.Context, where string, args ...any) ([]TimeEntry, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id, issue_id, user_id, spent_on, minutes, note, started_at, created_at FROM time_entries WHERE `+where+` ORDER BY spent_on DESC, id DESC`, args...)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id, issue_id, user_id, spent_on, minutes, note, started_at, created_at, source, external_id, began_at FROM time_entries WHERE `+where+` ORDER BY spent_on DESC, id DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (s *Store) timeWhere(ctx context.Context, where string, args ...any) ([]Tim
 	out := []TimeEntry{}
 	for rows.Next() {
 		var t TimeEntry
-		if err := rows.Scan(&t.ID, &t.IssueID, &t.UserID, &t.SpentOn, &t.Minutes, &t.Note, &t.StartedAt, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.IssueID, &t.UserID, &t.SpentOn, &t.Minutes, &t.Note, &t.StartedAt, &t.CreatedAt, &t.Source, &t.ExternalID, &t.BeganAt); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -304,16 +304,16 @@ func (s *Store) timeWhere(ctx context.Context, where string, args ...any) ([]Tim
 // GetTimeEntry loads one time entry.
 func (s *Store) GetTimeEntry(ctx context.Context, id int64) (*TimeEntry, error) {
 	var t TimeEntry
-	err := s.DB.QueryRowContext(ctx, `SELECT id, issue_id, user_id, spent_on, minutes, note, started_at, created_at FROM time_entries WHERE id = ?`, id).
-		Scan(&t.ID, &t.IssueID, &t.UserID, &t.SpentOn, &t.Minutes, &t.Note, &t.StartedAt, &t.CreatedAt)
+	err := s.DB.QueryRowContext(ctx, `SELECT id, issue_id, user_id, spent_on, minutes, note, started_at, created_at, source, external_id, began_at FROM time_entries WHERE id = ?`, id).
+		Scan(&t.ID, &t.IssueID, &t.UserID, &t.SpentOn, &t.Minutes, &t.Note, &t.StartedAt, &t.CreatedAt, &t.Source, &t.ExternalID, &t.BeganAt)
 	return &t, notFound(err)
 }
 
 // SaveTimeEntry creates or updates a time entry.
 func (s *Store) SaveTimeEntry(ctx context.Context, t *TimeEntry) error {
 	if t.ID == 0 {
-		res, err := s.DB.ExecContext(ctx, `INSERT INTO time_entries (issue_id, user_id, spent_on, minutes, note, started_at) VALUES (?, ?, ?, ?, ?, ?)`,
-			t.IssueID, t.UserID, t.SpentOn, t.Minutes, t.Note, t.StartedAt)
+		res, err := s.DB.ExecContext(ctx, `INSERT INTO time_entries (issue_id, user_id, spent_on, minutes, note, started_at, source, external_id, began_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			t.IssueID, t.UserID, t.SpentOn, t.Minutes, t.Note, t.StartedAt, t.Source, t.ExternalID, t.BeganAt)
 		if err != nil {
 			return err
 		}
@@ -321,8 +321,45 @@ func (s *Store) SaveTimeEntry(ctx context.Context, t *TimeEntry) error {
 		t.CreatedAt = Now()
 		return nil
 	}
-	_, err := s.DB.ExecContext(ctx, `UPDATE time_entries SET spent_on = ?, minutes = ?, note = ?, started_at = ? WHERE id = ?`, t.SpentOn, t.Minutes, t.Note, t.StartedAt, t.ID)
+	_, err := s.DB.ExecContext(ctx, `UPDATE time_entries SET issue_id = ?, spent_on = ?, minutes = ?, note = ?, started_at = ?, began_at = ? WHERE id = ?`,
+		t.IssueID, t.SpentOn, t.Minutes, t.Note, t.StartedAt, t.BeganAt, t.ID)
 	return err
+}
+
+// TimeEntryByExternal finds a person's entry that an app logged under its own id.
+func (s *Store) TimeEntryByExternal(ctx context.Context, userID int64, source, externalID string) (*TimeEntry, error) {
+	list, err := s.timeWhere(ctx, `user_id = ? AND source = ? AND external_id = ?`, userID, source, externalID)
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, ErrNotFound
+	}
+	return &list[0], nil
+}
+
+// FinishedTimeOf lists a person's own finished time (no running timer) in a
+// date range, on issues not in the trash.
+func (s *Store) FinishedTimeOf(ctx context.Context, userID int64, from, to string) ([]TimeEntry, error) {
+	return s.timeWhere(ctx, `user_id = ? AND started_at = '' AND spent_on >= ? AND spent_on <= ?
+		AND issue_id IN (SELECT id FROM issues WHERE deleted_at IS NULL)`, userID, from, to)
+}
+
+// RecentTimeIssues lists the issues a person logged time on lately, most recent first.
+func (s *Store) RecentTimeIssues(ctx context.Context, userID int64, limit int) []int64 {
+	rows, err := s.DB.QueryContext(ctx, `SELECT issue_id FROM time_entries WHERE user_id = ? GROUP BY issue_id ORDER BY MAX(id) DESC LIMIT ?`, userID, limit)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if rows.Scan(&id) == nil {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // DeleteTimeEntry removes a time entry.

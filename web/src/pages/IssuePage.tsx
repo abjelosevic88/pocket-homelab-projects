@@ -20,6 +20,8 @@ import { keysBusy } from '../components/Layout'
 import { Select } from '../components/Select'
 import { type Anchor, type MenuItem, Empty, Field, Loading, Menu, Modal, copyText, rectOf, useIsMobile, useToast } from '../components/ui'
 import { IssueSearchPicker } from '../components/issues/IssueSearch'
+import { useTimerControl } from '../components/TimerControl'
+import { currentOf, elapsedSecs, useTick, useTimer } from '../lib/timer'
 import { IssueActivity, type ActivityHandle } from '../components/issue/IssueActivity'
 import { Attachments, Contacts, IssueNotes, Relations, SharedNotes, SubIssues, useUploader } from '../components/issue/IssueSections'
 import { sharedNoteURL } from './SharedNotePage'
@@ -371,31 +373,41 @@ function SideExtras({ issue, code, canEdit, onChanged, onSchedule, onTask, copy 
   const [dur, setDur] = useState('')
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [taskMenu, setTaskMenu] = useState<Anchor | null>(null)
-  const [, tick] = useState(0)
-  const timer = app.boot?.timer
-  const running = !!timer && timer.issue_id === issue.id && !!timer.started_at
+  const timer = useTimer()
+  const cur = currentOf(timer)
+  const running = !!cur && cur.issue?.id === issue.id
+  // Pocket Time's timer for something else (another issue, another app)
+  const other = timer?.shared && cur && !running ? cur : null
+  const control = useTimerControl()
+  const now = useTick(!!cur)
   useEffect(() => { api.get<{ entries: TimeEntry[] }>(`${V1}/issues/${issue.id}/time`).then(r => setEntries(r.entries || [])).catch(() => {}) }, [issue.id, issue.time_minutes])
-  useEffect(() => { if (!running) return; const t = window.setInterval(() => tick(x => x + 1), 30000); return () => window.clearInterval(t) }, [running])
   const log = async () => {
     const m = parseMinutes(dur)
     if (!m) { toast('Write the time like 1h30m, 45m or 90', 'err'); return }
     try { await api.post(`${V1}/issues/${issue.id}/time`, { duration: dur }); setDur(''); toast(`Logged ${fmtMinutes(m)}`); onChanged() } catch (e) { toast((e as Error).message, 'err') }
   }
   const startStop = async () => {
-    try {
-      if (running) { await api.post(`${V1}/timer/stop`, {}); toast('Timer stopped') } else { await api.post(`${V1}/issues/${issue.id}/timer`, {}); toast('Timer started') }
-      await app.reload(); onChanged()
-    } catch (e) { toast((e as Error).message, 'err') }
+    if (running) await control.stop(cur)
+    else await control.start(issue)
+    app.reload().catch(() => {}); onChanged()
   }
-  const elapsed = running ? Math.max(0, Math.round((Date.now() - new Date(timer!.started_at).getTime()) / 60000)) : 0
+  const elapsed = running && cur ? Math.round(elapsedSecs(cur, now) / 60) : 0
   const mine = entries.filter(e => !e.started_at).slice(0, 3)
   return (
     <>
       <div className="ip-side-sec">
         <h4><Icon name="timer" size={13} />Time</h4>
         <div className="row"><span className="time-total">{fmtMinutes(issue.time_minutes) || '0 min'}</span><span className="spacer" />
-          {canEdit && <button type="button" className={`btn sm ${running ? 'danger' : ''}`} onClick={startStop}><Icon name={running ? 'stop' : 'play'} size={13} />{running ? 'Stop' : 'Start timer'}</button>}</div>
-        {running && <div className="timer-run"><span className="rec-dot" />Running · {fmtMinutes(elapsed) || 'just started'}</div>}
+          {canEdit && <button type="button" className={`btn sm ${running ? 'danger' : ''}`} onClick={startStop} disabled={control.busy}
+            title={timer?.shared ? 'The same timer as in Pocket Time' : undefined}><Icon name={running ? 'stop' : 'play'} size={13} />{running ? 'Stop' : 'Start timer'}</button>}</div>
+        {running && <div className="timer-run"><span className="rec-dot" />Running · {fmtMinutes(elapsed) || 'just started'}{timer?.shared && <span className="muted xsmall" style={{ fontWeight: 400 }}>· in Pocket Time too</span>}</div>}
+        {other && <div className="xsmall muted timer-other">
+          <span className="rec-dot" />
+          <span className="grow ellipsis" title={other.startedIn ? `Started in ${other.startedIn}` : undefined}>Timer running in Pocket Time: {other.issue && !other.elsewhere ? <Link to={`/issue/${other.issue.identifier}`}>{other.name}</Link> : other.name}{other.startedIn && !['Pocket Time', 'Pocket Projects'].includes(other.startedIn) ? ` (${other.startedIn})` : ''} · {fmtMinutes(Math.round(elapsedSecs(other, now) / 60)) || 'just started'}</span>
+          <button type="button" className="link-btn xsmall" onClick={() => control.stop(other)} disabled={control.busy}>Stop</button>
+        </div>}
+        {timer?.shared && timer.time_error && <div className="xsmall danger-text">{timer.time_error}</div>}
+        {control.dialog}
         {canEdit && <form className="time-form" onSubmit={e => { e.preventDefault(); log() }}>
           <input value={dur} onChange={e => setDur(e.target.value)} placeholder="Log time, e.g. 1h30m" aria-label="Time to log" />
           <button type="submit" className="btn sm" disabled={!dur.trim()}>Log</button>

@@ -71,6 +71,9 @@
 - **Pocket Contacts**: stakeholders and clients from your address book; their contact page lists their projects.
 - **Pocket Tasks**: put an issue on your personal to-do list; finishing the issue ticks it off.
 - **Pocket Notes**: notes that link to a project, one click to write a new one.
+- **Pocket Time**: the timer on an issue is your one timer in Pocket Time: start it here and it runs there, stop it
+  in either place; starting another offers to stop the one running. Pocket Time shows the time you log here and
+  writes the finished time back onto the issue (the `worklog:read|write` offer).
 - **Pocket Draw**: put a sketch or diagram in a description or comment; it shows as a picture that stays up to
   date and opens in Pocket Draw, and the drawing there lists the issues and projects it is used in.
 - **Pocket AI**: write a description, break an issue into sub-issues, summarise a long thread, draft the weekly

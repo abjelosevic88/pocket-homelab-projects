@@ -13,6 +13,7 @@ import { ProjectMark, StatusIcon } from './issue-bits'
 import { TeamMark } from './pickers'
 import { openCreateIssue } from './CreateIssue'
 import { type Anchor, type MenuItem, Menu, rectOf } from './ui'
+import { currentOf, elapsedSecs, useTick, useTimer } from '../lib/timer'
 
 export function useFold(key: string, def = true) {
   const [open, setOpen] = useState(() => { const v = localStorage.getItem(key); return v === null ? def : v === '1' })
@@ -200,12 +201,16 @@ function TeamGroup({ team, onNavigate }: { team: Team; onNavigate: () => void })
   )
 }
 
+// The running timer: the local one, or with Pocket Time connected the
+// person's one timer there (also when started in another app).
 function TimerPill() {
-  const app = useApp()
-  const t = app.boot?.timer
-  const [, tick] = useState(0)
-  useEffect(() => { if (!t) return; const i = window.setInterval(() => tick(x => x + 1), 30000); return () => window.clearInterval(i) }, [t])
-  if (!t || !t.started_at) return null
-  const mins = Math.max(0, Math.round((Date.now() - new Date(t.started_at).getTime()) / 60000)) + t.minutes
-  return <Link to={`/issue/${t.issue_id}`} className="timer-pill"><span className="rec-dot" /><Icon name="timer" size={14} />Timer running<span className="spacer" /><b>{Math.floor(mins / 60)}:{String(mins % 60).padStart(2, '0')}</b></Link>
+  const t = useTimer()
+  const cur = currentOf(t)
+  const now = useTick(!!cur)
+  if (!cur) return null
+  const mins = Math.round(elapsedSecs(cur, now) / 60)
+  const inner = <><span className="rec-dot" /><Icon name="timer" size={14} /><span className="ellipsis">{cur.elsewhere ? 'Pocket Time' : 'Timer running'}</span><span className="spacer" /><b>{Math.floor(mins / 60)}:{String(mins % 60).padStart(2, '0')}</b></>
+  if (cur.issue && !cur.elsewhere) return <Link to={`/issue/${cur.issue.identifier}`} className="timer-pill" title={cur.name}>{inner}</Link>
+  if (cur.url) return <a href={cur.url} target="_blank" rel="noreferrer" className="timer-pill" title={`${cur.name}${cur.startedIn ? ` — started in ${cur.startedIn}` : ''}`}>{inner}</a>
+  return <Link to="/time" className="timer-pill" title={cur.name}>{inner}</Link>
 }

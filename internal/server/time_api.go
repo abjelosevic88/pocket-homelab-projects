@@ -108,15 +108,13 @@ func (s *Server) handleLogTime(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, t)
 }
 
+// handleTimer answers the person's timer: Pocket Time's when shared
+// (time_link.go), else the local one.
 func (s *Server) handleTimer(w http.ResponseWriter, r *http.Request) {
-	t := s.store.RunningTimer(r.Context(), me(r))
-	if t == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"running": false})
+	if s.timerShared(w, r) {
 		return
 	}
-	refs, _ := s.store.IssueRefs(r.Context(), []int64{t.IssueID})
-	ref := refs[t.IssueID]
-	writeJSON(w, http.StatusOK, map[string]any{"running": true, "entry": t, "issue": ref})
+	writeJSON(w, http.StatusOK, s.localTimerView(r.Context(), me(r)))
 }
 
 func (s *Server) handleStartTimer(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +123,9 @@ func (s *Server) handleStartTimer(w http.ResponseWriter, r *http.Request) {
 	is, err := s.loadIssue(r, a, chi.URLParam(r, "ref"), needWrite)
 	if err != nil {
 		s.fail(w, err, "issue")
+		return
+	}
+	if s.startShared(w, r, is) {
 		return
 	}
 	if cur := s.store.RunningTimer(ctx, a.uid); cur != nil {
@@ -136,12 +137,17 @@ func (s *Server) handleStartTimer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.send(ctx, change{Kind: "timer", users: []int64{a.uid}})
-	s.handleTimer(w, r)
+	view := s.localTimerView(ctx, a.uid)
+	view["shared"] = false
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (s *Server) stopTimer(r *http.Request, t *store.TimeEntry) {
 	started := store.ParseTime(t.StartedAt)
 	t.Minutes += max(1, int(time.Since(started).Minutes()+.5))
+	if t.BeganAt == "" {
+		t.BeganAt = t.StartedAt
+	}
 	t.StartedAt = ""
 	_ = s.store.SaveTimeEntry(r.Context(), t)
 	if is, err := s.store.GetIssue(r.Context(), t.IssueID, 0); err == nil {
@@ -150,6 +156,9 @@ func (s *Server) stopTimer(r *http.Request, t *store.TimeEntry) {
 }
 
 func (s *Server) handleStopTimer(w http.ResponseWriter, r *http.Request) {
+	if s.stopShared(w, r) {
+		return
+	}
 	t := s.store.RunningTimer(r.Context(), me(r))
 	if t == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"running": false})

@@ -28,7 +28,7 @@ const TABS: { id: TabId; label: string; icon: string; sub: string; admin?: boole
   { id: 'profile', label: 'Profile', icon: 'user', sub: 'Your name, email, @name, colour and password.' },
   { id: 'preferences', label: 'Preferences', icon: 'sliders', sub: 'Theme, density, time zone and where the app opens.' },
   { id: 'notifications', label: 'Notifications', icon: 'bell', sub: 'What reaches your phone, and where it is sent.' },
-  { id: 'apps', label: 'Apps & AI', icon: 'grid', sub: 'Pocket Calendar, Contacts, Tasks, Notes and Pocket AI.' },
+  { id: 'apps', label: 'Apps & AI', icon: 'grid', sub: 'Pocket Calendar, Contacts, Tasks, Notes, Time and Pocket AI.' },
   { id: 'connections', label: 'Connected instances', icon: 'globe', sub: 'Teams of another Pocket Projects, opened here with your token there.' },
   { id: 'feed', label: 'Calendar feed', icon: 'rss', sub: 'Your due dates, milestones and project targets in any calendar app.' },
   { id: 'tokens', label: 'API tokens', icon: 'key', sub: 'Personal tokens for scripts and other tools.' },
