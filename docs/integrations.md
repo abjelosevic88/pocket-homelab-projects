@@ -24,7 +24,11 @@ Codex connected to Core), using the person's own permissions; writes pause for a
 `pocket_projects_create_issue`, `pocket_projects_update_issue`, `pocket_projects_comment`, `pocket_projects_projects`,
 `pocket_projects_get_project`, `pocket_projects_create_project`, `pocket_projects_post_update`,
 `pocket_projects_cycles`, `pocket_projects_calendar`, `pocket_projects_search`, `pocket_projects_inbox`,
-`pocket_projects_remember` (adds one line to a team's AI memory), `pocket_projects_workspaces` (your connected instances).
+`pocket_projects_remember` (adds one line to a team's AI memory), `pocket_projects_workspaces` (your connected instances),
+`pocket_projects_shared_notes`, `pocket_projects_get_shared_note`, `pocket_projects_create_shared_note`,
+`pocket_projects_update_shared_note` (needs `base` = the `updated_at` read, so a teammate's save is never overwritten
+blind) and `pocket_projects_share_note` (copies one of your Pocket Notes onto the issue for the team; the one sharing
+tool Core allows, approved per call). No tool deletes a shared note.
 
 Every `pocket_projects_*` tool takes an optional `workspace` (an id from `pocket_projects_workspaces`): Core then
 calls `/r/{workspace}/api/v1/…` here, which passes it on to that connected Pocket Projects with your token there, so

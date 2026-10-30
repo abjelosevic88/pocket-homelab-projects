@@ -113,7 +113,8 @@ func TestConnectedInstance(t *testing.T) {
 	text, _ := d["text"].(string)
 	if d["ref"] != host+"/ATH-1" || d["cwd"] != "~/Projects/athena" || d["mode"] != "plan" || !strings.Contains(sys, "another Pocket Projects instance") ||
 		!strings.Contains(sys, "ATHENA-RULES") || !strings.Contains(sys, fmt.Sprintf("pocket_projects_link_pr with id %d, workspace %d", is.ID, rem.ID)) ||
-		!strings.Contains(sys, fmt.Sprintf("Pass workspace %d to every pocket_projects_* tool", rem.ID)) || !strings.Contains(text, "Pilot setup") || !strings.Contains(text, "### Shared notes") {
+		!strings.Contains(sys, fmt.Sprintf("Pass workspace %d to every pocket_projects_* tool", rem.ID)) ||
+		!strings.Contains(sys, fmt.Sprintf("pocket_projects_share_note copies one of their notes there (id %d, note = its Pocket Notes id, workspace %d", is.ID, rem.ID)) || !strings.Contains(text, "Pilot setup") || !strings.Contains(text, "### Shared notes") {
 		t.Fatalf("draft: %+v", d)
 	}
 	if _, err := sA.store.FindRemoteThread(context.Background(), rem.ID, "ATH-1", "d1"); err != nil {
