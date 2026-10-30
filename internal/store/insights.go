@@ -8,7 +8,7 @@ import (
 
 // SearchHit is one result of the global search.
 type SearchHit struct {
-	Kind      string `json:"kind"` // issue | project | doc | shared_note | comment
+	Kind      string `json:"kind"` // issue | project | doc | shared_note | team_note | team_drawing | comment
 	ID        int64  `json:"id"`
 	IssueID   int64  `json:"issue_id,omitempty"`
 	ProjectID int64  `json:"project_id,omitempty"`
@@ -60,6 +60,24 @@ func (s *Store) Search(ctx context.Context, teamIDs []int64, q string, limit int
 			return nil, err
 		}
 		h.Kind = "shared_note"
+		out = append(out, h)
+	}
+	rows.Close()
+	rows, err = s.DB.QueryContext(ctx, `SELECT d.id, d.kind, t.key, d.title, snippet(team_items_fts, 1, '', '', '…', 12) FROM team_items_fts
+		JOIN team_items d ON d.id = team_items_fts.rowid JOIN teams t ON t.id = d.team_id
+		WHERE team_items_fts MATCH ? AND d.team_id IN (`+tq+`) ORDER BY rank LIMIT ?`,
+		append(append([]any{m}, targs...), limit)...)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var h SearchHit
+		var kind string
+		if err := rows.Scan(&h.ID, &kind, &h.Ident, &h.Title, &h.Snippet); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		h.Kind = "team_" + kind // the team's shared space; identifier = the team's key
 		out = append(out, h)
 	}
 	rows.Close()

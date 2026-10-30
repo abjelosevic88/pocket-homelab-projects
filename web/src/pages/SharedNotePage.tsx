@@ -1,7 +1,9 @@
-// A shared note on an issue: title + Markdown that the whole team sees and
-// edits, saved as you type. Also the panel beside the issue (embed: just the
-// note, no app chrome). Saves carry the version they started from: when
-// someone else saved in between, nothing is overwritten and the page asks.
+// A shared note on an issue, or in a team's shared space (/team/:key/shared/:id):
+// title + Markdown that the whole team sees and edits, saved as you type.
+// Also the panel beside the issue (embed: just the note, no app chrome).
+// Saves carry the version they started from: when someone else saved in
+// between, nothing is overwritten and the page asks. A drawing of the team's
+// space has its own page (SharedDrawing).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import '../styles/projects-ui.css'
@@ -9,19 +11,23 @@ import { api, ApiError, appURL, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { ago, stamp } from '../lib/format'
 import { Markdown } from '../lib/markdown'
-import type { SharedNote } from '../lib/types'
+import type { SharedNote, TeamItem } from '../lib/types'
 import { Icon } from '../components/icons'
 import { personName } from '../components/issue-bits'
 import { MarkdownEditor } from '../components/MarkdownEditor'
 import { Confirm, copyText, Empty, Loading, type MenuItem, MenuButton, Segmented, useToast } from '../components/ui'
+import { SharedDrawing, teamItemURL } from './TeamShared'
 
-type Loaded = SharedNote & { identifier: string; issue_title: string; team_id: number; can_edit: boolean }
+/** An issue's shared note (identifier, issue_title) or an item of a team's space (team_key, team_name, kind). */
+type Loaded = Omit<SharedNote, 'issue_id' | 'source_note'> & Partial<Pick<SharedNote, 'issue_id' | 'source_note'>> & Partial<Omit<TeamItem, keyof SharedNote>> & {
+  team_id: number; can_edit: boolean; identifier?: string; issue_title?: string; team_key?: string; team_name?: string; mine?: boolean
+}
 
 /** The page's address for a shared note (the panel shows it under /embed). */
 export const sharedNoteURL = (ident: string, id: number) => `/issue/${ident}/shared/${id}`
 
 export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
-  const { ref, id } = useParams()
+  const { ref, id, key } = useParams()
   const [search, setSearch] = useSearchParams()
   const app = useApp()
   const navigate = useNavigate()
@@ -32,12 +38,12 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
   const [body, setBody] = useState('')
   const [mode, setMode] = useState<'edit' | 'preview'>('preview')
   const [state, setState] = useState<'' | 'saving' | 'saved' | 'error'>('')
-  const [conflict, setConflict] = useState<{ msg: string; theirs: SharedNote } | null>(null)
+  const [conflict, setConflict] = useState<{ msg: string; theirs: Loaded } | null>(null)
   const [confirm, setConfirm] = useState(false)
   const saved = useRef<{ title: string; body: string; base: string }>({ title: '', body: '', base: '' })
   const timer = useRef(0)
   const titleRef = useRef<HTMLInputElement>(null)
-  const url = `${V1}/issues/${ref}/shared-notes/${id}`
+  const url = key ? `${V1}/teams/${key}/shared/${id}` : `${V1}/issues/${ref}/shared-notes/${id}`
 
   useEffect(() => {
     let live = true
@@ -46,7 +52,7 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
       if (!live) return
       setNote(n); setTitle(n.title); setBody(n.body || ''); saved.current = { title: n.title, body: n.body || '', base: n.updated_at }
       // just made (or never written): straight to typing the title
-      const fresh = search.get('new') === '1' || (n.title === 'Untitled' && !(n.body || '').trim())
+      const fresh = n.kind !== 'drawing' && (search.get('new') === '1' || (n.title === 'Untitled' && !(n.body || '').trim()))
       setMode(n.can_edit && (fresh || !(n.body || '').trim()) ? 'edit' : 'preview')
       if (fresh && n.can_edit) { if (search.has('new')) { search.delete('new'); setSearch(search, { replace: true }) } requestAnimationFrame(() => titleRef.current?.select()) }
     }).catch(e => live && setErr({ status: (e as ApiError).status || 0, msg: (e as Error).message }))
@@ -62,14 +68,14 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
     if (!Object.keys(patch).length) return
     setState('saving')
     try {
-      const n = await api.patch<SharedNote>(url, { ...patch, base: saved.current.base, force })
+      const n = await api.patch<Loaded>(url, { ...patch, base: saved.current.base, force })
       saved.current = { title: n.title, body: n.body ?? saved.current.body, base: n.updated_at }
       setNote(cur => cur && { ...cur, ...n })
       if (embed && patch.title) window.parent.postMessage({ type: 'pocket-projects-shared', id: n.id, title: n.title }, location.origin)
       setState('saved')
     } catch (e) {
       const ae = e as ApiError
-      if (ae.status === 409 && ae.data?.note) { setState(''); setConflict({ msg: ae.message, theirs: ae.data.note as SharedNote }); return }
+      if (ae.status === 409 && ae.data?.note) { setState(''); setConflict({ msg: ae.message, theirs: ae.data.note as Loaded }); return }
       setState('error'); toast(ae.message, 'err')
     }
   }, [note, conflict, url, toast, embed])
@@ -93,22 +99,24 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
     return () => {
       window.removeEventListener('beforeunload', h)
       const p = pending.current
-      if (note && (p.body !== saved.current.body || p.title.trim() !== saved.current.title)) api.patch(url, { title: p.title.trim() || 'Untitled', body: p.body, base: saved.current.base }).catch(() => {})
+      if (note && note.kind !== 'drawing' && (p.body !== saved.current.body || p.title.trim() !== saved.current.title)) api.patch(url, { title: p.title.trim() || 'Untitled', body: p.body, base: saved.current.base }).catch(() => {})
     }
   }, [note, url])
 
-  if (err) return <div className={embed ? 'shared-embed' : 'page'}><Empty title={err.status === 404 ? 'Shared note not found' : 'Could not open the shared note'} icon="users">{err.status === 404 ? 'It may have been deleted.' : err.msg}</Empty></div>
+  if (err) return <div className={embed ? 'shared-embed' : 'page'}><Empty title={err.status === 404 ? 'Not found' : 'Could not open it'} icon="users">{err.status === 404 ? 'It may have been deleted.' : err.msg}</Empty></div>
   if (!note) return <Loading />
+  if (key && note.kind === 'drawing') return <SharedDrawing item={note as TeamItem & { team_key: string; team_name: string; can_edit: boolean; mine: boolean }} onChange={n => setNote(cur => cur && { ...cur, ...n })} />
 
   const canEdit = note.can_edit
-  const link = appURL(sharedNoteURL(note.identifier, note.id))
+  const back = key ? `/team/${note.team_key || key}/shared` : `/issue/${note.identifier}`
+  const link = appURL(key ? teamItemURL(note.team_key || key, note.id) : sharedNoteURL(note.identifier || '', note.id))
   const remove = async () => {
     try {
       await api.del(url)
       saved.current = { ...saved.current, title, body }
       toast(`Deleted “${note.title}”`)
       if (embed) window.parent.postMessage({ type: 'pocket-projects-shared', closed: note.id }, location.origin)
-      else navigate(`/issue/${note.identifier}`)
+      else navigate(back)
     } catch (e) { toast((e as Error).message, 'err') }
   }
   const menu: MenuItem[] = [
@@ -119,14 +127,15 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
     { label: 'Delete shared note…', icon: 'trash', danger: true, disabled: !canEdit, onSelect: () => setConfirm(true) },
   ]
   const editor = app.person(note.updated_by || note.created_by)
-  const sharer = note.source_note ? app.person(note.created_by) : undefined
+  const sharer = note.source_note || note.source_app === 'notes' ? app.person(note.created_by) : undefined
 
   return (
     <div className={`full-page doc-page ${embed ? 'shared-embed' : ''}`}>
       <div className="page-head doc-head">
         {embed ? <span className="shared-tag" title="Everyone on the team sees and edits this note"><Icon name="users" size={13} />Shared with the team</span>
           : <nav className="doc-crumbs ellipsis">
-            <Link to={`/issue/${note.identifier}`} className="crumb-link"><span className="ident">{note.identifier}</span><span className="ellipsis">{note.issue_title}</span></Link>
+            {key ? <Link to={back} className="crumb-link"><Icon name="users" size={14} /><span className="ellipsis">{note.team_name} · Shared</span></Link>
+              : <Link to={back} className="crumb-link"><span className="ident">{note.identifier}</span><span className="ellipsis">{note.issue_title}</span></Link>}
             <Icon name="chevron-right" size={14} className="crumb-sep" />
             <span className="ellipsis">{title || 'Untitled'}</span>
           </nav>}
@@ -156,7 +165,7 @@ export default function SharedNotePage({ embed = false }: { embed?: boolean }) {
           <div className="doc-preview" onDoubleClick={() => canEdit && setMode('edit')}><Markdown text={body} /></div>
         ) : <p className="faint">Empty. {canEdit && <button type="button" className="link-btn" onClick={() => setMode('edit')}>Start writing</button>}</p>}
       </article>
-      {confirm && <Confirm title="Delete this shared note?" message={<>“{note.title}” will be deleted for everyone on the team. Notes it was shared from stay as they are. This can't be undone.</>} confirmLabel="Delete" onCancel={() => setConfirm(false)} onConfirm={() => { setConfirm(false); remove() }} />}
+      {confirm && <Confirm title="Delete this shared note?" message={<>“{note.title}” will be deleted for everyone on the team. A note it was shared from stays as it is. This can't be undone.</>} confirmLabel="Delete" onCancel={() => setConfirm(false)} onConfirm={() => { setConfirm(false); remove() }} />}
     </div>
   )
 }

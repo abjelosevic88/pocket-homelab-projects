@@ -172,6 +172,9 @@ export default function Search() {
               <h2 className="pl-section-h">Documents <span className="count">{show.docs.length}</span></h2>
               <div className="pl-list">{show.docs.map(d => d.kind === 'shared_note'
                 ? <HitRow key={`s${d.id}`} h={d} to={`/issue/${d.identifier}/shared/${d.id}`} icon="users" onOpen={remember} sub={`${d.identifier} · shared note`} />
+                : d.kind === 'team_note' || d.kind === 'team_drawing'
+                ? <HitRow key={`t${d.id}`} h={d} to={`/team/${d.identifier}/shared/${d.id}`} icon={d.kind === 'team_drawing' ? 'draw' : 'users'} onOpen={remember}
+                  sub={`${app.teams.find(t => t.key === d.identifier)?.name || d.identifier} · shared ${d.kind === 'team_drawing' ? 'drawing' : 'note'}`} />
                 : <HitRow key={d.id} h={d} to={`/doc/${d.id}`} icon="file-text" onOpen={remember} sub={app.project(d.project_id)?.name} />)}</div>
             </section>}
             {show.comments.length > 0 && <section className="sr-sec">

@@ -76,6 +76,9 @@
   writes the finished time back onto the issue (the `worklog:read|write` offer).
 - **Pocket Draw**: put a sketch or diagram in a description or comment; it shows as a picture that stays up to
   date and opens in Pocket Draw, and the drawing there lists the issues and projects it is used in.
+- **Shared space per team** (sidebar → Shared): notes and drawings the whole team sees. Write a note there or share a
+  copy of one of yours from Pocket Notes; share a Pocket Draw drawing and the team's copy keeps up with the original
+  as you draw. Anyone can make their own copy in their Pocket Draw to work on.
 - **Pocket AI**: write a description, break an issue into sub-issues, summarise a long thread, draft the weekly
   project update, suggest how to file an issue, turn meeting notes into issues — and every Pocket AI chat can read
   and change issues and projects through Core's tools (writes wait for your approval).

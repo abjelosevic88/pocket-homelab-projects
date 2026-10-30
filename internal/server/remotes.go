@@ -60,6 +60,7 @@ func (s *Server) remoteAPI() http.Handler {
 	r.Get("/notes/search", s.handleNoteSearch)
 	r.Get("/notes/folders", s.handleNoteFolders)
 	r.Get("/teams/{ref}/notes", s.handleTeamNotes)
+	s.remoteSharedRoutes(r) // sharing a note into its team space
 	// the person's own Pocket AI
 	r.Get("/ai/agent-options", s.handleAgentOptions)
 	r.Get("/ai/dirs", s.handleAIDirs)

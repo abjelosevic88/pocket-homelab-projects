@@ -195,6 +195,7 @@ function TeamGroup({ team, onNavigate }: { team: Team; onNavigate: () => void })
         <Item to={`${base}/backlog`} icon={<StatusIcon type="backlog" size={15} />} label="Backlog" onNavigate={onNavigate} />
         {team.cycles_enabled && <Item to={`${base}/cycles`} icon={<Icon name="cycle" size={15} />} label="Cycles" onNavigate={onNavigate} />}
         <Item to={`${base}/projects`} icon={<Icon name="briefcase" size={15} />} label="Projects" onNavigate={onNavigate} />
+        <Item to={`${base}/shared`} icon={<Icon name="users" size={15} />} label="Shared" onNavigate={onNavigate} />
         {team.notes_folder && <Item to={`${base}/notes`} icon={<Icon name="note" size={15} />} label="Notes" onNavigate={onNavigate} />}
       </div>}
     </div>

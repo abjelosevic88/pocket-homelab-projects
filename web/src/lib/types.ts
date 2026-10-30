@@ -104,6 +104,13 @@ export interface IssueDetail extends Issue {
 /** A shared note on an issue: the whole team sees and edits it. source_note = the sharer's own Pocket Notes note it was copied from. */
 export interface SharedNote { id: number; issue_id: number; title: string; body?: string; source_note: string; shared_at: string; created_by: number | null; updated_by: number | null; created_at: string; updated_at: string }
 
+/** A note or drawing in a team's shared space (sidebar "Shared"). Drawings are copies of someone's Pocket Draw drawing that follow the original. */
+export interface TeamItem {
+  id: number; team_id: number; kind: 'note' | 'drawing'; title: string; body?: string; snippet: string; draw_kind?: 'sketch' | 'mermaid' | 'drawio'
+  picture_rev: number; source_app: '' | 'notes' | 'draw'; source_id: string; source_url?: string; follow: boolean; sync_error: string; shared_at: string
+  created_by: number | null; updated_by: number | null; created_at: string; updated_at: string
+}
+
 export interface TimeEntry { id: number; issue_id: number; user_id: number; spent_on: string; minutes: number; note: string; started_at: string; created_at: string }
 
 export interface Notification {
@@ -184,11 +191,11 @@ export interface Insights {
   totals: { open: number; started: number; completed: number; created: number; overdue: number; open_points: number; minutes_logged: number }
 }
 
-export interface SearchHit { kind: 'doc' | 'shared_note' | 'comment'; id: number; issue_id?: number; project_id?: number; title: string; snippet: string; identifier?: string }
+export interface SearchHit { kind: 'doc' | 'shared_note' | 'team_note' | 'team_drawing' | 'comment'; id: number; issue_id?: number; project_id?: number; title: string; snippet: string; identifier?: string }
 export interface SearchResult { issues: Issue[]; projects: Project[]; docs: SearchHit[]; comments: SearchHit[] }
 
 /** What the live stream says changed. */
-export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'comment' | 'notification' | 'view' | 'favorite' | 'timer' | 'remotes'; team_ids?: number[]; ids?: number[]; actor_id?: number }
+export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'comment' | 'notification' | 'view' | 'favorite' | 'timer' | 'remotes' | 'shared'; team_ids?: number[]; ids?: number[]; actor_id?: number }
 
 /** A team's Pocket AI code conversation settings (instructions = hidden system prompt). */
 export interface TeamAI {
