@@ -16,6 +16,7 @@ import { type Anchor, Confirm, Menu, type MenuItem, Popover, Prompt, Spinner, re
 import { sharedNoteURL } from '../../pages/SharedNotePage'
 import { FixPromptButton, PRDetailsList, PRSummary, usePRDetails } from './PRDetails'
 import { SlackSend } from './SlackSend'
+import { PRReviewButton, usePRReview } from './PRReview'
 
 const changed = (is: IssueDetail) => emitChange({ kind: 'issue', team_ids: [is.team_id], ids: [is.id] })
 
@@ -167,6 +168,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const [link, setLink] = useState(false)
   const [slack, setSlack] = useState<Attachment | null>(null)
   const prs = usePRDetails(issue)
+  const review = usePRReview(issue.attachment_list)
   const [prOpen, setPrOpen] = useState<number | null>(null)
   const list = issue.attachment_list
   const remove = async (a: Attachment) => { try { await api.del(`${V1}/attachments/${a.id}`); changed(issue); onChanged() } catch (e) { toast((e as Error).message, 'err') } }
@@ -197,6 +199,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
               {a.kind === 'pull_request' && (a.meta as { status_error?: string } | null)?.status_error && <span className="att-warn" title={`Status not updated: ${(a.meta as { status_error?: string }).status_error}`}><Icon name="alert-triangle" size={13} /></span>}
               {pr && <FixPromptButton d={pr} issue={issue} />}
+              {a.kind === 'pull_request' && a.url && <PRReviewButton pr={a} state={review} />}
               {canEdit && a.kind === 'pull_request' && a.url && <button type="button" className="btn ghost sm att-slack" title="Send this pull request to Slack with a short summary" onClick={() => setSlack(a)}><Icon name="message" size={13} />Slack</button>}
               {canEdit && <button type="button" className="btn ghost icon-only xs x-btn" aria-label="Remove the attachment" title="Remove" onClick={() => remove(a)}><Icon name="x" size={13} /></button>}
             </div>

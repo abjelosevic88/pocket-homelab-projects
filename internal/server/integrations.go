@@ -41,6 +41,8 @@ func (s *Server) integrationRoutes(r chi.Router) {
 	r.Get("/teams/{ref}/notes", s.handleTeamNotes)
 	r.Put("/teams/{ref}/notes", s.handlePutTeamNotes)
 	r.Get("/notes/folders", s.handleNoteFolders)
+	r.Get("/pr-review/status", s.handlePRReviewStatus)
+	r.Post("/pr-review/open", s.handlePRReviewOpen)
 }
 
 // siblingErr says in plain words why another app did not answer.
