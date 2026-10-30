@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -137,8 +138,13 @@ func (s *Server) handleRemoteAIActive(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRemoteIssueCode(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rem := remoteFrom(ctx)
-	ident := strings.ToUpper(chi.URLParam(r, "ref"))
 	out := map[string]any{"threads": []codeThread{}, "worktrees": []codeWorktree{}, "connected": false, "detail": ""}
+	ident, err := s.remoteIdent(r)
+	if err != nil {
+		out["detail"] = err.Error()
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
 	sb, err := s.aiSibling(ctx)
 	if err != nil {
 		out["detail"] = err.Error()
@@ -341,7 +347,11 @@ func (s *Server) handleRemoteCodeDelete(w http.ResponseWriter, r *http.Request) 
 func (s *Server) remoteConversationAction(w http.ResponseWriter, r *http.Request, method, suffix string) {
 	ctx := r.Context()
 	rem := remoteFrom(ctx)
-	ident := strings.ToUpper(chi.URLParam(r, "ref"))
+	ident, err := s.remoteIdent(r)
+	if err != nil {
+		s.fail(w, err, "issue")
+		return
+	}
 	sb, err := s.aiSibling(ctx)
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, err.Error())
@@ -356,4 +366,19 @@ func (s *Server) remoteConversationAction(w http.ResponseWriter, r *http.Request
 		_ = s.store.DeleteRemoteThread(ctx, th.ID)
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// remoteIdent is the connected issue's identifier (ATH-12) from the {ref} in the
+// path, which the web app sends as the issue's id there: conversations are kept
+// by identifier, so a bare id is looked up on the other instance first.
+func (s *Server) remoteIdent(r *http.Request) (string, error) {
+	ref := strings.ToUpper(chi.URLParam(r, "ref"))
+	if _, err := strconv.ParseInt(ref, 10, 64); err != nil {
+		return ref, nil
+	}
+	is, err := s.issueInfoOf(r, needRead)
+	if err != nil {
+		return "", err
+	}
+	return is.Ident, nil
 }
