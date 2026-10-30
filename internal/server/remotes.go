@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -357,6 +358,9 @@ func (s *Server) proxyRemote(w http.ResponseWriter, r *http.Request) {
 				pr.Out.Header.Del(h)
 			}
 			pr.Out.Header.Set("Authorization", "Bearer "+rem.Token)
+			if pr.In.Header.Get("X-Pocket-Source") != "" {
+				pr.Out.Header.Set("X-Pocket-Workspace", "0") // the workspace was said: this one, over there
+			}
 			if isJSON(pr.Out.Header.Get("Content-Type")) && pr.Out.Body != nil {
 				b, err := io.ReadAll(io.LimitReader(pr.Out.Body, 32<<20))
 				if err == nil {
@@ -489,3 +493,25 @@ func (s *Server) issueInfoOf(r *http.Request, need int) (*issueInfo, error) {
 // remoteRef is how Pocket AI knows a connected instance's issue: host/ATH-12,
 // never mixed up with this instance's ATH-12.
 func remoteRef(rem *store.Remote, ident string) string { return rem.Host() + "/" + ident }
+
+// ---------- which workspace an agent means ----------
+
+// A tool call (Pocket Core's MCP gateway, X-Pocket-Source: mcp) that changes
+// an issue or project by bare number is ambiguous once the person connected
+// another instance: the same number is a different issue there, and an agent
+// that forgot the workspace would change the wrong one here. Such writes need
+// the workspace said (X-Pocket-Workspace, set by Core when the tool got one;
+// 0 = this instance) or the issue's identifier (WEB-12) instead of a number.
+var bareNumberPath = regexp.MustCompile(`^/api/v1/(issues|projects)/[0-9]+(/|$)`)
+
+func (s *Server) workspaceGuard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-Pocket-Source") == "mcp" &&
+			r.Header.Get("X-Pocket-Workspace") == "" && bareNumberPath.MatchString(r.URL.Path) && s.store.HasRemotes(r.Context(), me(r)) {
+			writeErr(w, http.StatusConflict, "You connected other Pocket Projects workspaces, so a bare number is ambiguous and nothing was changed. "+
+				"Pass workspace (0 = your own instance, or an id from pocket_projects_workspaces), or name the issue by its identifier such as WEB-12.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

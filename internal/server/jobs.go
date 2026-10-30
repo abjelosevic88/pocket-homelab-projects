@@ -17,6 +17,7 @@ func (s *Server) jobs(ctx context.Context) {
 	tick := time.NewTicker(time.Minute)
 	defer tick.Stop()
 	var lastCycles, lastHourly, lastPRs time.Time
+	go s.remoteInboxLoop(ctx)
 	for {
 		now := time.Now()
 		if now.Sub(lastCycles) >= 10*time.Minute {

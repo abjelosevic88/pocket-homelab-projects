@@ -81,11 +81,12 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const remotes = useRemotes()
   const [wsMenu, setWsMenu] = useState<Anchor | null>(null)
   const here = remotes.find(r => r.id === REMOTE)
+  const otherUnread = remotes.filter(r => r.id !== REMOTE).reduce((n, r) => n + (r.unread || 0), 0)
   // workspaces: this instance and the ones the person connected (a page load each)
   const wsItems: MenuItem[] = [
     { heading: 'Workspaces' },
     { label: 'Your own', icon: 'home', hint: location.host, checked: !REMOTE, onSelect: () => { location.href = '/' } },
-    ...remotes.map(r => ({ label: r.name, icon: 'globe', hint: r.host, checked: r.id === REMOTE, onSelect: () => { location.href = `/r/${r.id}/` } })),
+    ...remotes.map(r => ({ label: r.name, icon: 'globe', hint: r.unread ? `${r.unread} unread · ${r.host}` : r.host, checked: r.id === REMOTE, onSelect: () => { location.href = `/r/${r.id}/` } })),
     'sep',
     { label: 'Connect another…', icon: 'plus', onSelect: () => { location.href = '/settings/connections' } },
   ]
@@ -100,7 +101,8 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       {(REMOTE > 0 || remotes.length > 0) && <button type="button" className={`sb-ws ${REMOTE ? 'remote' : ''}`} onClick={e => setWsMenu(rectOf(e.currentTarget))}
         title={REMOTE ? `${here?.host || 'A connected instance'}: its teams, as you there. Your Pocket AI conversations and notes stay yours, here.` : 'Switch workspace'}>
         <Icon name={REMOTE ? 'globe' : 'home'} size={14} /><span className="ellipsis">{REMOTE ? here?.name || 'Connected instance' : 'Your workspace'}</span>
-        {REMOTE > 0 && here && <span className="sb-ws-host ellipsis">{here.host}</span>}<Icon name="chevron-down" size={13} />
+        {REMOTE > 0 && here && <span className="sb-ws-host ellipsis">{here.host}</span>}
+        {otherUnread > 0 && <span className="sb-ws-badge" title={`${otherUnread} unread in your other workspaces`}>{otherUnread}</span>}<Icon name="chevron-down" size={13} />
       </button>}
       {wsMenu && <Menu items={wsItems} anchor={wsMenu} onClose={() => setWsMenu(null)} width={270} />}
       <button type="button" className="btn primary create-btn" onClick={() => { onNavigate(); openCreateIssue() }} title="New issue (C)">

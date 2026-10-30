@@ -188,7 +188,7 @@ export interface SearchHit { kind: 'doc' | 'shared_note' | 'comment'; id: number
 export interface SearchResult { issues: Issue[]; projects: Project[]; docs: SearchHit[]; comments: SearchHit[] }
 
 /** What the live stream says changed. */
-export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'comment' | 'notification' | 'view' | 'favorite' | 'timer'; team_ids?: number[]; ids?: number[]; actor_id?: number }
+export interface Change { kind: 'issue' | 'project' | 'team' | 'cycle' | 'comment' | 'notification' | 'view' | 'favorite' | 'timer' | 'remotes'; team_ids?: number[]; ids?: number[]; actor_id?: number }
 
 /** A team's Pocket AI code conversation settings (instructions = hidden system prompt). */
 export interface TeamAI {

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -85,6 +86,10 @@ func mustLoad() (*config.Config, *slog.Logger, *store.Store) {
 	st, err := store.Open(cfg.DBPath, log)
 	if err != nil {
 		log.Error("open database", "path", cfg.DBPath, "err", err)
+		os.Exit(1)
+	}
+	if err := st.UseSecretKey(context.Background(), filepath.Join(cfg.DataDir, "secret.key")); err != nil {
+		log.Error("secret key", "err", err)
 		os.Exit(1)
 	}
 	return cfg, log, st

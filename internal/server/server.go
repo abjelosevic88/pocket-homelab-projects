@@ -143,7 +143,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/client-error", s.handleClientError)
 
 		r.Group(func(r chi.Router) {
-			r.Use(s.requireAuth)
+			r.Use(s.requireAuth, s.workspaceGuard)
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/auth/me", s.handleMe)
 			r.Put("/auth/me", s.handleUpdateMe)

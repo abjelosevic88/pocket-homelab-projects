@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -44,6 +45,9 @@ func apiServerCore(t *testing.T, coreURL string) (*Server, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
+	if err := st.UseSecretKey(context.Background(), filepath.Join(filepath.Dir(cfg.DBPath), "secret.key")); err != nil {
+		t.Fatal(err)
+	}
 	s := New(cfg, st, log, nil)
 	if err := s.core.Start(context.Background()); err != nil {
 		t.Fatal(err)

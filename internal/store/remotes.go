@@ -17,6 +17,8 @@ type Remote struct {
 	Token      string `json:"-"`
 	Proxy      string `json:"proxy"`
 	RemoteUser string `json:"remote_user"`
+	InboxSeen  int64  `json:"-"`
+	Unread     int    `json:"unread"` // the person's unread inbox there, as last polled
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
 }
@@ -29,11 +31,11 @@ func (r *Remote) Host() string {
 	return r.URL
 }
 
-const remoteCols = `id, user_id, name, url, token, proxy, remote_user, created_at, updated_at`
+const remoteCols = `id, user_id, name, url, token, proxy, remote_user, inbox_seen, unread, created_at, updated_at`
 
 func scanRemote(row interface{ Scan(...any) error }) (*Remote, error) {
 	var r Remote
-	if err := row.Scan(&r.ID, &r.UserID, &r.Name, &r.URL, &r.Token, &r.Proxy, &r.RemoteUser, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.UserID, &r.Name, &r.URL, &r.Token, &r.Proxy, &r.RemoteUser, &r.InboxSeen, &r.Unread, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, notFound(err)
 	}
 	return &r, nil
@@ -41,7 +43,29 @@ func scanRemote(row interface{ Scan(...any) error }) (*Remote, error) {
 
 // Remotes lists a person's connected instances.
 func (s *Store) Remotes(ctx context.Context, userID int64) ([]Remote, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+remoteCols+` FROM remotes WHERE user_id = ? ORDER BY lower(name), id`, userID)
+	return s.queryRemotes(ctx, `SELECT `+remoteCols+` FROM remotes WHERE user_id = ? ORDER BY lower(name), id`, userID)
+}
+
+// AllRemotes is every person's connections (the inbox poll).
+func (s *Store) AllRemotes(ctx context.Context) ([]Remote, error) {
+	return s.queryRemotes(ctx, `SELECT `+remoteCols+` FROM remotes ORDER BY id`)
+}
+
+// HasRemotes: whether the person connected any other instance.
+func (s *Store) HasRemotes(ctx context.Context, userID int64) bool {
+	var n int
+	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM remotes WHERE user_id = ?`, userID).Scan(&n)
+	return n > 0
+}
+
+// SetRemoteInbox records the poll of the person's inbox over there.
+func (s *Store) SetRemoteInbox(ctx context.Context, id, seen int64, unread int) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE remotes SET inbox_seen = ?, unread = ? WHERE id = ?`, seen, unread, id)
+	return err
+}
+
+func (s *Store) queryRemotes(ctx context.Context, q string, args ...any) ([]Remote, error) {
+	rows, err := s.DB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -52,6 +76,7 @@ func (s *Store) Remotes(ctx context.Context, userID int64) ([]Remote, error) {
 		if err != nil {
 			return nil, err
 		}
+		r.Token = s.unseal(r.Token)
 		out = append(out, *r)
 	}
 	return out, rows.Err()
@@ -59,7 +84,12 @@ func (s *Store) Remotes(ctx context.Context, userID int64) ([]Remote, error) {
 
 // GetRemote loads one of the person's connected instances.
 func (s *Store) GetRemote(ctx context.Context, id, userID int64) (*Remote, error) {
-	return scanRemote(s.DB.QueryRowContext(ctx, `SELECT `+remoteCols+` FROM remotes WHERE id = ? AND user_id = ?`, id, userID))
+	r, err := scanRemote(s.DB.QueryRowContext(ctx, `SELECT `+remoteCols+` FROM remotes WHERE id = ? AND user_id = ?`, id, userID))
+	if err != nil {
+		return nil, err
+	}
+	r.Token = s.unseal(r.Token)
+	return r, nil
 }
 
 // SaveRemote creates (ID 0) or updates a connected instance.
@@ -67,7 +97,7 @@ func (s *Store) SaveRemote(ctx context.Context, r *Remote) error {
 	now := Now()
 	if r.ID == 0 {
 		res, err := s.DB.ExecContext(ctx, `INSERT INTO remotes (user_id, name, url, token, proxy, remote_user, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			r.UserID, r.Name, r.URL, r.Token, r.Proxy, r.RemoteUser, now, now)
+			r.UserID, r.Name, r.URL, s.seal(r.Token), r.Proxy, r.RemoteUser, now, now)
 		if err != nil {
 			return err
 		}
@@ -76,8 +106,10 @@ func (s *Store) SaveRemote(ctx context.Context, r *Remote) error {
 		return nil
 	}
 	r.UpdatedAt = now
-	_, err := s.DB.ExecContext(ctx, `UPDATE remotes SET name = ?, url = ?, token = ?, proxy = ?, remote_user = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
-		r.Name, r.URL, r.Token, r.Proxy, r.RemoteUser, now, r.ID, r.UserID)
+	// another address is another inbox: start its poll afresh
+	_, err := s.DB.ExecContext(ctx, `UPDATE remotes SET name = ?, url = ?, token = ?, proxy = ?, remote_user = ?, updated_at = ?,
+		inbox_seen = CASE WHEN url = ? THEN inbox_seen ELSE -1 END, unread = CASE WHEN url = ? THEN unread ELSE 0 END WHERE id = ? AND user_id = ?`,
+		r.Name, r.URL, s.seal(r.Token), r.Proxy, r.RemoteUser, now, r.URL, r.URL, r.ID, r.UserID)
 	return err
 }
 

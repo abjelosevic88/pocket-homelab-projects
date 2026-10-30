@@ -33,8 +33,22 @@ tool Core allows, approved per call). No tool deletes a shared note.
 Every `pocket_projects_*` tool takes an optional `workspace` (an id from `pocket_projects_workspaces`): Core then
 calls `/r/{workspace}/api/v1/…` here, which passes it on to that connected Pocket Projects with your token there, so
 the agent reads, creates and changes issues on the other instance as you, with your rights there; its links point at
-`/r/{workspace}/…` here. **Code with Pocket AI** on a connected issue tells the agent its workspace and the issue's id
-over there.
+`/r/{workspace}/…` here. **Code with Pocket AI** names the issue by its identifier (and, on a connected issue, its workspace).
+
+Once someone connected another instance, a tool call (`X-Pocket-Source: mcp`) that **changes** an issue or project by
+bare number without saying the workspace is refused with 409: the same number is another issue over there. Core sends
+`X-Pocket-Workspace` when the tool got `workspace` (0 = their own instance); an identifier like `WEB-12` needs neither.
+Calls through `/r/{id}/…` count as explicit. Reads and people in the web app are never affected.
+
+**Connected inboxes:** every two minutes this server reads the person's inbox on each connected instance with their
+token there. New entries are pushed through their own notification address with the same per-kind switches
+(Settings → Notifications), titled `<connection> · …` and linking to `/r/{id}/issue/…` here; the first poll of a
+connection only takes note. The unread count shows in the workspace switcher (`unread` on `GET /remotes`, live via the
+`remotes` change). The other instance is never told about this one: it can't reach it.
+
+**Tokens at rest:** the person's token on a connected instance is sealed (AES-GCM, `enc1:…`) with `DATA_DIR/secret.key`,
+a file beside the database and never in it, so a copy of the database or a database browser shows no usable token.
+Plain tokens from before are sealed on start. Losing the key file only means pasting the tokens again.
 
 The **Ask** button in the header opens Pocket Ask about the page; rows and cards carry `data-pocket-ask` so the
 target picker can point at a single issue.

@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"crypto/cipher"
 	"database/sql"
 	"embed"
 	"encoding/json"
@@ -30,8 +31,9 @@ var ErrConflict = errors.New("already exists")
 
 // Store is the database handle.
 type Store struct {
-	DB  *sql.DB
-	log *slog.Logger
+	DB   *sql.DB
+	log  *slog.Logger
+	aead cipher.AEAD // seals per-person secrets (secret.go); nil = kept as they are
 }
 
 // Open opens (and creates if needed) the SQLite database and runs migrations.
