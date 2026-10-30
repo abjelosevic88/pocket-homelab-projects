@@ -171,6 +171,13 @@
 .ci-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 4px 16px; }
 .ci-crumb { font-size: 13px; color: var(--muted); }
 .ci-body { padding: 4px 20px 8px; display: grid; gap: 4px; overflow-y: auto; max-height: 55vh; }
+.ci-pics { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 2px; }
+.ci-pic { position: relative; display: flex; height: 64px; max-width: 160px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+.ci-pic img { height: 100%; width: auto; max-width: 160px; object-fit: cover; display: block; }
+.ci-file { display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 12px; color: var(--muted); max-width: 160px; }
+.ci-pic-x { position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; border-radius: 50%; border: 0; padding: 0; display: grid; place-items: center; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; opacity: 0; }
+.ci-pic:hover .ci-pic-x, .ci-pic-x:focus-visible { opacity: 1; }
+@media (hover: none) { .ci-pic-x { opacity: 1; } }
 input.ci-title { font-size: 19px; font-weight: 650; height: 42px; border: 0; box-shadow: none !important; padding: 0; background: transparent; letter-spacing: -.01em; }
 .ci-props { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 16px 12px; }
 .ci-props .chip { height: 28px; gap: 6px; font-weight: 500; }

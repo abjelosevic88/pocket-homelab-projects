@@ -1,12 +1,14 @@
 // The "New issue" dialog: team, template, title, description, every property
 // as a chip, Pocket AI to write the description, "create more", a kept draft.
+// Pictures pasted before the issue exists stay in the browser (blob: URLs)
+// and are uploaded to it right after it's created.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, V1 } from '../lib/api'
+import { api, upload, V1 } from '../lib/api'
 import { emitChange, useApp } from '../lib/app-context'
 import { estimateLabel, priorityLabel } from '../lib/issues'
 import { shortDate } from '../lib/dates'
-import type { Issue, Template } from '../lib/types'
+import type { Attachment, Issue, Template } from '../lib/types'
 import { Icon } from './icons'
 import { MarkdownEditor } from './MarkdownEditor'
 import { LabelPill, PersonAvatar, PriorityIcon, ProjectMark, StatusIcon, personName } from './issue-bits'
@@ -23,6 +25,9 @@ export interface IssueDefaults {
 export function openCreateIssue(defaults: IssueDefaults = {}) { window.dispatchEvent(new CustomEvent<IssueDefaults>('pp:new-issue', { detail: defaults })) }
 
 const DRAFT = 'pp-issue-draft'
+
+// A held picture or file in the description: ![name](blob:…) or [name](blob:…) on its own line.
+const HELD = /!?\[[^\]]*\]\((blob:[^)\s]+)\)\n?/g
 
 const LAST_PROJECT = 'pp-last-project' // {"<team id>": project id, 0 = none}
 function lastProjects(): Record<string, number> {
@@ -73,12 +78,20 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
   const [ai, setAi] = useState(false)
   const [prop, setProp] = useState<{ p: Prop | 'team' | 'template'; at: Anchor } | null>(null)
   const titleRef = useRef<HTMLInputElement>(null)
+  // Files pasted or dropped into the description, by their blob: URL
+  const held = useRef(new Map<string, File>())
+  const holdFile = (f: File) => { const u = URL.createObjectURL(f); held.current.set(u, f); return u }
+  useEffect(() => () => held.current.forEach((_, u) => URL.revokeObjectURL(u)), [])
+  const heldIn = (text: string) => [...held.current.keys()].filter(u => text.includes(u))
+  const withoutHeld = (text: string, only?: string) => text.replace(HELD, (m, u) => held.current.has(u) && (!only || u === only) ? '' : m)
+  const heldLinks = (text: string) => [...text.matchAll(HELD)].filter(m => held.current.has(m[1])).map(m => m[0].trimEnd()).join('\n')
+  const forget = (urls: string[]) => urls.forEach(u => { URL.revokeObjectURL(u); held.current.delete(u) })
   const stateId = d.state_id && team?.states?.some(s => s.id === d.state_id) ? d.state_id : defaultState()
 
   // Keep a draft of what was typed (not when prefilled from somewhere).
   useEffect(() => {
     if (defaults.title !== undefined) return
-    if (d.title || d.description) localStorage.setItem(DRAFT, JSON.stringify({ title: d.title, description: d.description }))
+    if (d.title || d.description) localStorage.setItem(DRAFT, JSON.stringify({ title: d.title, description: withoutHeld(d.description) }))
     else localStorage.removeItem(DRAFT)
   }, [d.title, d.description, defaults.title])
 
@@ -93,13 +106,25 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
   const submit = async () => {
     if (!d.title.trim() || !teamId || busy) return
     setBusy(true)
+    const pending = heldIn(d.description)
     try {
-      const body: Record<string, unknown> = { team_id: teamId, title: d.title.trim(), description: d.description, state_id: stateId, priority: d.priority,
+      const body: Record<string, unknown> = { team_id: teamId, title: d.title.trim(), description: pending.length ? withoutHeld(d.description) : d.description, state_id: stateId, priority: d.priority,
         assignee_id: d.assignee_id || 0, label_ids: d.label_ids, project_id: d.project_id || 0, milestone_id: d.milestone_id || 0, cycle_id: d.cycle_id || 0,
         due_date: d.due_date, estimate: d.estimate }
       if (defaults.parent_id) body.parent_id = defaults.parent_id
       if (templateId) body.template_id = templateId
       const is = await api.post<Issue>(`${V1}/issues`, body)
+      if (pending.length) {
+        try {
+          let text = d.description
+          for (const u of pending) {
+            const a = await upload<Attachment>(`${V1}/issues/${is.id}/attachments`, 'file', held.current.get(u)!)
+            text = text.split(u).join(a.url)
+          }
+          await api.patch(`${V1}/issues/${is.id}`, { description: text })
+          forget(pending)
+        } catch (e) { toast(`${is.identifier} is created, but its pictures didn’t upload: ${(e as Error).message}`, 'err') }
+      }
       localStorage.removeItem(DRAFT)
       // remember the project (or none) for this team's next issue
       localStorage.setItem(LAST_PROJECT, JSON.stringify({ ...lastProjects(), [String(teamId)]: d.project_id || 0 }))
@@ -113,8 +138,8 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
     if (!d.title.trim()) { toast('Write a title first', 'err'); return }
     setAi(true)
     try {
-      const r = await api.post<{ description: string }>(`${V1}/ai/describe`, { title: d.title, description: d.description, team_id: teamId, project_id: d.project_id || 0 })
-      setD(x => ({ ...x, description: r.description }))
+      const r = await api.post<{ description: string }>(`${V1}/ai/describe`, { title: d.title, description: withoutHeld(d.description), team_id: teamId, project_id: d.project_id || 0 })
+      setD(x => { const pics = heldLinks(x.description); return { ...x, description: r.description + (pics ? '\n\n' + pics + '\n' : '') } })
     } catch (e) { toast((e as Error).message, 'err') } finally { setAi(false) }
   }
 
@@ -144,7 +169,14 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
       <div className="ci-body">
         <input ref={titleRef} className="ci-title bare" placeholder="Issue title" value={d.title} autoFocus onChange={e => setD(x => ({ ...x, title: e.target.value }))}
           onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit() } }} />
-        <MarkdownEditor value={d.description} onChange={v => setD(x => ({ ...x, description: v }))} onSubmit={submit} placeholder="Add a description… (Markdown, @ to mention)" teamId={teamId} minRows={4} bare />
+        <MarkdownEditor value={d.description} onChange={v => setD(x => ({ ...x, description: v }))} onSubmit={submit} placeholder="Add a description… (Markdown, @ to mention, paste images)" teamId={teamId} holdFile={holdFile} minRows={4} bare />
+        {heldIn(d.description).length > 0 && <div className="ci-pics">
+          {heldIn(d.description).map(u => { const f = held.current.get(u)!; return (
+            <span key={u} className="ci-pic" title={`${f.name || 'image'} — uploads when you create the issue`}>
+              {f.type.startsWith('image/') ? <img src={u} alt={f.name} /> : <span className="ci-file"><Icon name="file-text" size={14} /><span className="ellipsis">{f.name}</span></span>}
+              <button type="button" className="ci-pic-x" aria-label={`Remove ${f.name || 'picture'}`} onClick={() => { const text = withoutHeld(d.description, u); forget([u]); setD(x => ({ ...x, description: text })) }}><Icon name="x" size={11} /></button>
+            </span>) })}
+        </div>}
       </div>
       <div className="ci-props">
         <button type="button" className="chip" onClick={open('state')}><StatusIcon state={state} />{state?.name || 'Status'}</button>

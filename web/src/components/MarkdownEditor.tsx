@@ -1,5 +1,6 @@
 // A Markdown textarea that grows with its text, completes @people and
-// issue identifiers, pastes images as attachments (when it knows the issue)
+// issue identifiers, pastes images as attachments (when it knows the issue;
+// before the issue exists, holdFile keeps them for the caller to upload)
 // and can show a preview. Cmd/Ctrl+Enter submits. "Drawing" puts in a
 // sketch or diagram from Pocket Draw at the cursor (greyed out, with why,
 // while Pocket Draw isn't connected).
@@ -16,9 +17,11 @@ import { type Anchor, Popover, rectOf, useToast } from './ui'
 
 interface Suggest { kind: '@' | '#'; start: number; query: string }
 
-export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder, autoFocus, minRows = 3, teamId, issueRef, className = '', preview: canPreview = true, bare }: {
+export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder, autoFocus, minRows = 3, teamId, issueRef, holdFile, className = '', preview: canPreview = true, bare }: {
   value: string; onChange: (v: string) => void; onSubmit?: () => void; onBlur?: () => void; placeholder?: string; autoFocus?: boolean; minRows?: number
   teamId?: number | null; issueRef?: string | number; className?: string; preview?: boolean; bare?: boolean
+  /** No issue yet: keep a pasted file and return a local URL to show it with. */
+  holdFile?: (f: File) => string
 }) {
   const app = useApp()
   const { toast } = useToast()
@@ -76,17 +79,27 @@ export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder,
     else { const is = issues[i]; if (is) insert(is.identifier) }
   }
 
+  // Pasted or dropped files go in at the cursor: images as pictures, others as links.
   const uploadFiles = async (files: File[]) => {
-    if (!issueRef) { toast('Save the issue first, then paste images into it', 'err'); return }
+    if (!issueRef && !holdFile) { toast('Save the issue first, then paste images into it', 'err'); return }
+    const el = ta.current
+    const [a, b] = el ? [el.selectionStart, el.selectionEnd] : [value.length, value.length]
+    const put = (links: string[]) => {
+      const before = value.slice(0, a), after = value.slice(b)
+      const text = (before && !before.endsWith('\n') ? '\n' : '') + links.join('\n') + (after.startsWith('\n') ? '' : '\n')
+      onChange(before + text + after)
+      requestAnimationFrame(() => { ta.current?.focus(); ta.current?.setSelectionRange(a + text.length, a + text.length) })
+    }
+    const link = (f: File, name: string, url: string) => f.type.startsWith('image/') ? `![${name}](${url})` : `[${name}](${url})`
+    if (!issueRef) { put(files.map(f => link(f, f.name || 'image', holdFile!(f)))); return }
     setUploading(true)
     try {
-      let text = value
+      const links: string[] = []
       for (const f of files) {
-        const a = await upload<Attachment>(`${V1}/issues/${issueRef}/attachments`, 'file', f)
-        const md = f.type.startsWith('image/') ? `![${a.file_name}](${a.url})` : `[${a.file_name}](${a.url})`
-        text = text + (text && !text.endsWith('\n') ? '\n' : '') + md + '\n'
+        const at = await upload<Attachment>(`${V1}/issues/${issueRef}/attachments`, 'file', f)
+        links.push(link(f, at.file_name, at.url))
       }
-      onChange(text)
+      put(links)
     } catch (e) { toast((e as Error).message, 'err') } finally { setUploading(false) }
   }
 
@@ -145,7 +158,7 @@ export function MarkdownEditor({ value, onChange, onSubmit, onBlur, placeholder,
       </div>}
       {!tools && !preview && drawButton(true)}
       {tools && <div className="md-tools">
-        <span className="faint xsmall">Markdown · @ to mention · # for issues{issueRef ? ' · paste images' : ''}</span>
+        <span className="faint xsmall">Markdown · @ to mention · # for issues{issueRef || holdFile ? ' · paste images' : ''}</span>
         {uploading && <span className="xsmall muted">Uploading…</span>}
         <span className="spacer" />
         {!preview && drawButton(false)}
