@@ -24,7 +24,13 @@ Codex connected to Core), using the person's own permissions; writes pause for a
 `pocket_projects_create_issue`, `pocket_projects_update_issue`, `pocket_projects_comment`, `pocket_projects_projects`,
 `pocket_projects_get_project`, `pocket_projects_create_project`, `pocket_projects_post_update`,
 `pocket_projects_cycles`, `pocket_projects_calendar`, `pocket_projects_search`, `pocket_projects_inbox`,
-`pocket_projects_remember` (adds one line to a team's AI memory).
+`pocket_projects_remember` (adds one line to a team's AI memory), `pocket_projects_workspaces` (your connected instances).
+
+Every `pocket_projects_*` tool takes an optional `workspace` (an id from `pocket_projects_workspaces`): Core then
+calls `/r/{workspace}/api/v1/…` here, which passes it on to that connected Pocket Projects with your token there, so
+the agent reads, creates and changes issues on the other instance as you, with your rights there; its links point at
+`/r/{workspace}/…` here. **Code with Pocket AI** on a connected issue tells the agent its workspace and the issue's id
+over there.
 
 The **Ask** button in the header opens Pocket Ask about the page; rows and cards carry `data-pocket-ask` so the
 target picker can point at a single issue.

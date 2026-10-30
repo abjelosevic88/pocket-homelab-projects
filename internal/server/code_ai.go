@@ -599,6 +599,7 @@ type codeIssue struct {
 	Links                                                                  []string // other attachments: "Title — URL"
 	SharedNotes                                                            []store.IssueDoc
 	Remote                                                                 string // the connected instance it lives on ("" = this one)
+	RemoteID                                                               int64  // the person's connection to it: the tools' workspace
 	NotesFolder                                                            string // the team's folder in Pocket Notes
 	Files                                                                  []codeFile
 	Team, Cwd                                                              string
@@ -928,12 +929,14 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 
 	var sys strings.Builder
 	fmt.Fprintf(&sys, "This conversation is about issue %s (%q) in Pocket Projects (%s), team %s, working in %s.\n", ci.Identifier, ci.Title, ci.URL, ci.Team, ci.Cwd)
+	// a connected instance's ticket: the same tools, with the person's connection as workspace
+	ws := ""
 	if ci.Remote != "" {
-		fmt.Fprintf(&sys, "The ticket lives on another Pocket Projects instance (%s) that the person connected; the pocket_projects_* tools reach only their own instance, so they can't read or change this ticket. When something should go on the ticket (a comment, a status, follow-ups), write it out for the person to post.\n", ci.Remote)
-	} else {
-		fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %d; writes wait for the person's approval. ", ci.ID)
-		sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + "): one short factual line, never secrets or credentials.\n")
+		ws = fmt.Sprintf(", workspace %d", ci.RemoteID)
+		fmt.Fprintf(&sys, "The ticket lives on another Pocket Projects instance (%s) that the person connected as workspace %d. Pass workspace %d to every pocket_projects_* tool for this ticket and its team (without it they reach the person's own instance, where the ids mean other things); changes are made there as the person.\n", ci.Remote, ci.RemoteID, ci.RemoteID)
 	}
+	fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %d%s; writes wait for the person's approval. ", ci.ID, ws)
+	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + ws + "): one short factual line, never secrets or credentials.\n")
 	link := "[" + strings.NewReplacer("[", "(", "]", ")").Replace(ci.Identifier+" · "+ci.Title) + "](" + ci.URL + ")"
 	fmt.Fprintf(&sys, "\n## Notes\nWhen the person asks to put a plan, write-up or findings in a note (Pocket Notes), create it with pocket_notes_create (category %[2]q, the team's folder) and put this link in its content: %[1]s. Every note that links to the issue is listed under Notes on the issue page, so that is all linking takes. To link an existing note, add the same link to it with pocket_notes_append.\n", link, firstNonEmpty(ci.NotesFolder, defaultNotesFolder))
 	if tai.LinkRefs {
@@ -941,14 +944,13 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 	} else {
 		fmt.Fprintf(&sys, "\n## Commits and pull requests\nKeep Pocket Projects out of the repository: do not mention %s, its URL, Pocket Projects, any internal id or who asked in branch names, commit messages, pull request titles or descriptions, or code comments. Write them for a reviewer who has never seen the ticket.\n", ci.Identifier)
 	}
-	// About the ticket, not the repository: always, whatever link_refs says (not reachable on a connected instance)
+	// About the ticket, not the repository: always, whatever link_refs says
+	fmt.Fprintf(&sys, "\n## After you open a pull request\nThen update the ticket with the Pocket Projects tools (search for pocket_projects_ tools if they are not loaded yet), each write small (they wait for the person's approval):\n"+
+		"1. Link it: pocket_projects_link_pr with id %[1]d%[3]s and the pull request's url (plus title, branch, repo, number). Pocket Projects also picks up PRs opened in this conversation by itself, so if that tool is missing just carry on; it follows the PR and completes the issue when it is merged.\n"+
+		"2. Post one comment with pocket_projects_comment (id %[1]d%[3]s): what changed, how it was tested, and what is NOT done.\n"+
+		"3. Turn concrete follow-ups into sub-issues with pocket_projects_create_issue (parent_id %[1]d, team %[2]s%[3]s); for small items append a \"- [ ] …\" checklist to the description with pocket_projects_update_issue instead (if that is refused, put the checklist in the comment).\n", ci.ID, teamKeyOf(ci.Identifier), ws)
 	if ci.Remote != "" {
-		sys.WriteString("\n## After you open a pull request\nGive the person its link and a short comment for the ticket (what changed, how it was tested, what is NOT done) to post there.\n")
-	} else {
-		fmt.Fprintf(&sys, "\n## After you open a pull request\nThen update the ticket with the Pocket Projects tools (search for pocket_projects_ tools if they are not loaded yet), each write small (they wait for the person's approval):\n"+
-			"1. Link it: pocket_projects_link_pr with id %[1]d and the pull request's url (plus title, branch, repo, number). Pocket Projects also picks up PRs opened in this conversation by itself, so if that tool is missing just carry on; it follows the PR and completes the issue when it is merged.\n"+
-			"2. Post one comment with pocket_projects_comment (id %[1]d): what changed, how it was tested, and what is NOT done.\n"+
-			"3. Turn concrete follow-ups into sub-issues with pocket_projects_create_issue (parent_id %[1]d, team %[2]s); for small items append a \"- [ ] …\" checklist to the description with pocket_projects_update_issue instead (if that is refused, put the checklist in the comment).\n", ci.ID, teamKeyOf(ci.Identifier))
+		sys.WriteString("If the Pocket Projects tools are missing or refuse the workspace, give the person the link and that comment to post on the ticket themselves.\n")
 	}
 	if ins := strings.TrimSpace(tai.Instructions); ins != "" {
 		sys.WriteString("\n## Team instructions\n" + ins + "\n")

@@ -288,7 +288,7 @@ func (s *Server) handleRemoteStartCode(w http.ResponseWriter, r *http.Request) {
 func (s *Server) remoteCodeIssue(r *http.Request, rem *store.Remote, ri *remoteIssue, cwd string) codeIssue {
 	ci := codeIssue{Identifier: ri.Identifier, Title: ri.Title, URL: firstNonEmpty(ri.URL, rem.URL+"/issue/"+ri.Identifier), Priority: priorityName(ri.Priority),
 		Description: ri.Description, Branch: ri.BranchName, Status: ri.StateType, Team: ri.Team.Name, Cwd: cwd,
-		NotesFolder: firstNonEmpty(ri.Team.NotesFolder, defaultNotesFolder), Remote: rem.Host()}
+		NotesFolder: firstNonEmpty(ri.Team.NotesFolder, defaultNotesFolder), Remote: rem.Host(), ID: ri.ID, RemoteID: rem.ID}
 	if ci.Branch == "" {
 		ci.Branch = strings.ToLower(ri.Identifier)
 	}
