@@ -4,7 +4,8 @@
 // conversations with their state.
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, V1 } from '../../lib/api'
+import { api, ApiError, V1 } from '../../lib/api'
+import { claimAgentWorkspace } from '../../lib/remotes'
 import { refreshAIActive } from '../../lib/ai-active'
 import { ago } from '../../lib/format'
 import type { CodeThread, CodeWorktree, IssueDetail } from '../../lib/types'
@@ -89,6 +90,11 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
     } catch (e) {
       tab?.close()
       const msg = errMsg(e)
+      if (e instanceof ApiError && typeof e.data.switch_to === 'string') {
+        // another tab took Pocket AI to another workspace: bring it here
+        toast(msg, 'err', { label: 'Use this one', run: () => { claimAgentWorkspace().then(() => start(action, note, worktree)) } })
+        return
+      }
       toast(msg, 'err', /code folder/i.test(msg) ? { label: 'Settings', run: () => navigate(`/team/${issue.team.key}/settings/ai`) } : undefined)
     } finally { setBusy(false) }
   }

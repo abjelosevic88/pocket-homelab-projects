@@ -19,6 +19,7 @@ type Remote struct {
 	RemoteUser string `json:"remote_user"`
 	InboxSeen  int64  `json:"-"`
 	Unread     int    `json:"unread"` // the person's unread inbox there, as last polled
+	TeamKeys   string `json:"-"`      // their team keys there, "ATH,OPS"
 	CreatedAt  string `json:"created_at"`
 	UpdatedAt  string `json:"updated_at"`
 }
@@ -31,11 +32,11 @@ func (r *Remote) Host() string {
 	return r.URL
 }
 
-const remoteCols = `id, user_id, name, url, token, proxy, remote_user, inbox_seen, unread, created_at, updated_at`
+const remoteCols = `id, user_id, name, url, token, proxy, remote_user, inbox_seen, unread, team_keys, created_at, updated_at`
 
 func scanRemote(row interface{ Scan(...any) error }) (*Remote, error) {
 	var r Remote
-	if err := row.Scan(&r.ID, &r.UserID, &r.Name, &r.URL, &r.Token, &r.Proxy, &r.RemoteUser, &r.InboxSeen, &r.Unread, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.UserID, &r.Name, &r.URL, &r.Token, &r.Proxy, &r.RemoteUser, &r.InboxSeen, &r.Unread, &r.TeamKeys, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, notFound(err)
 	}
 	return &r, nil
@@ -56,6 +57,12 @@ func (s *Store) HasRemotes(ctx context.Context, userID int64) bool {
 	var n int
 	_ = s.DB.QueryRowContext(ctx, `SELECT count(*) FROM remotes WHERE user_id = ?`, userID).Scan(&n)
 	return n > 0
+}
+
+// SetRemoteTeamKeys records the person's team keys over there.
+func (s *Store) SetRemoteTeamKeys(ctx context.Context, id int64, keys string) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE remotes SET team_keys = ? WHERE id = ?`, keys, id)
+	return err
 }
 
 // SetRemoteInbox records the poll of the person's inbox over there.

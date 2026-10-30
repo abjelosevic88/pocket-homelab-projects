@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { REMOTE } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import { useRemotes } from '../lib/remotes'
+import { useRemotes, watchAgentWorkspace } from '../lib/remotes'
 import { useAIActiveList } from '../lib/ai-active'
 import { useTeamDeploy } from '../lib/deploy-live'
 import type { Favorite, Team } from '../lib/types'
@@ -79,6 +79,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const live = teams.filter(t => !t.archived_at)
   const favorites = boot?.favorites || []
   const remotes = useRemotes()
+  useEffect(() => watchAgentWorkspace(), [])
   const [wsMenu, setWsMenu] = useState<Anchor | null>(null)
   const here = remotes.find(r => r.id === REMOTE)
   const otherUnread = remotes.filter(r => r.id !== REMOTE).reduce((n, r) => n + (r.unread || 0), 0)
@@ -99,7 +100,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         {status?.version && <span className="sb-version" title={`Version ${status.version}`}>{/^v?\d+\.\d+/.test(status.version) ? 'v' + status.version.replace(/^v/, '').replace(/[-+].*$/, '') : status.version}</span>}
       </div>
       {(REMOTE > 0 || remotes.length > 0) && <button type="button" className={`sb-ws ${REMOTE ? 'remote' : ''}`} onClick={e => setWsMenu(rectOf(e.currentTarget))}
-        title={REMOTE ? `${here?.host || 'A connected instance'}: its teams, as you there. Your Pocket AI conversations and notes stay yours, here.` : 'Switch workspace'}>
+        title={(REMOTE ? `${here?.host || 'A connected instance'}: its teams, as you there. Your Pocket AI conversations and notes stay yours, here.` : 'Switch workspace') + ' Pocket AI works in the workspace open here; the others are closed to it.'}>
         <Icon name={REMOTE ? 'globe' : 'home'} size={14} /><span className="ellipsis">{REMOTE ? here?.name || 'Connected instance' : 'Your workspace'}</span>
         {REMOTE > 0 && here && <span className="sb-ws-host ellipsis">{here.host}</span>}
         {otherUnread > 0 && <span className="sb-ws-badge" title={`${otherUnread} unread in your other workspaces`}>{otherUnread}</span>}<Icon name="chevron-down" size={13} />

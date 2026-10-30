@@ -599,7 +599,8 @@ type codeIssue struct {
 	Links                                                                  []string // other attachments: "Title — URL"
 	SharedNotes                                                            []store.IssueDoc
 	Remote                                                                 string // the connected instance it lives on ("" = this one)
-	RemoteID                                                               int64  // the person's connection to it: the tools' workspace
+	RemoteID                                                               int64  // the person's connection to it
+	Workspace                                                              string // the tools' workspace: the address of the instance it lives on
 	NotesFolder                                                            string // the team's folder in Pocket Notes
 	Files                                                                  []codeFile
 	Team, Cwd                                                              string
@@ -608,6 +609,9 @@ type codeIssue struct {
 
 func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if !s.codeHere(w, r, s.ownAddress(r)) {
+		return
+	}
 	var in struct {
 		Action string `json:"action"`
 		Note   string `json:"note"`
@@ -752,7 +756,7 @@ func shortCwd(p string) string {
 // codeIssueOf gathers the issue's context the person can see.
 func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, cwd string) codeIssue {
 	ctx := r.Context()
-	ci := codeIssue{ID: is.ID, Identifier: is.Identifier, Title: is.Title, URL: s.issueURL(r, is.Identifier), Priority: priorityName(is.Priority),
+	ci := codeIssue{ID: is.ID, Workspace: s.ownAddress(r), Identifier: is.Identifier, Title: is.Title, URL: s.issueURL(r, is.Identifier), Priority: priorityName(is.Priority),
 		Description: is.Description, Branch: s.branchName(ctx, a.uid, is), Team: team, Cwd: cwd, NotesFolder: s.teamNotesFolder(ctx, is.TeamID)}
 	if st, err := s.store.GetState(ctx, is.StateID); err == nil {
 		ci.Status = st.Name
@@ -929,14 +933,15 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 
 	var sys strings.Builder
 	fmt.Fprintf(&sys, "This conversation is about issue %s (%q) in Pocket Projects (%s), team %s, working in %s.\n", ci.Identifier, ci.Title, ci.URL, ci.Team, ci.Cwd)
-	// every tool call says its workspace: 0 = the person's own instance, else their connection
-	ws := ", workspace 0"
+	// every tool call says its workspace by address: the instance the ticket lives on
+	addr := ci.Workspace
+	ws := fmt.Sprintf(", workspace %q", addr)
 	if ci.Remote != "" {
-		ws = fmt.Sprintf(", workspace %d", ci.RemoteID)
-		fmt.Fprintf(&sys, "The ticket lives on another Pocket Projects instance (%s) that the person connected as workspace %d. Pass workspace %d to every pocket_projects_* tool for this ticket and its team (without it they reach the person's own instance, where the same names mean other things); changes are made there as the person.\n", ci.Remote, ci.RemoteID, ci.RemoteID)
+		fmt.Fprintf(&sys, "The ticket lives on another Pocket Projects instance that the person connected: workspace %q. Pass workspace %q to every pocket_projects_* tool for this ticket and its team; changes are made there as the person.\n", addr, addr)
 	} else {
-		sys.WriteString("Pass workspace 0 (the person's own instance, where this ticket is) to every pocket_projects_* tool for this ticket and its team; changes that don't say their workspace are refused once other workspaces are connected.\n")
+		fmt.Fprintf(&sys, "The ticket lives on the person's own Pocket Projects: workspace %q. Pass workspace %q to every pocket_projects_* tool for this ticket and its team.\n", addr, addr)
 	}
+	sys.WriteString("If a tool says this workspace is closed to Pocket AI (the person may allow only the workspace open in Pocket Projects), tell them to open it there; never try another workspace instead.\n")
 	fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %q%s (the identifier, never a bare number); writes wait for the person's approval. ", ci.Identifier, ws)
 	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + ws + "): one short factual line, never secrets or credentials.\n")
 	link := "[" + strings.NewReplacer("[", "(", "]", ")").Replace(ci.Identifier+" · "+ci.Title) + "](" + ci.URL + ")"
@@ -951,7 +956,7 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 	fmt.Fprintf(&sys, "\n## After you open a pull request\nThen update the ticket with the Pocket Projects tools (search for pocket_projects_ tools if they are not loaded yet), each write small (they wait for the person's approval):\n"+
 		"1. Link it: pocket_projects_link_pr with id %[4]q%[3]s and the pull request's url (plus title, branch, repo, number). Pocket Projects also picks up PRs opened in this conversation by itself, so if that tool is missing just carry on; it follows the PR and completes the issue when it is merged.\n"+
 		"2. Post one comment with pocket_projects_comment (id %[4]q%[3]s): what changed, how it was tested, and what is NOT done.\n"+
-		"3. Turn concrete follow-ups into sub-issues with pocket_projects_create_issue (parent_id %[1]d, team %[2]s%[3]s); for small items append a \"- [ ] …\" checklist to the description with pocket_projects_update_issue instead (if that is refused, put the checklist in the comment).\n", ci.ID, teamKeyOf(ci.Identifier), ws, ci.Identifier)
+		"3. Turn concrete follow-ups into sub-issues with pocket_projects_create_issue (parent_id %[4]q, team %[2]s%[3]s); for small items append a \"- [ ] …\" checklist to the description with pocket_projects_update_issue instead (if that is refused, put the checklist in the comment).\n", ci.ID, teamKeyOf(ci.Identifier), ws, ci.Identifier)
 	if ci.Remote != "" {
 		sys.WriteString("If the Pocket Projects tools are missing or refuse the workspace, give the person the link and that comment to post on the ticket themselves.\n")
 	}

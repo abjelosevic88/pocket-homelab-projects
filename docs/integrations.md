@@ -35,11 +35,23 @@ calls `/r/{workspace}/api/v1/…` here, which passes it on to that connected Poc
 the agent reads, creates and changes issues on the other instance as you, with your rights there; its links point at
 `/r/{workspace}/…` here. **Code with Pocket AI** names the issue by its identifier (and, on a connected issue, its workspace).
 
-Once someone connected another instance, **every change** a tool call (`X-Pocket-Source: mcp`) makes here must say
-its workspace, or it is refused with 409 and nothing changes: a number, a team key, even an identifier like `WEB-12`
-can name something over there too. Core sends `X-Pocket-Workspace` when the tool got `workspace` (0 = their own
-instance); Code with Pocket AI always passes it. Calls through `/r/{id}/…` are explicit. Reads and people in the web
-app are never affected. Connecting tells which of the person's team keys the other instance uses too (`same_keys`).
+**Agents and workspaces** (`workspace_guard.go`). Tools name the workspace by **address** (`workspace:
+"projects.example.com"`, sent by Core as `X-Pocket-Workspace`); `pocket_projects_workspaces` (`GET /workspaces`) lists
+the person's own instance and connections with `active`/`open`. A call for a connection is answered through
+`/r/{id}/…`; agents can't call `/r/…` themselves. Once the person connected another instance:
+
+- every change must say its workspace, and name its target so that a wrong workspace finds nothing: issues by
+  identifier (`ATH-12`, never a number, parents too), new issues and team memory by team key, new projects by `teams`
+  (keys; mapped to the workspace's own `team_ids`), a project by number **and** exact name (`project`);
+- the key must exist in the workspace said, and a key used in two of the person's workspaces is off limits to agents;
+- **only the workspace open in Projects** (Settings → Connected instances, on by default): the web app claims the
+  workspace of the tab looked at last (`PUT /workspaces/agent`); every other one refuses agents, reads too, and Code
+  there offers to switch. Only the person changes either (`PUT /workspaces/agent`, `PUT /workspaces/rule`); agent and
+  link calls get 403. Pocket AI reads `GET /workspaces` (projects:read link) and shows conversations about the other
+  workspaces as paused.
+
+Core's links for a connection are `/r/<address>/…`; Projects redirects them to the person's `/r/{id}/…`. Connecting
+tells which team keys both sides use (`same_keys`).
 
 **Connected inboxes:** every two minutes this server reads the person's inbox on each connected instance with their
 token there. New entries are pushed through their own notification address with the same per-kind switches

@@ -52,7 +52,7 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	alex.do("POST", "/api/v1/issues", map[string]any{"team_id": mine.ID, "title": "Home thing"}, 201, &here)
 
 	// an agent's write by bare number: fine while there is only this instance
-	tool := func(method, path, workspace string, body any) int {
+	call := func(method, path, workspace string, body any) (int, string) {
 		t.Helper()
 		b, _ := json.Marshal(body)
 		req := httptest.NewRequest(method, path, bytes.NewReader(b))
@@ -64,12 +64,20 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 		}
 		w := httptest.NewRecorder()
 		hA.ServeHTTP(w, req)
-		return w.Code
+		return w.Code, w.Body.String()
+	}
+	tool := func(method, path, workspace string, body any) int {
+		t.Helper()
+		c, _ := call(method, path, workspace, body)
+		return c
 	}
 	num := "/api/v1/issues/" + strconv.FormatInt(here.ID, 10)
 	if c := tool("POST", num+"/comments", "", map[string]any{"body": "one"}); c != 201 {
 		t.Fatalf("no connections yet: %d", c)
 	}
+	var only store.Team
+	alex.do("POST", "/api/v1/teams", map[string]any{"name": "Mine", "key": "mine", "preset": "software"}, 201, &only)
+	alex.do("POST", "/api/v1/issues", map[string]any{"team_id": only.ID, "title": "Only here"}, 201, nil)
 
 	var rem struct {
 		remoteOut
@@ -90,37 +98,69 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 		t.Fatalf("token read back: %v", err)
 	}
 
-	// now a bare number is ambiguous for an agent; people and explicit calls are not
-	if c := tool("POST", num+"/comments", "", map[string]any{"body": "two"}); c != 409 {
-		t.Fatalf("ambiguous write went through: %d", c)
-	}
-	if c := tool("PATCH", num, "", map[string]any{"title": "Changed"}); c != 409 {
-		t.Fatalf("ambiguous update went through: %d", c)
-	}
-	if c := tool("POST", num+"/comments", "0", map[string]any{"body": "three"}); c != 201 {
-		t.Fatalf("workspace 0 refused: %d", c)
-	}
-	// strict: an identifier, a new issue, a project, team memory: all need the workspace said
-	for _, c := range []struct{ method, path string }{{"POST", "/api/v1/issues/WEB-1/comments"}, {"POST", "/api/v1/issues"}, {"POST", "/api/v1/projects"}, {"POST", "/api/v1/teams/WEB/memory"}} {
-		if code := tool(c.method, c.path, "", map[string]any{"body": "x", "title": "x", "name": "x", "text": "x", "team": "WEB"}); code != 409 {
-			t.Fatalf("%s %s without workspace: %d", c.method, c.path, code)
+	own, addr := "projects.home.example", strings.ToLower(strings.TrimPrefix(srvB.URL, "http://"))
+	expect := func(code int, method, path, ws string, body any, why string) {
+		t.Helper()
+		if c, b := call(method, path, ws, body); c != code {
+			t.Fatalf("%s: %s %s (%s) = %d %s", why, method, path, ws, c, b)
 		}
 	}
-	if c := tool("POST", "/api/v1/issues", "0", map[string]any{"title": "Made here", "team": "WEB"}); c != 201 {
-		t.Fatalf("create with workspace 0: %d", c)
+	// every change says its workspace, and names its target so a wrong one finds nothing
+	expect(409, "POST", "/api/v1/issues/MINE-1/comments", "", map[string]any{"body": "x"}, "no workspace")
+	expect(409, "POST", num+"/comments", own, map[string]any{"body": "x"}, "bare number")
+	expect(201, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "by name"}, "identifier here")
+	expect(409, "POST", "/api/v1/issues/WEB-1/comments", own, map[string]any{"body": "x"}, "key in both workspaces")
+	expect(409, "POST", "/api/v1/issues/ATH-1/comments", own, map[string]any{"body": "x"}, "team only over addr")
+	expect(409, "POST", "/api/v1/issues", own, map[string]any{"title": "x"}, "new issue without team")
+	expect(201, "POST", "/api/v1/issues", own, map[string]any{"title": "New here", "team": "MINE"}, "new issue by key")
+	expect(409, "POST", "/api/v1/issues", own, map[string]any{"title": "x", "team": "MINE", "parent_id": "1"}, "parent by number")
+	expect(409, "POST", "/api/v1/projects", own, map[string]any{"name": "P", "team_ids": []int64{only.ID}}, "project by team ids")
+	var proj struct {
+		ID int64 `json:"id"`
 	}
-	if c := tool("POST", "/api/v1/issues/WEB-1/comments", "0", map[string]any{"body": "four"}); c != 201 {
-		t.Fatalf("identifier with workspace 0: %d", c)
+	c, b := call("POST", "/api/v1/projects", own, map[string]any{"name": "Pilot", "teams": []string{"MINE"}})
+	if c != 201 || json.Unmarshal([]byte(b), &proj) != nil {
+		t.Fatalf("project by key: %d %s", c, b)
 	}
-	if c := tool("GET", num, "", nil); c != 200 {
-		t.Fatalf("read refused: %d", c)
+	pu := "/api/v1/projects/" + strconv.FormatInt(proj.ID, 10) + "/updates"
+	expect(409, "POST", pu, own, map[string]any{"body": "x", "health": "on_track"}, "update without the project's name")
+	expect(409, "POST", pu, own, map[string]any{"body": "x", "health": "on_track", "project": "Other"}, "update with another name")
+	expect(201, "POST", pu, own, map[string]any{"body": "Fine", "health": "on_track", "project": "pilot"}, "update by number and name")
+	expect(404, "GET", "/api/v1/issues/MINE-1", "nowhere.example", nil, "unknown workspace")
+	expect(200, "GET", "/api/v1/issues/MINE-1", "", nil, "reads default to the open workspace")
+
+	// one workspace at a time: only the one open in Projects
+	expect(409, "GET", "/api/v1/issues/ATH-1", addr, nil, "closed workspace, reads too")
+	expect(409, "POST", "/r/"+strconv.FormatInt(rem.ID, 10)+"/api/v1/issues/ATH-1/comments", "", map[string]any{"body": "x"}, "an agent straight to /r")
+	expect(403, "PUT", "/api/v1/workspaces/agent", own, map[string]any{"id": rem.ID}, "an agent picking its workspace")
+	expect(403, "PUT", "/api/v1/workspaces/rule", own, map[string]any{"one_workspace": false}, "an agent switching the rule off")
+	if c := alex.status("PUT", "/api/v1/workspaces/agent", map[string]any{"id": rem.ID}); c != 200 {
+		t.Fatalf("opening the workspace: %d", c)
 	}
-	alex.do("POST", num+"/comments", map[string]any{"body": "by hand"}, 201, nil)
-	// through the workspace the call is explicit, also for the instance over there
+	expect(201, "POST", "/api/v1/issues/ATH-1/comments", addr, map[string]any{"body": "addr"}, "the open workspace")
+	expect(409, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "x"}, "own instance closed now")
+	if c := alex.status("POST", "/api/v1/issues/MINE-1/code", map[string]any{"action": "chat"}); c != 409 {
+		t.Fatalf("Code on a closed workspace: %d", c)
+	}
+	var ws []workspaceOut
+	alex.do("GET", "/api/v1/workspaces", nil, 200, &ws)
+	if len(ws) != 2 || ws[0].Active || !ws[1].Active || !ws[1].Open || ws[1].Address != addr {
+		t.Fatalf("workspaces: %+v", ws)
+	}
+	// the rule off: every workspace, still naming which
+	alex.do("PUT", "/api/v1/workspaces/rule", map[string]any{"one_workspace": false}, 200, nil)
+	expect(201, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "rule off"}, "rule off")
+	expect(409, "POST", "/api/v1/issues/MINE-1/comments", "", map[string]any{"body": "x"}, "rule off, still says the workspace")
+	alex.do("GET", "/api/v1/workspaces", nil, 200, &ws)
+	if !ws[0].Active || !ws[1].Active || ws[0].Open {
+		t.Fatalf("workspaces with the rule off: %+v", ws)
+	}
+	alex.do("PUT", "/api/v1/workspaces/rule", map[string]any{"one_workspace": true}, 200, nil)
+	// links Core builds by address open the workspace here
+	if c, _ := alex.raw("GET", "/r/"+addr+"/issue/ATH-1", "", nil); c != 302 {
+		t.Fatalf("address link: %d", c)
+	}
 	base := "/r/" + strconv.FormatInt(rem.ID, 10)
-	if c := tool("POST", base+"/api/v1/issues/"+strconv.FormatInt(there.ID, 10)+"/comments", "", map[string]any{"body": "there"}); c != 201 {
-		t.Fatalf("workspace call: %d", c)
-	}
 
 	// the inbox over there: the first poll only takes note
 	bob.do("PATCH", "/api/v1/issues/ATH-1", map[string]any{"assignee": "alex@example.com"}, 200, nil)

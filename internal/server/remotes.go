@@ -37,6 +37,10 @@ func remoteFrom(ctx context.Context) *store.Remote {
 
 func (s *Server) remoteRoutes(r chi.Router) {
 	r.Get("/remotes", s.handleListRemotes)
+	r.Get("/workspaces", s.handleWorkspaces)
+	r.Put("/workspaces/agent", s.handleSetAgentWorkspace)
+	r.Get("/workspaces/rule", s.handleAgentRule)
+	r.Put("/workspaces/rule", s.handleAgentRule)
 	r.Post("/remotes", s.handleCreateRemote)
 	r.Patch("/remotes/{id}", s.handlePatchRemote)
 	r.Delete("/remotes/{id}", s.handleDeleteRemote)
@@ -77,6 +81,10 @@ func (s *Server) remoteAPI() http.Handler {
 	// this instance's session and connections, not the other one's
 	r.Post("/auth/logout", s.handleLogout)
 	r.Get("/remotes", s.handleListRemotes)
+	r.Get("/workspaces", s.handleWorkspaces)
+	r.Put("/workspaces/agent", s.handleSetAgentWorkspace)
+	r.Get("/workspaces/rule", s.handleAgentRule)
+	r.Put("/workspaces/rule", s.handleAgentRule)
 	r.NotFound(s.proxyRemote)
 	r.MethodNotAllowed(s.proxyRemote)
 	return r
@@ -360,8 +368,10 @@ func (s *Server) proxyRemote(w http.ResponseWriter, r *http.Request) {
 				pr.Out.Header.Del(h)
 			}
 			pr.Out.Header.Set("Authorization", "Bearer "+rem.Token)
-			if pr.In.Header.Get("X-Pocket-Source") != "" {
-				pr.Out.Header.Set("X-Pocket-Workspace", "0") // the workspace was said: this one, over there
+			// checked here already (workspace_guard.go): over there it is this connection asking
+			pr.Out.Header.Del("X-Pocket-Workspace")
+			if pr.In.Header.Get("X-Pocket-Source") == "mcp" {
+				pr.Out.Header.Set("X-Pocket-Source", "projects-remote")
 			}
 			if isJSON(pr.Out.Header.Get("Content-Type")) && pr.Out.Body != nil {
 				b, err := io.ReadAll(io.LimitReader(pr.Out.Body, 32<<20))
@@ -495,48 +505,3 @@ func (s *Server) issueInfoOf(r *http.Request, need int) (*issueInfo, error) {
 // remoteRef is how Pocket AI knows a connected instance's issue: host/ATH-12,
 // never mixed up with this instance's ATH-12.
 func remoteRef(rem *store.Remote, ident string) string { return rem.Host() + "/" + ident }
-
-// ---------- which workspace an agent means ----------
-
-// Once the person connected another instance, every change a tool call makes
-// here (Pocket Core's MCP gateway, X-Pocket-Source: mcp) must say which
-// workspace it means: X-Pocket-Workspace, set by Core when the tool got
-// workspace (0 = this instance). Without it nothing is changed: a number, a
-// team key or even an identifier like WEB-12 can name something over there
-// too, and an agent that forgot the workspace would create or change it here.
-// Calls through /r/{id}/… are explicit (that router isn't behind this guard).
-func (s *Server) workspaceGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-Pocket-Source") == "mcp" &&
-			r.Header.Get("X-Pocket-Workspace") == "" && s.store.HasRemotes(r.Context(), me(r)) {
-			writeErr(w, http.StatusConflict, "You connected other Pocket Projects workspaces, so every change must say which one; nothing was changed. "+
-				"Pass workspace: 0 for your own instance, or an id from pocket_projects_workspaces.")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// sameTeamKeys: the person's team keys here that a team over there uses too
-// (WEB-12 then names an issue in both; worth knowing when connecting).
-func (s *Server) sameTeamKeys(ctx context.Context, rem *store.Remote) []string {
-	var there []struct {
-		Key string `json:"key"`
-	}
-	if err := s.remoteCall(ctx, rem, http.MethodGet, "/api/v1/teams", nil, &there); err != nil {
-		return nil
-	}
-	mine, _ := s.store.ListTeams(ctx, rem.UserID)
-	keys := map[string]bool{}
-	for _, t := range mine {
-		keys[strings.ToUpper(t.Key)] = true
-	}
-	out := []string{}
-	for _, t := range there {
-		if k := strings.ToUpper(t.Key); keys[k] {
-			out = append(out, k)
-			delete(keys, k)
-		}
-	}
-	return out
-}

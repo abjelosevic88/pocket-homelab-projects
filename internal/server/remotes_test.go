@@ -99,6 +99,7 @@ func TestConnectedInstance(t *testing.T) {
 	ai := &fakeAI{}
 	asrv := ai.server(t)
 	connectAI(t, sA, alex.user.ID, asrv.URL)
+	alex.do("PUT", "/api/v1/workspaces/agent", map[string]any{"id": rem.ID}, 200, nil) // the workspace open in Projects
 	if code, b := alex.raw("POST", base+"/issues/ATH-1/code", "application/json", []byte(`{"action":"chat"}`)); code != 400 || !strings.Contains(string(b), "Just for you") {
 		t.Fatalf("no folder yet: %d %s", code, b)
 	}
@@ -112,9 +113,9 @@ func TestConnectedInstance(t *testing.T) {
 	sys, _ := d["system"].(string)
 	text, _ := d["text"].(string)
 	if d["ref"] != host+"/ATH-1" || d["cwd"] != "~/Projects/athena" || d["mode"] != "plan" || !strings.Contains(sys, "another Pocket Projects instance") ||
-		!strings.Contains(sys, "ATHENA-RULES") || !strings.Contains(sys, fmt.Sprintf(`pocket_projects_link_pr with id "ATH-1", workspace %d`, rem.ID)) ||
-		!strings.Contains(sys, fmt.Sprintf("Pass workspace %d to every pocket_projects_* tool", rem.ID)) ||
-		!strings.Contains(sys, fmt.Sprintf(`pocket_projects_share_note copies one of their notes there (id "ATH-1", note = its Pocket Notes id, workspace %d`, rem.ID)) || !strings.Contains(text, "Pilot setup") || !strings.Contains(text, "### Shared notes") {
+		!strings.Contains(sys, "ATHENA-RULES") || !strings.Contains(sys, fmt.Sprintf(`pocket_projects_link_pr with id "ATH-1", workspace %q`, host)) ||
+		!strings.Contains(sys, fmt.Sprintf("Pass workspace %q to every pocket_projects_* tool", host)) ||
+		!strings.Contains(sys, fmt.Sprintf(`pocket_projects_share_note copies one of their notes there (id "ATH-1", note = its Pocket Notes id, workspace %q`, host)) || !strings.Contains(text, "Pilot setup") || !strings.Contains(text, "### Shared notes") {
 		t.Fatalf("draft: %+v", d)
 	}
 	if _, err := sA.store.FindRemoteThread(context.Background(), rem.ID, "ATH-1", "d1"); err != nil {

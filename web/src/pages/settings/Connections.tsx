@@ -5,11 +5,12 @@ import { api, HOME_V1 } from '../../lib/api'
 import { ago } from '../../lib/format'
 import { loadRemotes, type Remote } from '../../lib/remotes'
 import { Icon } from '../../components/icons'
-import { Confirm, Empty, errMsg, Field, Loading, useAsync, useToast } from '../../components/ui'
+import { Confirm, Empty, errMsg, Field, Loading, Switch, useAsync, useToast } from '../../components/ui'
 import { Section } from './common'
 
 export function ConnectionsTab() {
   const { toast } = useToast()
+  const rule = useAsync(() => api.get<{ one_workspace: boolean }>(`${HOME_V1}/workspaces/rule`), [])
   const list = useAsync(() => loadRemotes(true), [])
   const [form, setForm] = useState({ name: '', url: '', token: '', proxy: '' })
   const [more, setMore] = useState(false)
@@ -72,6 +73,15 @@ export function ConnectionsTab() {
               ))}
             </div>
           )}
+      </Section>
+      <Section title="Pocket AI and your workspaces" sub="Every change an agent makes always names its workspace and its issue, so a wrong guess finds nothing. This goes further.">
+        <label className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
+          <Switch checked={!!rule.data?.one_workspace} disabled={!rule.data} onChange={v => api.put(`${HOME_V1}/workspaces/rule`, { one_workspace: v }).then(() => { rule.reload(); toast(v ? 'Pocket AI now works only in the workspace open here' : 'Pocket AI may now use all your workspaces') }).catch(e => toast(errMsg(e), 'err'))} />
+          <span className="grow">
+            <span className="set-person-name">Only the workspace open in Projects</span>
+            <span className="muted small" style={{ display: 'block' }}>Agents can reach only the workspace you have open here (the tab you looked at last); every other one refuses them, reads too. Conversations about the others show as paused in Pocket AI. Off: they may use any of your workspaces, still naming which.</span>
+          </span>
+        </label>
       </Section>
       {del && <Confirm title={`Disconnect ${del.name}?`} message={<>Its workspace goes from here, with the records of your Pocket AI conversations about its issues and your setup for its teams. Nothing changes on {del.host}; revoke the token there too if you won't connect it again.</>}
         confirmLabel="Disconnect" onCancel={() => setDel(null)} onConfirm={() => { const r = del; setDel(null); remove(r) }} />}

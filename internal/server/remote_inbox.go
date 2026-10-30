@@ -61,6 +61,7 @@ func (s *Server) pollRemoteInbox(ctx context.Context, rem *store.Remote) {
 	if rem.Token == "" {
 		return // sealed under a lost key: waits for a new token
 	}
+	s.remoteTeamKeys(ctx, rem) // agents' workspace checks need them current
 	var in struct {
 		Notifications []remoteNotification `json:"notifications"`
 		Unread        int                  `json:"unread"`

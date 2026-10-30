@@ -121,6 +121,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(s.logging)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5, "application/json", "text/html", "text/css", "application/javascript", "text/plain", "text/calendar", "text/csv"))
+	r.Use(s.agentWorkspace) // which workspace a tool call means (workspace_guard.go)
 
 	r.Get("/pocket-ask.js", s.core.AskWidget("projects"))
 	r.Get("/healthz", s.handleHealth)
@@ -143,7 +144,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/client-error", s.handleClientError)
 
 		r.Group(func(r chi.Router) {
-			r.Use(s.requireAuth, s.workspaceGuard)
+			r.Use(s.requireAuth)
 			r.Post("/auth/logout", s.handleLogout)
 			r.Get("/auth/me", s.handleMe)
 			r.Put("/auth/me", s.handleUpdateMe)
@@ -464,6 +465,9 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/feed/") || strings.HasPrefix(r.URL.Path, "/hooks/") || strings.HasPrefix(r.URL.Path, "/files/") {
 		writeErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	if s.workspaceLink(w, r) {
 		return
 	}
 	if s.webFS == nil {
