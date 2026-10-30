@@ -244,9 +244,9 @@ func (s *Server) startShared(w http.ResponseWriter, r *http.Request, is *store.I
 		Switch bool `json:"switch"`
 	}
 	_ = decode(r, &in)
-	// "app" matters only on a direct connection (Time then sees the person,
-	// not this app); through a Core link Time takes the app from the token.
-	body := map[string]any{"app": "projects", "app_ref": "issue:" + is.Identifier, "app_label": is.Identifier + " " + is.Title, "app_url": "/issue/" + is.Identifier,
+	// "app" and "source" matter only on a direct connection (Time then sees
+	// the person, not this app); through a Core link Time takes both from the token.
+	body := map[string]any{"app": "projects", "source": "projects", "app_ref": "issue:" + is.Identifier, "app_label": is.Identifier + " " + is.Title, "app_url": "/issue/" + is.Identifier,
 		"deliver": true, "switch": in.Switch}
 	if is.ProjectID != nil {
 		if p, err := s.store.GetProject(ctx, *is.ProjectID); err == nil && p.DeletedAt == nil {

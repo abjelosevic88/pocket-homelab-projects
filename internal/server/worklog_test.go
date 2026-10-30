@@ -334,7 +334,8 @@ func TestSharedTimerThroughPocketTime(t *testing.T) {
 		t.Fatalf("started through Time: %+v", v)
 	}
 	st := ft.starts[0]
-	if st["app_ref"] != "issue:"+a.Identifier || st["app_label"] != a.Identifier+" Fix the login redirect" || st["app_url"] != "/issue/"+a.Identifier || st["deliver"] != true || st["switch"] != false {
+	if st["app_ref"] != "issue:"+a.Identifier || st["app_label"] != a.Identifier+" Fix the login redirect" || st["app_url"] != "/issue/"+a.Identifier || st["deliver"] != true || st["switch"] != false ||
+		st["app"] != "projects" || st["source"] != "projects" {
 		t.Fatalf("start sent to Time: %+v", st)
 	}
 	if s.store.RunningTimer(ctx, alex.user.ID) != nil {
