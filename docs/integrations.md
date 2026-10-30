@@ -78,6 +78,12 @@ On an issue, **Code** (header) or **Pocket AI → Code with Pocket AI…** (side
 - **Fix it**: switch to the issue's branch, change, test, commit with the identifier (the git hook links it).
 - **Chat about it**, optionally with a note.
 
+**Your prompts** (Team settings → Pocket AI, just for you): each member can word Investigate, Fix it and Chat their
+own way per team (`GET/PUT /teams/{ref}/ai/templates`, table `action_templates`; a connected instance's team is
+kept here under `remote:<id>:<KEY>`). The text replaces the built-in ask at the top of the first message, with
+`{{id}}`, `{{title}}`, `{{branch}}` and `{{url}}` filled in; the issue always follows, Investigate stays read-only,
+and in a worktree a line saying to stay on its branch is added. Empty = the built-in wording.
+
 Projects calls `POST /api/v1/link/drafts` on Pocket AI with the issue written out as the first message (description,
 status, labels, sub-issues, linked commits and pull requests, the last ten comments) and the team context as a
 hidden system prompt: instructions, memory, and how to use `pocket_projects_get_issue/comment/update_issue/remember`.

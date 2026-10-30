@@ -66,6 +66,8 @@ func (s *Server) remoteAPI() http.Handler {
 	r.Get("/ai/active", s.handleRemoteAIActive)
 	r.Get("/teams/{ref}/ai/mine", s.handleRemoteGetMyAI)
 	r.Put("/teams/{ref}/ai/mine", s.handleRemotePutMyAI)
+	r.Get("/teams/{ref}/ai/templates", s.handleRemoteGetTemplates)
+	r.Put("/teams/{ref}/ai/templates", s.handleRemotePutTemplates)
 	r.Put("/teams/{ref}/ai", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "the team's own Pocket AI setup is changed on "+remoteFrom(r.Context()).Name+" itself; here you set up your own (Just for you)")
 	})

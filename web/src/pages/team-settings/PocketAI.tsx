@@ -119,6 +119,7 @@ export function PocketAITab({ team, admin }: TabProps) {
       </Section>
 
       {my.data && <MySetup team={team} o={o} teamAI={saved.data} my={my.data} onSaved={my.reload} />}
+      <MyPrompts team={team} />
       {my.error && <div className="callout danger"><Icon name="alert" size={15} /><span>{my.error}</span></div>}
 
       {(my.data?.uses.cwd || saved.data.cwd) && <DeploySettings team={team} admin={admin} hostOpts={hostOpts}
@@ -208,6 +209,43 @@ function MySetup({ team, o, teamAI, my, onSaved }: { team: Team; o?: AgentOption
           <span className="spacer" style={{ flex: 1 }} />
           <button type="button" className="btn primary" disabled={!dirty || busy || (otherMachine && !f.cwd.trim())} onClick={() => save(f, 'Your setup saved')}>Save mine</button>
         </div>
+      </div>
+    </Section>
+  )
+}
+
+interface Templates { templates: Record<string, string>; defaults: Record<string, string>; placeholders: string[] }
+const PROMPT_ACTIONS: { id: 'investigate' | 'fix' | 'chat'; label: string }[] = [{ id: 'investigate', label: 'Investigate' }, { id: 'fix', label: 'Fix it' }, { id: 'chat', label: 'Chat about it' }]
+
+/** Just for you: a member's own wording for Investigate, Fix it and Chat in this team (the issue always follows it). */
+function MyPrompts({ team }: { team: Team }) {
+  const { toast } = useToast()
+  const data = useAsync(() => api.get<Templates>(`${V1}/teams/${team.key}/ai/templates`), [team.key])
+  const [f, setF] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { if (data.data) setF({ investigate: '', fix: '', chat: '', ...data.data.templates }) }, [data.data])
+  if (data.error) return <Section title="Your prompts"><div className="callout danger"><Icon name="alert" size={15} /><span>{data.error}</span></div></Section>
+  if (!data.data) return <Section title="Your prompts"><Loading /></Section>
+  const d = data.data
+  const dirty = PROMPT_ACTIONS.some(a => (f[a.id] || '') !== (d.templates[a.id] || ''))
+  const save = async () => {
+    setBusy(true)
+    try { await api.put(`${V1}/teams/${team.key}/ai/templates`, f); data.reload(); toast('Your prompts saved') } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
+  }
+  return (
+    <Section title="Your prompts" sub={<>Just for you: how <b>Investigate</b>, <b>Fix it</b> and <b>Chat about it</b> ask the agent in this team. The issue (description, comments, files, shared notes) always follows your text. Empty = the built-in wording, shown greyed. Fill-ins: {d.placeholders.map((p, i) => <span key={p}>{i ? ', ' : ''}<code>{p}</code></span>)}.</>}>
+      <div className="stack">
+        {PROMPT_ACTIONS.map(a => (
+          <Field key={a.id} label={a.label} help={<span className="row" style={{ gap: 10 }}>
+            {(f[a.id] || '') === '' ? <span className="muted">Built-in wording</span> : <span>Your own</span>}
+            <span className="spacer" style={{ flex: 1 }} />
+            {(f[a.id] || '') === '' && <button type="button" className="link-btn small" onClick={() => setF({ ...f, [a.id]: d.defaults[a.id] })}>Start from the built-in one</button>}
+            {(f[a.id] || '') !== '' && <button type="button" className="link-btn small" onClick={() => setF({ ...f, [a.id]: '' })}>Use the built-in one</button>}
+          </span>}>
+            <textarea value={f[a.id] || ''} onChange={e => setF({ ...f, [a.id]: e.target.value })} rows={4} spellCheck={false} placeholder={d.defaults[a.id]} maxLength={8000} />
+          </Field>
+        ))}
+        <div className="row"><span className="spacer" style={{ flex: 1 }} /><button type="button" className="btn primary" disabled={!dirty || busy} onClick={save}>Save my prompts</button></div>
       </div>
     </Section>
   )

@@ -29,6 +29,8 @@ func (s *Server) codeRoutes(r chi.Router) {
 	r.Put("/teams/{ref}/ai", s.handlePutTeamAI)
 	r.Get("/teams/{ref}/ai/mine", s.handleGetMyAI)
 	r.Put("/teams/{ref}/ai/mine", s.handlePutMyAI)
+	r.Get("/teams/{ref}/ai/templates", s.handleGetTemplates)
+	r.Put("/teams/{ref}/ai/templates", s.handlePutTemplates)
 	// where the team's attachments are kept: files.go
 	r.Get("/teams/{ref}/files", s.handleTeamFiles)
 	r.Put("/teams/{ref}/files", s.handlePutTeamFiles)
@@ -676,7 +678,8 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	if in.Worktree && !tai.LinkRefs {
 		ci.Branch = plainBranch(ci.Branch, is.Identifier)
 	}
-	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree)
+	mine, _ := s.store.ActionTemplates(ctx, me(r), store.TemplateScope(team.ID))
+	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree, mine)
 	body := map[string]any{"cwd": cwd, "title": title, "text": text, "system": system, "source": "projects",
 		"ref": is.Identifier, "ref_url": ci.URL, "ref_label": is.Identifier + " " + is.Title}
 	if in.Worktree {
@@ -871,19 +874,31 @@ func plainBranch(branch, ident string) string {
 
 // buildCodePrompt returns the conversation title, the visible first message
 // and the hidden system context.
-func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, worktree bool) (title, text, system string) {
+func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, worktree bool, own map[string]string) (title, text, system string) {
 	title = ci.Identifier + " · " + ci.Title
 	if r := []rune(title); len(r) > 80 {
 		title = string(r[:79]) + "…"
 	}
 	var b strings.Builder
-	ask := codeAsk[action]
-	if worktree && codeAsk[action+"-worktree"] != "" {
-		ask = codeAsk[action+"-worktree"]
-	} else if action == "fix" && !tai.LinkRefs {
-		ask = codeAsk["fix-plain"]
+	if mine := strings.TrimSpace(own[action]); mine != "" {
+		// the person's own wording for this action in this team
+		branch := ci.Branch
+		if action == "fix" && !tai.LinkRefs && !worktree {
+			branch = "a new branch with a short descriptive name"
+		}
+		b.WriteString(fillTemplate(mine, ci, branch))
+		if worktree {
+			b.WriteString("\nYou are in a git worktree of its own, on the branch " + ci.Branch + ": stay on it, do not switch branches.")
+		}
+	} else {
+		ask := codeAsk[action]
+		if worktree && codeAsk[action+"-worktree"] != "" {
+			ask = codeAsk[action+"-worktree"]
+		} else if action == "fix" && !tai.LinkRefs {
+			ask = codeAsk["fix-plain"]
+		}
+		fmt.Fprintf(&b, ask, ci.Identifier, ci.Branch)
 	}
-	fmt.Fprintf(&b, ask, ci.Identifier, ci.Branch)
 	b.WriteString("\n\n")
 	if n := strings.TrimSpace(note); n != "" {
 		b.WriteString(n + "\n\n")

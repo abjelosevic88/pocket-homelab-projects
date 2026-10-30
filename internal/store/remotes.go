@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/url"
 )
 
@@ -123,7 +124,13 @@ func (s *Store) SaveRemote(ctx context.Context, r *Remote) error {
 // DeleteRemote disconnects an instance (its conversations' records and the
 // person's setup for its teams go with it; nothing over there changes).
 func (s *Store) DeleteRemote(ctx context.Context, id, userID int64) error {
-	_, err := s.DB.ExecContext(ctx, `DELETE FROM remotes WHERE id = ? AND user_id = ?`, id, userID)
+	res, err := s.DB.ExecContext(ctx, `DELETE FROM remotes WHERE id = ? AND user_id = ?`, id, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		_, err = s.DB.ExecContext(ctx, `DELETE FROM action_templates WHERE user_id = ? AND scope LIKE ?`, userID, fmt.Sprintf("remote:%d:%%", id))
+	}
 	return err
 }
 

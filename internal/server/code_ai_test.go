@@ -171,6 +171,37 @@ func TestCodeWithPocketAI(t *testing.T) {
 			t.Fatalf("text misses %q:\n%s", want, text)
 		}
 	}
+	// a person's own wording for an action, in this team: replaces the built-in ask, the issue still follows
+	var tpl struct {
+		Templates map[string]string `json:"templates"`
+		Defaults  map[string]string `json:"defaults"`
+	}
+	alex.do("GET", "/api/v1/teams/WEB/ai/templates", nil, 200, &tpl)
+	if len(tpl.Templates) != 0 || !strings.Contains(tpl.Defaults["investigate"], "Investigate this issue") || !strings.Contains(tpl.Defaults["fix"], "Fix this issue") {
+		t.Fatalf("templates at first: %+v", tpl)
+	}
+	alex.do("PUT", "/api/v1/teams/WEB/ai/templates", map[string]any{"investigate": "Look into {{id}} ({{title}}) at {{url}}, 100% read-only."}, 200, &tpl)
+	if alex.status("PUT", "/api/v1/teams/WEB/ai/templates", map[string]any{"deploy": "x"}) != 400 {
+		t.Fatal("a template for an unknown action")
+	}
+	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "investigate"}, 201, nil)
+	mineText := ai.drafts[len(ai.drafts)-1]["text"].(string)
+	if !strings.HasPrefix(mineText, "Look into WEB-1 (Fix login) at https://projects.example/issue/WEB-1, 100% read-only.") ||
+		strings.Contains(mineText, "Investigate this issue") || !strings.Contains(mineText, "Login fails on Safari.") || ai.drafts[len(ai.drafts)-1]["mode"] != "plan" {
+		t.Fatalf("own template:\n%s", mineText)
+	}
+	var bens struct {
+		Templates map[string]string `json:"templates"`
+	}
+	ben.do("GET", "/api/v1/teams/WEB/ai/templates", nil, 200, &bens)
+	if len(bens.Templates) != 0 {
+		t.Fatalf("someone else's prompts: %+v", bens.Templates)
+	}
+	tpl.Templates = nil
+	alex.do("PUT", "/api/v1/teams/WEB/ai/templates", map[string]any{"investigate": ""}, 200, &tpl)
+	if len(tpl.Templates) != 0 {
+		t.Fatalf("reset: %+v", tpl.Templates)
+	}
 	for _, want := range []string{"issue WEB-1", `with id "WEB-1", workspace "projects.example" (the identifier`, "~/Projects/web", "Use pnpm, never npm.", "Team memory", "- Tests run with `make test` in CI (", "by Alex)", `pocket_projects_remember (team WEB, workspace "projects.example")`, `Pass workspace "projects.example"`} {
 		if !strings.Contains(system, want) {
 			t.Fatalf("system misses %q:\n%s", want, system)
@@ -197,7 +228,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if !started.Send {
 		t.Fatalf("team send_now not passed on: %+v", started)
 	}
-	d = ai.drafts[1]
+	d = ai.drafts[2] // [1] was the own-prompt one above
 	// link_refs off (the default): nothing about Pocket Projects goes into the repository
 	if d["mode"] != "default" || d["cwd"] != "/srv/relaunch" || strings.Contains(d["text"].(string), "web-1-fix-login") ||
 		!strings.Contains(d["system"].(string), "Keep Pocket Projects out of the repository") || strings.Contains(d["system"].(string), "Resolves WEB-1") {
@@ -207,7 +238,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 	alex.do("PUT", "/api/v1/teams/WEB/ai", map[string]any{"cwd": "~/Projects/web", "provider": "claude", "model": "opus", "effort": "high", "mode": "default",
 		"instructions": "Use pnpm, never npm.", "send_now": true, "link_refs": true}, 200, &tai)
 	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "fix"}, 201, nil)
-	d = ai.drafts[2]
+	d = ai.drafts[3]
 	if !strings.Contains(d["text"].(string), "web-1-fix-login") || !strings.Contains(d["system"].(string), "Resolves WEB-1 (") || strings.Contains(d["system"].(string), "Keep Pocket Projects out") {
 		t.Fatalf("fix draft (refs on): %+v", d)
 	}
@@ -269,7 +300,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 	}
 	alex.do("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "chat"}, 201, nil) // a new one (the fake hands out d1 again)
 	// after a pull request: link it, comment, follow-ups — with the issue's numeric id, either way
-	for _, i := range []int{1, 2} {
+	for _, i := range []int{2, 3} {
 		sys := ai.drafts[i]["system"].(string)
 		if !strings.Contains(sys, "After you open a pull request") || !strings.Contains(sys, `pocket_projects_link_pr with id "`+is.Identifier+`", workspace "projects.example"`) ||
 			!strings.Contains(sys, `parent_id "`+is.Identifier+`"`) {

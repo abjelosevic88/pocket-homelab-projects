@@ -248,7 +248,8 @@ func (s *Server) handleRemoteStartCode(w http.ResponseWriter, r *http.Request) {
 	if in.Worktree && !tai.LinkRefs {
 		ci.Branch = plainBranch(ci.Branch, ri.Identifier)
 	}
-	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree)
+	own, _ := s.store.ActionTemplates(ctx, me(r), store.RemoteTemplateScope(rem.ID, teamKeyOf(ri.Identifier)))
+	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree, own)
 	body := map[string]any{"cwd": tai.Cwd, "title": title, "text": text, "system": system, "source": "projects",
 		"ref": remoteRef(rem, ri.Identifier), "ref_url": ci.URL, "ref_label": ri.Identifier + " " + ri.Title}
 	if in.Worktree {
