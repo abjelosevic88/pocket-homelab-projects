@@ -35,10 +35,11 @@ calls `/r/{workspace}/api/v1/…` here, which passes it on to that connected Poc
 the agent reads, creates and changes issues on the other instance as you, with your rights there; its links point at
 `/r/{workspace}/…` here. **Code with Pocket AI** names the issue by its identifier (and, on a connected issue, its workspace).
 
-Once someone connected another instance, a tool call (`X-Pocket-Source: mcp`) that **changes** an issue or project by
-bare number without saying the workspace is refused with 409: the same number is another issue over there. Core sends
-`X-Pocket-Workspace` when the tool got `workspace` (0 = their own instance); an identifier like `WEB-12` needs neither.
-Calls through `/r/{id}/…` count as explicit. Reads and people in the web app are never affected.
+Once someone connected another instance, **every change** a tool call (`X-Pocket-Source: mcp`) makes here must say
+its workspace, or it is refused with 409 and nothing changes: a number, a team key, even an identifier like `WEB-12`
+can name something over there too. Core sends `X-Pocket-Workspace` when the tool got `workspace` (0 = their own
+instance); Code with Pocket AI always passes it. Calls through `/r/{id}/…` are explicit. Reads and people in the web
+app are never affected. Connecting tells which of the person's team keys the other instance uses too (`same_keys`).
 
 **Connected inboxes:** every two minutes this server reads the person's inbox on each connected instance with their
 token there. New entries are pushed through their own notification address with the same per-kind switches

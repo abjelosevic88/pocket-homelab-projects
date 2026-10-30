@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -201,7 +200,10 @@ func (s *Server) handleCreateRemote(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "connection")
 		return
 	}
-	writeJSON(w, http.StatusCreated, outRemote(*rem))
+	writeJSON(w, http.StatusCreated, struct {
+		remoteOut
+		SameKeys []string `json:"same_keys"`
+	}{outRemote(*rem), s.sameTeamKeys(r.Context(), rem)})
 }
 
 func (s *Server) applyRemote(rem *store.Remote, in remoteIn) error {
@@ -496,22 +498,45 @@ func remoteRef(rem *store.Remote, ident string) string { return rem.Host() + "/"
 
 // ---------- which workspace an agent means ----------
 
-// A tool call (Pocket Core's MCP gateway, X-Pocket-Source: mcp) that changes
-// an issue or project by bare number is ambiguous once the person connected
-// another instance: the same number is a different issue there, and an agent
-// that forgot the workspace would change the wrong one here. Such writes need
-// the workspace said (X-Pocket-Workspace, set by Core when the tool got one;
-// 0 = this instance) or the issue's identifier (WEB-12) instead of a number.
-var bareNumberPath = regexp.MustCompile(`^/api/v1/(issues|projects)/[0-9]+(/|$)`)
-
+// Once the person connected another instance, every change a tool call makes
+// here (Pocket Core's MCP gateway, X-Pocket-Source: mcp) must say which
+// workspace it means: X-Pocket-Workspace, set by Core when the tool got
+// workspace (0 = this instance). Without it nothing is changed: a number, a
+// team key or even an identifier like WEB-12 can name something over there
+// too, and an agent that forgot the workspace would create or change it here.
+// Calls through /r/{id}/… are explicit (that router isn't behind this guard).
 func (s *Server) workspaceGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-Pocket-Source") == "mcp" &&
-			r.Header.Get("X-Pocket-Workspace") == "" && bareNumberPath.MatchString(r.URL.Path) && s.store.HasRemotes(r.Context(), me(r)) {
-			writeErr(w, http.StatusConflict, "You connected other Pocket Projects workspaces, so a bare number is ambiguous and nothing was changed. "+
-				"Pass workspace (0 = your own instance, or an id from pocket_projects_workspaces), or name the issue by its identifier such as WEB-12.")
+			r.Header.Get("X-Pocket-Workspace") == "" && s.store.HasRemotes(r.Context(), me(r)) {
+			writeErr(w, http.StatusConflict, "You connected other Pocket Projects workspaces, so every change must say which one; nothing was changed. "+
+				"Pass workspace: 0 for your own instance, or an id from pocket_projects_workspaces.")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// sameTeamKeys: the person's team keys here that a team over there uses too
+// (WEB-12 then names an issue in both; worth knowing when connecting).
+func (s *Server) sameTeamKeys(ctx context.Context, rem *store.Remote) []string {
+	var there []struct {
+		Key string `json:"key"`
+	}
+	if err := s.remoteCall(ctx, rem, http.MethodGet, "/api/v1/teams", nil, &there); err != nil {
+		return nil
+	}
+	mine, _ := s.store.ListTeams(ctx, rem.UserID)
+	keys := map[string]bool{}
+	for _, t := range mine {
+		keys[strings.ToUpper(t.Key)] = true
+	}
+	out := []string{}
+	for _, t := range there {
+		if k := strings.ToUpper(t.Key); keys[k] {
+			out = append(out, k)
+			delete(keys, k)
+		}
+	}
+	return out
 }

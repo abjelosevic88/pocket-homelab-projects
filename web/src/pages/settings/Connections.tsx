@@ -26,8 +26,9 @@ export function ConnectionsTab() {
         await api.patch(`${HOME_V1}/remotes/${editing.id}`, { name: form.name, url: form.url, proxy: form.proxy, ...(form.token.trim() ? { token: form.token } : {}) })
         toast(`Saved “${form.name || editing.name}”`)
       } else {
-        const r = await api.post<Remote>(`${HOME_V1}/remotes`, form)
+        const r = await api.post<Remote & { same_keys?: string[] }>(`${HOME_V1}/remotes`, form)
         toast(`Connected ${r.host} as ${r.remote_user}`)
+        if (r.same_keys?.length) toast(`${r.name} also has team${r.same_keys.length > 1 ? 's' : ''} ${r.same_keys.join(', ')}: ${r.same_keys[0]}-1 there is another issue than here. Pocket AI always says which workspace it means.`, 'err')
       }
       setForm({ name: '', url: '', token: '', proxy: '' }); setEditing(null); setMore(false); list.reload()
     } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }

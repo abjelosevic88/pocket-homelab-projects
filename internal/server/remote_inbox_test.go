@@ -28,6 +28,9 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	bob.do("POST", "/api/v1/teams/ATH/members", map[string]any{"user_id": alexThere.user.ID, "role": "member"}, 200, nil)
 	var there store.Issue
 	bob.do("POST", "/api/v1/issues", map[string]any{"team_id": team.ID, "title": "Pilot setup"}, 201, &there)
+	// a team over there with the key of one here: said when connecting
+	bob.do("POST", "/api/v1/teams", map[string]any{"name": "Their web", "key": "web", "preset": "software"}, 201, nil)
+	bob.do("POST", "/api/v1/teams/WEB/members", map[string]any{"user_id": alexThere.user.ID, "role": "member"}, 200, nil)
 
 	sA, hA := apiServer(t)
 	sA.cfg.BaseURL = "https://projects.home.example"
@@ -68,8 +71,14 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 		t.Fatalf("no connections yet: %d", c)
 	}
 
-	var rem remoteOut
+	var rem struct {
+		remoteOut
+		SameKeys []string `json:"same_keys"`
+	}
 	alex.do("POST", "/api/v1/remotes", map[string]any{"name": "Athena", "url": srvB.URL, "token": alexThere.token}, 201, &rem)
+	if strings.Join(rem.SameKeys, ",") != "WEB" {
+		t.Fatalf("same keys: %v", rem.SameKeys)
+	}
 
 	// the token is sealed in the database, and still works
 	var raw string
@@ -91,8 +100,17 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	if c := tool("POST", num+"/comments", "0", map[string]any{"body": "three"}); c != 201 {
 		t.Fatalf("workspace 0 refused: %d", c)
 	}
-	if c := tool("POST", "/api/v1/issues/WEB-1/comments", "", map[string]any{"body": "four"}); c != 201 {
-		t.Fatalf("identifier refused: %d", c)
+	// strict: an identifier, a new issue, a project, team memory: all need the workspace said
+	for _, c := range []struct{ method, path string }{{"POST", "/api/v1/issues/WEB-1/comments"}, {"POST", "/api/v1/issues"}, {"POST", "/api/v1/projects"}, {"POST", "/api/v1/teams/WEB/memory"}} {
+		if code := tool(c.method, c.path, "", map[string]any{"body": "x", "title": "x", "name": "x", "text": "x", "team": "WEB"}); code != 409 {
+			t.Fatalf("%s %s without workspace: %d", c.method, c.path, code)
+		}
+	}
+	if c := tool("POST", "/api/v1/issues", "0", map[string]any{"title": "Made here", "team": "WEB"}); c != 201 {
+		t.Fatalf("create with workspace 0: %d", c)
+	}
+	if c := tool("POST", "/api/v1/issues/WEB-1/comments", "0", map[string]any{"body": "four"}); c != 201 {
+		t.Fatalf("identifier with workspace 0: %d", c)
 	}
 	if c := tool("GET", num, "", nil); c != 200 {
 		t.Fatalf("read refused: %d", c)

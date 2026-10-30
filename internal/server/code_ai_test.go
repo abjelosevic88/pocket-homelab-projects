@@ -171,7 +171,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 			t.Fatalf("text misses %q:\n%s", want, text)
 		}
 	}
-	for _, want := range []string{"issue WEB-1", `with id "WEB-1" (the identifier`, "~/Projects/web", "Use pnpm, never npm.", "Team memory", "- Tests run with `make test` in CI (", "by Alex)", "pocket_projects_remember (team WEB)"} {
+	for _, want := range []string{"issue WEB-1", `with id "WEB-1", workspace 0 (the identifier`, "~/Projects/web", "Use pnpm, never npm.", "Team memory", "- Tests run with `make test` in CI (", "by Alex)", "pocket_projects_remember (team WEB, workspace 0)", "Pass workspace 0"} {
 		if !strings.Contains(system, want) {
 			t.Fatalf("system misses %q:\n%s", want, system)
 		}
@@ -271,7 +271,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 	// after a pull request: link it, comment, follow-ups — with the issue's numeric id, either way
 	for _, i := range []int{1, 2} {
 		sys := ai.drafts[i]["system"].(string)
-		if !strings.Contains(sys, "After you open a pull request") || !strings.Contains(sys, `pocket_projects_link_pr with id "`+is.Identifier+`"`) ||
+		if !strings.Contains(sys, "After you open a pull request") || !strings.Contains(sys, `pocket_projects_link_pr with id "`+is.Identifier+`", workspace 0`) ||
 			!strings.Contains(sys, "parent_id "+strconv.FormatInt(is.ID, 10)) {
 			t.Fatalf("after-PR steps missing (draft %d): %s", i, sys)
 		}

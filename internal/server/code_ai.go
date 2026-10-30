@@ -929,11 +929,13 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 
 	var sys strings.Builder
 	fmt.Fprintf(&sys, "This conversation is about issue %s (%q) in Pocket Projects (%s), team %s, working in %s.\n", ci.Identifier, ci.Title, ci.URL, ci.Team, ci.Cwd)
-	// a connected instance's ticket: the same tools, with the person's connection as workspace
-	ws := ""
+	// every tool call says its workspace: 0 = the person's own instance, else their connection
+	ws := ", workspace 0"
 	if ci.Remote != "" {
 		ws = fmt.Sprintf(", workspace %d", ci.RemoteID)
-		fmt.Fprintf(&sys, "The ticket lives on another Pocket Projects instance (%s) that the person connected as workspace %d. Pass workspace %d to every pocket_projects_* tool for this ticket and its team (without it they reach the person's own instance, where the ids mean other things); changes are made there as the person.\n", ci.Remote, ci.RemoteID, ci.RemoteID)
+		fmt.Fprintf(&sys, "The ticket lives on another Pocket Projects instance (%s) that the person connected as workspace %d. Pass workspace %d to every pocket_projects_* tool for this ticket and its team (without it they reach the person's own instance, where the same names mean other things); changes are made there as the person.\n", ci.Remote, ci.RemoteID, ci.RemoteID)
+	} else {
+		sys.WriteString("Pass workspace 0 (the person's own instance, where this ticket is) to every pocket_projects_* tool for this ticket and its team; changes that don't say their workspace are refused once other workspaces are connected.\n")
 	}
 	fmt.Fprintf(&sys, "Read or update the ticket with the Pocket Projects tools when they are available: pocket_projects_get_issue, pocket_projects_comment and pocket_projects_update_issue with id %q%s (the identifier, never a bare number); writes wait for the person's approval. ", ci.Identifier, ws)
 	sys.WriteString("When you learn something durable about this team's code, conventions or environment that would help future conversations, save it with pocket_projects_remember (team " + teamKeyOf(ci.Identifier) + ws + "): one short factual line, never secrets or credentials.\n")
