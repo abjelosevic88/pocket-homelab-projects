@@ -42,6 +42,13 @@ func (s *Store) UpdateUser(ctx context.Context, u *User) error {
 	return conflict(err)
 }
 
+// KeepName marks the user's name as chosen in Projects, so identity sync
+// from Pocket Core leaves it alone.
+func (s *Store) KeepName(ctx context.Context, id int64) error {
+	_, err := s.DB.ExecContext(ctx, `UPDATE users SET name_custom = 1 WHERE id = ?`, id)
+	return err
+}
+
 const userCols = `id, email, name, username, password_hash, role, feed_token, color, created_at`
 
 func scanUser(row interface{ Scan(...any) error }) (*User, error) {

@@ -247,8 +247,9 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid json")
 		return
 	}
-	if in.Name != "" {
-		u.Name = in.Name
+	renamed := false
+	if n := strings.TrimSpace(in.Name); n != "" && n != u.Name {
+		u.Name, renamed = n, true
 	}
 	if in.Email != "" {
 		u.Email = strings.ToLower(strings.TrimSpace(in.Email))
@@ -279,6 +280,12 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateUser(r.Context(), u); err != nil {
 		s.fail(w, err, "update user")
 		return
+	}
+	if renamed {
+		if err := s.store.KeepName(r.Context(), u.ID); err != nil {
+			s.fail(w, err, "keep name")
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, u)
 }
@@ -377,8 +384,9 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if n := store.Slug(in.Username); n != "" {
 		u.Username = n
 	}
-	if in.Name != "" {
-		u.Name = strings.TrimSpace(in.Name)
+	renamed := false
+	if n := strings.TrimSpace(in.Name); n != "" && n != u.Name {
+		u.Name, renamed = n, true
 	}
 	if in.Role == "admin" || in.Role == "member" {
 		if in.Role == "member" && u.Role == "admin" {
@@ -400,6 +408,12 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateUser(r.Context(), u); err != nil {
 		s.fail(w, err, "update user")
 		return
+	}
+	if renamed {
+		if err := s.store.KeepName(r.Context(), u.ID); err != nil {
+			s.fail(w, err, "keep name")
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, u)
 }

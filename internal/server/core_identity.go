@@ -26,8 +26,9 @@ func (s *Server) identityUser(ctx context.Context, issuer, subject, email, name 
 	if err != nil {
 		return nil, err
 	}
-	// Keep background integrations using the person's current verified email.
-	if _, err = s.store.DB.ExecContext(ctx, `UPDATE users SET email=?, name=CASE WHEN ?='' THEN name ELSE ? END WHERE id=?`, email, name, name, id); err != nil {
+	// Keep background integrations using the person's current verified email;
+	// the Core name only until the person picks their own in Projects.
+	if _, err = s.store.DB.ExecContext(ctx, `UPDATE users SET email=?, name=CASE WHEN ?='' OR name_custom=1 THEN name ELSE ? END WHERE id=?`, email, name, name, id); err != nil {
 		return nil, err
 	}
 	return s.store.GetUser(ctx, id)
