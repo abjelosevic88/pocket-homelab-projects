@@ -214,7 +214,7 @@ export default function IssuePage() {
             <IssueNotes issue={d} openId={noteOpen} onOpen={n => openDock({ kind: 'note', url: n.url, title: n.title, id: n.id })} onUnlinked={id => { const t = docksRef.current.find(x => x.kind === 'note' && x.id === id); if (t) closeDock(t.key) }}
               canShare={canEdit} onShared={n => openShared(n)} />
           </div>}
-          <IssueDeploy issue={d} deploy={deploy} />
+          <IssueDeploy issue={d} deploy={deploy} onFixStarted={code.reload} />
           <SubIssues issue={d} canEdit={canEdit} onChanged={load} breakdownRef={breakdownRef} />
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />

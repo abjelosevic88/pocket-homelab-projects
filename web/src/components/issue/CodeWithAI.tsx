@@ -13,7 +13,7 @@ import { StatusDot } from '../../pages/settings/common'
 import { Icon } from '../icons'
 import { type Anchor, Confirm, errMsg, Menu, type MenuItem, Modal, rectOf, useToast } from '../ui'
 
-type Action = 'investigate' | 'fix' | 'chat'
+type Action = 'investigate' | 'fix' | 'chat' | 'deploy' // deploy: from the Deploy section, not the menu
 const ACTIONS: { id: Action; label: string; icon: string; hint: string }[] = [
   { id: 'investigate', label: 'Investigate', icon: 'search', hint: 'Read-only: find the code, explain, plan' },
   { id: 'fix', label: 'Fix it', icon: 'code', hint: 'Branch, change, test, commit' },
@@ -73,7 +73,7 @@ function visible(list: CodeThread[]) {
 }
 
 /** Starts a conversation in the panel, else a new tab (opened on the click for popup blockers). */
-function useCodeStart(issue: IssueDetail, onStarted: () => void) {
+export function useCodeStart(issue: IssueDetail, onStarted: () => void) {
   const { toast } = useToast()
   const navigate = useNavigate()
   const panel = useContext(CodePanelContext)
@@ -84,7 +84,7 @@ function useCodeStart(issue: IssueDetail, onStarted: () => void) {
     try {
       const r = await api.post<{ url: string; send: boolean; files?: number; skipped?: string[] }>(`${V1}/issues/${issue.id}/code`, { action, note, worktree: worktree || undefined })
       if (r.skipped?.length) toast(`Not sent to the agent: ${r.skipped.join(', ')} (it can only take pictures and documents with text, up to 20 MB each)`, 'err')
-      if (panel) panel.open(r.url, `${issue.identifier} · ${worktree && action === 'chat' ? 'Chat in a worktree' : ACTIONS.find(a => a.id === action)!.label + (worktree ? ' in a worktree' : '')}`, r.send)
+      if (panel) panel.open(r.url, `${issue.identifier} · ${worktree && action === 'chat' ? 'Chat in a worktree' : (ACTIONS.find(a => a.id === action)?.label || 'Fix the deploy') + (worktree ? ' in a worktree' : '')}`, r.send)
       else if (tab) { tab.opener = null; tab.location.href = r.url } else window.open(r.url, '_blank', 'noopener')
       onStarted()
     } catch (e) {

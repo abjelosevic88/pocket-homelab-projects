@@ -358,7 +358,7 @@ func TestCodeWithPocketAI(t *testing.T) {
 	if list, _ := s.store.ThreadsOf(context.Background(), alex.user.ID, "2000", "3000"); len(list) == 0 {
 		t.Fatal("alex's own threads missing")
 	}
-	if alex.status("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "deploy"}) != 400 {
+	if alex.status("POST", "/api/v1/issues/WEB-1/code", map[string]any{"action": "ship"}) != 400 {
 		t.Fatal("unknown action accepted")
 	}
 }
