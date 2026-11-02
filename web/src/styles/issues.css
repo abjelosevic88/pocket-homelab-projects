@@ -658,3 +658,10 @@ button.ic-chip:hover { background: var(--hover); }
   .ts-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
   .ts-drawing-page .doc-head { flex-wrap: wrap; }
 }
+/* a deploy running: a sweeping bar under the box's first line; the branch shows "Deploying" in place of its button */
+.dp-box { position: relative; overflow: hidden; }
+.dp-box.running::before { content: ""; position: absolute; top: 0; left: 0; width: 30%; height: 2px; background: linear-gradient(90deg, transparent, #7c3aed, transparent); animation: loadbar 1.2s ease-in-out infinite; }
+.cc-state.dp-going { display: inline-flex; align-items: center; gap: 6px; color: #7c3aed; background: color-mix(in srgb, #7c3aed 11%, transparent); }
+.cc-state.dp-going .code-pulse { margin: 0; width: 7px; height: 7px; }
+[data-theme="dark"] .cc-state.dp-going { color: #c4b5fd; }
+@media (prefers-reduced-motion: reduce) { .dp-box.running::before { animation: none; width: 100%; opacity: .5; } }
