@@ -127,6 +127,8 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var in struct {
 		Branch string `json:"branch"`
+		// MergeBase: merge the default branch (e.g. development) in and push first
+		MergeBase bool `json:"merge_base"`
 	}
 	if err := decode(r, &in); err != nil || in.Branch == "" {
 		writeErr(w, http.StatusBadRequest, "pick the branch to deploy")
@@ -157,7 +159,7 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 		HostName string `json:"host_name"`
 	}
 	body := map[string]any{"host_id": host, "cwd": cwd, "source": "projects", "ref": is.Identifier, "branch": in.Branch,
-		"ref_url": s.cfg.BaseURL + "/issue/" + is.Identifier, "ref_label": is.Title}
+		"ref_url": s.cfg.BaseURL + "/issue/" + is.Identifier, "ref_label": is.Title, "merge_base": in.MergeBase}
 	var raw map[string]any
 	if err := sb.call(ctx, http.MethodPost, "/api/v1/link/deploys", body, &raw); err != nil {
 		aiFail(w, err)
