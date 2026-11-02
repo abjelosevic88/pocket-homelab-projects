@@ -47,23 +47,9 @@ function useBranchCheck(issueId: number, branch: string, version: string) {
   return c
 }
 
-function CheckLines({ c }: { c: DeployCheck | null }) {
-  if (!c) return null
-  const bh = c.behind
-  if (!c.lines.length && !c.error && !bh) return null
-  const n = (k: number, one: string) => `${k.toLocaleString()} ${one}${k === 1 ? '' : 's'}`
-  return (
-    <span className="dp-check">
-      {bh && <small className="muted">{n(bh.commits, 'commit')} behind {bh.base} (deploys anyway; the deploy merges {bh.base} in itself when the database needs it)</small>}
-      {c.lines.map((l, i) => <small key={i} className={l.warn ? 'dp-warn' : 'muted'}>{l.warn && <Icon name="alert-triangle" size={11} />}{l.text}</small>)}
-      {c.error && <small className="faint">Could not check: {c.error}</small>}
-    </span>
-  )
-}
-
-/** One of the issue's branches, with what deploying it would do and its buttons. */
-function BranchRow({ issueId, b, version, isLive, canDeploy, busy, starting, where, onStart, onFix }: {
-  issueId: number; b: DeployBranch; version: string; isLive: boolean; canDeploy: boolean; busy: boolean; starting: string; where: string
+/** One of the issue's branches: its name and Deploy. What the deploy would do stays in the button's tooltip. */
+function BranchRow({ issueId, b, version, isLive, canDeploy, busy, deploying, starting, where, onStart, onFix }: {
+  issueId: number; b: DeployBranch; version: string; isLive: boolean; canDeploy: boolean; busy: boolean; deploying: boolean; starting: string; where: string
   onStart: (b: DeployBranch) => void; onFix: (note: string) => void
 }) {
   const c = useBranchCheck(issueId, b.branch, version)
@@ -75,19 +61,21 @@ function BranchRow({ issueId, b, version, isLive, canDeploy, busy, starting, whe
     b.dirty ? `${b.dirty} uncommitted, not deployed` : '',
   ].filter(Boolean)
   const label = starting === b.branch ? 'Starting…' : isLive ? 'Redeploy' : 'Deploy'
+  const plan = (c?.lines || []).map(l => l.text).join('\n')
   return (
     <div className="dp-branch">
       <Icon name="git-branch" size={14} />
       <span className="dp-main">
         <span className="mono ellipsis">{b.branch}</span>
-        <small className="ellipsis muted">{b.subject}{b.committed_at ? ` · ${ago(b.committed_at)}` : ''}{facts.length ? <> · <span className={b.dirty ? 'dp-warn' : ''}>{facts.join(' · ')}</span></> : null}</small>
-        <CheckLines c={c} />
+        {facts.length ? <small className={`ellipsis ${b.dirty ? 'dp-warn' : 'muted'}`}>{facts.join(' · ')}</small> : null}
+        {blocked && bh && <small className="dp-warn ellipsis">Conflicts with {bh.base}: merge it into the branch first</small>}
       </span>
-      {isLive && !busy ? <span className="cc-state ok">Live</span> : null}
+      {deploying ? <span className="cc-state running dp-going"><span className="code-pulse" />Deploying</span>
+        : isLive && !busy ? <span className="cc-state ok">Live</span> : null}
       {blocked && bh && !bh.clean && <button type="button" className="btn sm" title={`The agent merges ${bh.base} into ${b.branch}, resolves the conflicts, tests and pushes`}
         onClick={() => onFix(conflictNote(b.branch, bh.base, bh.commits, bh.conflicts))}><Icon name="sparkles" size={13} />Fix with agent</button>}
-      {canDeploy && !blocked && <button type="button" className="btn sm" disabled={busy || !!starting}
-        title={busy ? 'A deploy is running; one at a time' : `Put ${b.branch} on ${where}${isLive ? ' again' : ''}`} onClick={() => onStart(b)}>
+      {canDeploy && !blocked && !deploying && <button type="button" className="btn sm" disabled={busy || !!starting}
+        title={busy ? 'A deploy is running; one at a time' : `Put ${b.branch} on ${where}${isLive ? ' again' : ''}${plan ? `\n\n${plan}` : ''}`} onClick={() => onStart(b)}>
         <Icon name="upload" size={13} />{label}</button>}
     </div>
   )
@@ -177,20 +165,23 @@ export function IssueDeploy({ issue, deploy, onFixStarted = () => {} }: { issue:
         {info.config.url && <a className="dp-url" href={info.config.url} target="_blank" rel="noreferrer" title={`Open ${info.config.url}`}>
           <Icon name="server" size={12} />{hostOf(info.config.url)}<Icon name="external" size={11} /></a>}
       </div>
-      <div className="ip-box dp-box">
+      <div className={`ip-box dp-box${running ? ' running' : ''}`}>
         <div className={`dp-now ${running ? 'running' : cur && info.live?.live ? 'live' : ''}`}>
           {running ? <span className="code-pulse running" /> : <Icon name="server" size={14} />}
           <span className="ellipsis">{where}: {now}</span>
+          {running && run?.mine && <><span className="spacer" style={{ flex: 1 }} />
+            <button type="button" className="btn ghost sm" onClick={() => setShowLog(v => !v)}>{showLog ? 'Hide log' : 'Log'}</button></>}
         </div>
         {branches.map(b => (
           <BranchRow key={b.branch} issueId={issue.id} b={b} version={`${b.sha}|${latest?.id || 0}|${latest?.status || ''}`}
-            isLive={!!liveSha && liveSha === b.sha} canDeploy={!!info.can_deploy} busy={running} starting={starting} where={where} onStart={start}
+            isLive={!!liveSha && liveSha === b.sha} canDeploy={!!info.can_deploy} busy={running} deploying={running && run?.branch === b.branch}
+            starting={starting} where={where} onStart={start}
             onFix={note => { if (!fix.busy) fix.start('deploy', note) }} />
         ))}
-        {run && (run.mine || run.status !== 'running') && (ours || running) && (
+        {run && run.status !== 'running' && ours && (
           <div className={`dp-run ${run.status}`}>
-            <span className={`cc-state ${run.status === 'ok' ? 'ok' : run.status}`}>{run.status === 'running' ? 'Deploying' : run.status === 'ok' ? 'Deployed' : 'Failed'}</span>
-            <span className="ellipsis muted small"><span className="mono">{run.branch}</span>{run.sha ? <> @ <span className="mono">{short(run.sha)}</span></> : null} · {run.status === 'running' ? elapsed(run.started_at) : `took ${elapsed(run.started_at, run.finished_at)}, ${ago(run.finished_at)}`}
+            <span className={`cc-state ${run.status}`}>{run.status === 'ok' ? 'Deployed' : 'Failed'}</span>
+            <span className="ellipsis muted small"><span className="mono">{run.branch}</span>{run.sha ? <> @ <span className="mono">{short(run.sha)}</span></> : null} · took {elapsed(run.started_at, run.finished_at)}, {ago(run.finished_at)}
               {run.error ? <> · <span className="dp-warn">{run.error}</span></> : null}</span>
             <span className="spacer" style={{ flex: 1 }} />
             {run.status === 'failed' && ours && <button type="button" className="btn sm" disabled={fix.busy} title="The agent reads the error and the log, then fixes the branch or tells you what to do"
