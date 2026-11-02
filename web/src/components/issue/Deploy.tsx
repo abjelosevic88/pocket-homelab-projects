@@ -50,7 +50,7 @@ function useBranchCheck(issueId: number, branch: string, version: string) {
 /** One of the issue's branches: its name and Deploy. What the deploy would do stays in the button's tooltip. */
 function BranchRow({ issueId, b, version, isLive, canDeploy, busy, deploying, starting, where, onStart, onFix }: {
   issueId: number; b: DeployBranch; version: string; isLive: boolean; canDeploy: boolean; busy: boolean; deploying: boolean; starting: string; where: string
-  onStart: (b: DeployBranch) => void; onFix: (note: string) => void
+  onStart: (b: DeployBranch, quick?: boolean) => void; onFix: (note: string) => void
 }) {
   const c = useBranchCheck(issueId, b.branch, version)
   const bh = c?.behind
@@ -62,6 +62,9 @@ function BranchRow({ issueId, b, version, isLive, canDeploy, busy, deploying, st
   ].filter(Boolean)
   const label = starting === b.branch ? 'Starting…' : isLive ? 'Redeploy' : 'Deploy'
   const plan = (c?.lines || []).map(l => l.text).join('\n')
+  // the deploy machine says the quick redeploy fits (the branch runs there and the fix needs no fresh start)
+  // (unpushed commits are pushed first, so "nothing new" on the machine can't judge them yet; the deploy asks again after the push)
+  const quick = b.ahead !== -1 && (!!c?.quick?.ok || (b.ahead > 0 && /^nothing new/i.test(c?.quick?.reason || '')))
   return (
     <div className="dp-branch">
       <Icon name="git-branch" size={14} />
@@ -74,6 +77,9 @@ function BranchRow({ issueId, b, version, isLive, canDeploy, busy, deploying, st
         : isLive && !busy ? <span className="cc-state ok">Live</span> : null}
       {blocked && bh && !bh.clean && <button type="button" className="btn sm" title={`The agent merges ${bh.base} into ${b.branch}, resolves the conflicts, tests and pushes`}
         onClick={() => onFix(conflictNote(b.branch, bh.base, bh.commits, bh.conflicts))}><Icon name="sparkles" size={13} />Fix with agent</button>}
+      {canDeploy && !blocked && !deploying && quick && <button type="button" className="btn sm primary" disabled={busy || !!starting}
+        title={busy ? 'A deploy is running; one at a time' : `Put the new commits of ${b.branch} on ${where}, keeping what is there (the database stays)`} onClick={() => onStart(b, true)}>
+        <Icon name="zap" size={13} />{starting === b.branch ? 'Starting…' : 'Quick redeploy'}</button>}
       {canDeploy && !blocked && !deploying && <button type="button" className="btn sm" disabled={busy || !!starting}
         title={busy ? 'A deploy is running; one at a time' : `Put ${b.branch} on ${where}${isLive ? ' again' : ''}${plan ? `\n\n${plan}` : ''}`} onClick={() => onStart(b)}>
         <Icon name="upload" size={13} />{label}</button>}
@@ -157,10 +163,10 @@ export function IssueDeploy({ issue, deploy, onFixStarted = () => {} }: { issue:
   const where = info.host_name || 'the deploy server'
   const liveSha = cur && info.live?.live ? cur.sha : ''
 
-  const start = async (b: DeployBranch) => {
+  const start = async (b: DeployBranch, quick = false) => {
     setStarting(b.branch)
     try {
-      const d = await api.post<DeployRun>(`${V1}/issues/${issue.id}/deploy`, { branch: b.branch })
+      const d = await api.post<DeployRun>(`${V1}/issues/${issue.id}/deploy`, { branch: b.branch, quick })
       setRun(d); setShowLog(false); reload(); refreshDeployLive()
     } catch (e) { toast(errMsg(e), 'err') } finally { setStarting('') }
   }

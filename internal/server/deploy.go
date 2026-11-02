@@ -129,6 +129,8 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 		Branch string `json:"branch"`
 		// MergeBase: merge the default branch (e.g. development) in and push first
 		MergeBase bool `json:"merge_base"`
+		// Quick: the project's quick redeploy instead of the deploy
+		Quick bool `json:"quick"`
 	}
 	if err := decode(r, &in); err != nil || in.Branch == "" {
 		writeErr(w, http.StatusBadRequest, "pick the branch to deploy")
@@ -159,7 +161,7 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 		HostName string `json:"host_name"`
 	}
 	body := map[string]any{"host_id": host, "cwd": cwd, "source": "projects", "ref": is.Identifier, "branch": in.Branch,
-		"ref_url": s.cfg.BaseURL + "/issue/" + is.Identifier, "ref_label": is.Title, "merge_base": in.MergeBase}
+		"ref_url": s.cfg.BaseURL + "/issue/" + is.Identifier, "ref_label": is.Title, "merge_base": in.MergeBase, "quick": in.Quick}
 	var raw map[string]any
 	if err := sb.call(ctx, http.MethodPost, "/api/v1/link/deploys", body, &raw); err != nil {
 		aiFail(w, err)
@@ -171,6 +173,9 @@ func (s *Server) handleStartDeploy(w http.ResponseWriter, r *http.Request) {
 	d.Branch, _ = raw["branch"].(string)
 	d.HostName, _ = raw["host_name"].(string)
 	label := d.Branch
+	if in.Quick {
+		label += " (quick)"
+	}
 	if d.HostName != "" {
 		label += " to " + d.HostName
 	}
@@ -290,6 +295,9 @@ func (s *Server) handlePutTeamDeploy(w http.ResponseWriter, r *http.Request) {
 			URL     string   `json:"url"`
 			Current string   `json:"current"`
 			Check   string   `json:"check"`
+			// Quick, QuickCheck: redeploying the branch that runs there after a fix
+			Quick      []string `json:"quick"`
+			QuickCheck string   `json:"quick_check"`
 		} `json:"config"`
 		Scope string `json:"scope"` // "mine" = the caller's own deploy (any member); "" = the team's (admins)
 	}

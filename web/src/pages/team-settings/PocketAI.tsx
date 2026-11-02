@@ -284,25 +284,27 @@ function DeploySettings({ team, admin, hostOpts }: { team: Team; admin: boolean;
   )
 }
 
-const EMPTY_DEPLOY: DeployConfig = { host_id: 0, dir: '', run: [], url: '', current: '', check: '' }
+const EMPTY_DEPLOY: DeployConfig = { host_id: 0, dir: '', run: [], url: '', current: '', check: '', quick: [], quick_check: '' }
 
 function DeployForm({ team, scope, cfg, hostName, editable, hostOpts, onSaved, onCancel }: {
   team: Team; scope: '' | 'mine'; cfg?: DeployConfig; hostName?: string; editable: boolean; hostOpts: Option<string>[]; onSaved: () => void; onCancel?: () => void
 }) {
   const { toast } = useToast()
   const savedCfg = cfg || EMPTY_DEPLOY
-  const [f, setF] = useState({ ...savedCfg, current: savedCfg.current || '', check: savedCfg.check || '', runText: (savedCfg.run || []).join('\n') })
+  const [f, setF] = useState({ ...savedCfg, current: savedCfg.current || '', check: savedCfg.check || '', runText: (savedCfg.run || []).join('\n'), quickText: (savedCfg.quick || []).join('\n'), quick_check: savedCfg.quick_check || '' })
   const [busy, setBusy] = useState(false)
-  useEffect(() => { const c = cfg || EMPTY_DEPLOY; setF({ ...c, current: c.current || '', check: c.check || '', runText: (c.run || []).join('\n') }) }, [cfg])
+  useEffect(() => { const c = cfg || EMPTY_DEPLOY; setF({ ...c, current: c.current || '', check: c.check || '', runText: (c.run || []).join('\n'), quickText: (c.quick || []).join('\n'), quick_check: c.quick_check || '' }) }, [cfg])
   const set = (patch: Partial<typeof f>) => setF({ ...f, ...patch })
   const deployHosts = hostOpts.some(h => h.value === String(f.host_id || 0)) ? hostOpts
     : [...hostOpts, { value: String(f.host_id), label: hostName || `Machine #${f.host_id}` }]
   const run = f.runText.split('\n').map(l => l.trim()).filter(Boolean)
+  const quick = f.quickText.split('\n').map(l => l.trim()).filter(Boolean)
   const dirty = !cfg || f.host_id !== savedCfg.host_id || f.dir !== savedCfg.dir || f.url !== savedCfg.url || (f.current || '') !== (savedCfg.current || '') || (f.check || '') !== (savedCfg.check || '') || run.join('\n') !== (savedCfg.run || []).join('\n')
+    || quick.join('\n') !== (savedCfg.quick || []).join('\n') || f.quick_check !== (savedCfg.quick_check || '')
   const save = async (clear = false) => {
     setBusy(true)
     try {
-      await api.put(`${V1}/teams/${team.key}/deploy`, { scope, config: clear ? null : { host_id: f.host_id, dir: f.dir, run, url: f.url, current: f.current, check: f.check } })
+      await api.put(`${V1}/teams/${team.key}/deploy`, { scope, config: clear ? null : { host_id: f.host_id, dir: f.dir, run, url: f.url, current: f.current, check: f.check, quick, quick_check: f.quick_check } })
       onSaved(); toast(clear ? (scope ? 'Back to the team’s deploy' : 'Deploy removed') : 'Deploy saved')
     } catch (e) { toast(errMsg(e), 'err') } finally { setBusy(false) }
   }
@@ -324,6 +326,13 @@ function DeployForm({ team, scope, cfg, hostName, editable, hostOpts, onSaved, o
       <Field label="Check before deploy" help={<>Optional: says what deploying <code>$POCKET_BRANCH</code> would do, shown on the issue before the click. Lines starting with <code>!</code> show as warnings (“! resets the database…”).</>}>
         <input value={f.check || ''} onChange={e => set({ check: e.target.value })} disabled={!editable} placeholder={'check-staging "$POCKET_BRANCH"'} className="mono" />
       </Field>
+      <div className="ui-ai-grid">
+        <Field label="Quick redeploy" group help="Optional: commands that put a fix on the branch running there without starting over (e.g. keep the database). Offered next to Deploy on that branch.">
+          <textarea value={f.quickText} onChange={e => set({ quickText: e.target.value })} rows={2} disabled={!editable} spellCheck={false} className="mono"
+            placeholder={'redeploy-staging "$POCKET_BRANCH"'} /></Field>
+        <Field label="Quick redeploy fits when" group help={<>Optional: exits 0 when a quick redeploy of <code>$POCKET_BRANCH</code> fits; otherwise its last line says why, and only Deploy is offered.</>}>
+          <input value={f.quick_check} onChange={e => set({ quick_check: e.target.value })} disabled={!editable} placeholder={'can-redeploy "$POCKET_BRANCH"'} className="mono" /></Field>
+      </div>
       {editable && <div className="row">
         {cfg && <button type="button" className="btn ghost" disabled={busy} onClick={() => save(true)}>{scope ? 'Use the team’s instead' : 'Remove'}</button>}
         {onCancel && <button type="button" className="btn ghost" disabled={busy} onClick={onCancel}>Cancel</button>}
