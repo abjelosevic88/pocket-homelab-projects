@@ -457,6 +457,15 @@ func TestLinkRoutes(t *testing.T) {
 			t.Errorf("%s %s %v: got %v", c.method, c.path, c.scopes, got)
 		}
 	}
+	// a connection's API: only as the workspace guard's detour, checked as asked
+	if linkAllows(read, httptest.NewRequest("GET", "/r/1/api/v1/issues", nil)) {
+		t.Error("a link token reached a connection directly")
+	}
+	r := httptest.NewRequest("GET", "/r/1/api/v1/issues", nil)
+	r = r.WithContext(context.WithValue(r.Context(), agentPathKey, "/api/v1/issues"))
+	if !linkAllows(read, r) || linkAllows([]string{"worklog:read"}, r) {
+		t.Error("the guard's detour is checked against the path asked for")
+	}
 }
 
 func TestDemoSeedsWithCore(t *testing.T) {

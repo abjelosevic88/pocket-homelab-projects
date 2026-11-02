@@ -115,6 +115,8 @@ func (s *Server) agentWorkspace(next http.Handler) http.Handler {
 			}
 		}
 		if rem != nil {
+			// a link token's scope is checked against the path it asked for
+			r = r.WithContext(context.WithValue(ctx, agentPathKey, r.URL.Path))
 			r.URL.Path = "/r/" + strconv.FormatInt(rem.ID, 10) + r.URL.Path
 			r.URL.RawPath = ""
 		}
