@@ -257,7 +257,8 @@ button.ic-chip:hover { background: var(--hover); }
 .att-ico { width: 28px; height: 28px; border-radius: 7px; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); flex-shrink: 0; }
 .att-ico.event { color: #8b5cf6; } .att-ico.task { color: #16a34a; } .att-ico.pull_request, .att-ico.commit { color: #f97316; } .att-ico.note { color: #c9a35b; }
 .att-main { display: flex; flex-direction: column; min-width: 0; }
-.att-main a, .att-main .att-title { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the whole title, wrapping: a pull request's title is how it is told apart */
+.att-main a, .att-main .att-title { color: var(--text); font-weight: 500; overflow-wrap: anywhere; line-height: 1.35; }
 .att-main small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .att-state { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); text-transform: capitalize; white-space: nowrap; }
 .att-state.done, .att-state.merged, .att-state.completed { background: color-mix(in srgb, #8b5cf6 16%, transparent); color: #8b5cf6; }
