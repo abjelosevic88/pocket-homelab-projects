@@ -551,9 +551,9 @@ button.ic-chip:hover { background: var(--hover); }
 .dp-check small svg { flex-shrink: 0; margin-top: 2px; }
 
 /* pull request checks + comments (PRDetails.tsx) */
-.pr-sum { display: inline-flex; align-items: center; gap: 10px; align-self: flex-start; max-width: 100%; min-width: 0; margin-top: 3px; padding: 1px 6px 1px 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; border-radius: 6px; white-space: nowrap; overflow: hidden; }
+.pr-sum { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; align-self: flex-start; max-width: 100%; min-width: 0; margin-top: 3px; padding: 1px 6px 1px 0; border: 0; background: none; font: inherit; font-size: 12px; color: var(--muted); cursor: pointer; border-radius: 6px; text-align: left; }
 .pr-sum:hover { color: var(--text-2); }
-.pr-sum > span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.pr-sum > span { display: inline-flex; align-items: center; gap: 4px; flex: none; white-space: nowrap; }
 .pr-checks.passed { color: var(--success); }
 .pr-checks.failed { color: var(--danger); font-weight: 600; }
 .pr-checks.pending { color: #b45309; }
@@ -585,7 +585,7 @@ button.ic-chip:hover { background: var(--hover); }
 .pr-comment-head a { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; white-space: nowrap; text-decoration: none; }
 .pr-comment-body { font-size: 13px; margin-top: 2px; max-height: 260px; overflow: auto; overflow-wrap: anywhere; }
 .pr-comment-body img { max-width: 100%; }
-@media (max-width: 640px) { .pr-details { padding-left: 12px; } .pr-sum { flex-wrap: wrap; row-gap: 2px; white-space: normal; } }
+@media (max-width: 640px) { .pr-details { padding-left: 12px; } }
 
 /* team deploy server page (/team/:key/server) */
 .srv-body { flex: 1; min-height: 0; overflow: auto; padding: 20px 24px 48px; }
