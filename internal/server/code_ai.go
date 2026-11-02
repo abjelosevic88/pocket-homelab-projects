@@ -589,7 +589,8 @@ const (
 	codeMaxAllBytes  = 60 << 20
 )
 
-var codeActions = map[string]string{"investigate": "Investigate", "fix": "Fix it", "chat": "Chat"}
+// deploy: from the Deploy section, when a branch can't be deployed (conflicts, a failed deploy)
+var codeActions = map[string]string{"investigate": "Investigate", "fix": "Fix it", "chat": "Chat", "deploy": "Fix the deploy"}
 
 // codeIssue is everything the prompt says about an issue.
 type codeIssue struct {
@@ -855,7 +856,9 @@ Finish with a short summary of what changed and offer to post it as a comment on
 	"fix-plain": `Fix this issue. First switch to a new branch with a short descriptive name.
 Implement the change, run the project's tests or build, and commit. Do not push unless I ask.
 Finish with a short summary of what changed and offer to post it as a comment on %[1]s.`,
-	"chat": `Let's talk about this issue. Read the relevant code when it helps, but do not change anything unless I ask.`,
+	// the note says what stops the deploy and on which branch; the issue below is context only
+	"deploy": `%[1]s's branch can't be deployed. Below is what went wrong: get the branch deployable again, without building anything new for the issue itself.`,
+	"chat":   `Let's talk about this issue. Read the relevant code when it helps, but do not change anything unless I ask.`,
 	// in a worktree Pocket AI made for the issue: already on its branch
 	"fix-worktree": `Fix this issue. You are in a git worktree of its own, on the branch %[2]s: stay on it, do not switch branches.
 Implement the change, run the project's tests or build, and commit. Do not push unless I ask.

@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/abjelosevic88/pocket-homelab-projects/internal/store"
@@ -56,7 +57,7 @@ func readTemplates(w http.ResponseWriter, r *http.Request) (map[string]string, b
 		}
 	}
 	for k := range in {
-		if _, ok := codeActions[k]; !ok {
+		if !slices.Contains(templateActions, k) {
 			writeErr(w, http.StatusBadRequest, "templates are for investigate, fix and chat")
 			return nil, false
 		}
