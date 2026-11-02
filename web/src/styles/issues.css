@@ -526,6 +526,7 @@ button.ic-chip:hover { background: var(--hover); }
 .dp-branch > svg { color: var(--muted); flex-shrink: 0; }
 .dp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .dp-main small { font-size: 12px; }
+.dp-pick { height: 28px; font-size: 12.5px; margin-top: 4px; max-width: 420px; }
 .dp-warn { color: #b45309; }
 .cc-state.ok { color: #15803d; background: color-mix(in srgb, #16a34a 12%, transparent); }
 .cc-state.failed { color: #dc2626; background: color-mix(in srgb, #dc2626 11%, transparent); }

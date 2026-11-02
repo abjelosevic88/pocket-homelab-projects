@@ -6,7 +6,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { api, V1 } from '../../lib/api'
 import { refreshDeployLive } from '../../lib/deploy-live'
 import { ago } from '../../lib/format'
-import type { DeployBranch, DeployCheck, DeployInfo, DeployRun, IssueDetail } from '../../lib/types'
+import type { DeployBranch, DeployCheck, DeployInfo, DeployRun, IssueDetail, ServerBranch, ServerInfo } from '../../lib/types'
 import { Icon } from '../icons'
 import { useCodeStart } from './CodeWithAI'
 import { errMsg, useToast } from '../ui'
@@ -81,6 +81,23 @@ function BranchRow({ issueId, b, version, isLive, canDeploy, busy, deploying, st
   )
 }
 
+const toDeployBranch = (b: ServerBranch): DeployBranch =>
+  ({ branch: b.branch, sha: b.sha, ahead: b.ahead, dirty: 0, path: b.path, subject: b.subject, committed_at: b.committed_at })
+const pickBranch = (name: string): DeployBranch =>
+  ({ branch: name.trim().replace(/^origin\//, ''), sha: '', ahead: 0, dirty: 0, subject: '', committed_at: '' })
+
+/** The team deploy server's branches (newest first), read only when the issue's own lookup found none. */
+function useServerBranches(teamKey: string, enabled: boolean) {
+  const [list, setList] = useState<ServerBranch[] | null>(null)
+  useEffect(() => {
+    if (!enabled) return
+    let live = true
+    api.get<ServerInfo>(`${V1}/teams/${teamKey}/server`).then(r => { if (live) setList(r.branches || []) }).catch(() => { if (live) setList([]) })
+    return () => { live = false }
+  }, [teamKey, enabled])
+  return list
+}
+
 export function useIssueDeploy(issue: IssueDetail | null) {
   const [info, setInfo] = useState<DeployInfo | null>(null)
   const id = issue?.id
@@ -106,6 +123,8 @@ export function IssueDeploy({ issue, deploy, onFixStarted = () => {} }: { issue:
   const [showLog, setShowLog] = useState(false)
   const [, tick] = useState(0)
   const logRef = useRef<HTMLPreElement>(null)
+  const server = useServerBranches(issue.team.key, !!info?.configured && !info.branches?.length)
+  const [pick, setPick] = useState('')
 
   // follow the slot's running deploy (anyone's), and keep the issue's own last one
   const latest = info?.latest || null
@@ -131,10 +150,10 @@ export function IssueDeploy({ issue, deploy, onFixStarted = () => {} }: { issue:
   useEffect(() => { const el = logRef.current; if (el) el.scrollTop = el.scrollHeight }, [run?.log, showLog])
 
   if (!info?.configured) return null
-  const branches = info.branches || []
   const cur = info.current
   const ours = !!run && run.ref === issue.identifier
-  if (!branches.length && !ours && !(cur && cur.ref === issue.identifier)) return null
+  // nothing found for the issue itself: the server's branches that belong to it, else a branch picker
+  const branches = info.branches?.length ? info.branches : (server || []).filter(b => b.issue?.identifier === issue.identifier).map(toDeployBranch)
   const where = info.host_name || 'the deploy server'
   const liveSha = cur && info.live?.live ? cur.sha : ''
 
@@ -178,6 +197,18 @@ export function IssueDeploy({ issue, deploy, onFixStarted = () => {} }: { issue:
             starting={starting} where={where} onStart={start}
             onFix={note => { if (!fix.busy) fix.start('deploy', note) }} />
         ))}
+        {!branches.length && <div className="dp-branch">
+          <Icon name="git-branch" size={14} />
+          <span className="dp-main">
+            <small className="muted ellipsis">{server ? 'No branch of this issue found (no PR branch or branch named after it).' : 'Looking for this issue\'s branches…'}</small>
+            {info.can_deploy && <input className="dp-pick mono" list={`dp-pick-${issue.id}`} placeholder="Branch to deploy" value={pick}
+              onChange={e => setPick(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && pick.trim()) start(pickBranch(pick)) }} />}
+            <datalist id={`dp-pick-${issue.id}`}>{(server || []).slice(0, 40).map(b => <option key={b.branch} value={b.branch}>{b.subject}</option>)}</datalist>
+          </span>
+          {info.can_deploy && <button type="button" className="btn sm" disabled={running || !!starting || !pick.trim()}
+            title={running ? 'A deploy is running; one at a time' : `Put ${pick.trim() || 'the branch'} on ${where}`} onClick={() => start(pickBranch(pick))}>
+            <Icon name="upload" size={13} />{starting ? 'Starting…' : 'Deploy'}</button>}
+        </div>}
         {run && run.status !== 'running' && ours && (
           <div className={`dp-run ${run.status}`}>
             <span className={`cc-state ${run.status}`}>{run.status === 'ok' ? 'Deployed' : 'Failed'}</span>
