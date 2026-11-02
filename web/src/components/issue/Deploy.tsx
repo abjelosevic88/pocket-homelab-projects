@@ -54,9 +54,7 @@ function CheckLines({ c }: { c: DeployCheck | null }) {
   const n = (k: number, one: string) => `${k.toLocaleString()} ${one}${k === 1 ? '' : 's'}`
   return (
     <span className="dp-check">
-      {bh && <small className="dp-warn"><Icon name="alert-triangle" size={11} />
-        {n(bh.commits, 'commit')} behind {bh.base}{bh.clean ? ` — merges cleanly: "Merge & deploy" merges ${bh.base} in, pushes the branch and deploys`
-          : ` — merging it brings conflicts in ${n(bh.conflicts.length, 'file')} (${bh.conflicts.slice(0, 6).join(', ')}${bh.conflicts.length > 6 ? ', …' : ''}). "Fix with agent" has the agent merge ${bh.base} in and resolve them`}</small>}
+      {bh && <small className="muted">{n(bh.commits, 'commit')} behind {bh.base} (deploys anyway; the deploy merges {bh.base} in itself when the database needs it)</small>}
       {c.lines.map((l, i) => <small key={i} className={l.warn ? 'dp-warn' : 'muted'}>{l.warn && <Icon name="alert-triangle" size={11} />}{l.text}</small>)}
       {c.error && <small className="faint">Could not check: {c.error}</small>}
     </span>
@@ -66,10 +64,12 @@ function CheckLines({ c }: { c: DeployCheck | null }) {
 /** One of the issue's branches, with what deploying it would do and its buttons. */
 function BranchRow({ issueId, b, version, isLive, canDeploy, busy, starting, where, onStart, onFix }: {
   issueId: number; b: DeployBranch; version: string; isLive: boolean; canDeploy: boolean; busy: boolean; starting: string; where: string
-  onStart: (b: DeployBranch, mergeBase: boolean) => void; onFix: (note: string) => void
+  onStart: (b: DeployBranch) => void; onFix: (note: string) => void
 }) {
   const c = useBranchCheck(issueId, b.branch, version)
   const bh = c?.behind
+  // the deploy target says it can't take the branch as it is (it needs the base merged in, and that conflicts)
+  const blocked = !!c?.lines.some(l => l.warn && /^can.t deploy/i.test(l.text))
   const facts = [
     b.ahead === -1 ? 'not on origin yet — pushed first' : b.ahead > 0 ? `${b.ahead} unpushed — pushed first` : '',
     b.dirty ? `${b.dirty} uncommitted, not deployed` : '',
@@ -84,14 +84,11 @@ function BranchRow({ issueId, b, version, isLive, canDeploy, busy, starting, whe
         <CheckLines c={c} />
       </span>
       {isLive && !busy ? <span className="cc-state ok">Live</span> : null}
-      {bh && !bh.clean && <button type="button" className="btn sm" title={`The agent merges ${bh.base} into ${b.branch}, resolves the conflicts, tests and pushes`}
+      {blocked && bh && !bh.clean && <button type="button" className="btn sm" title={`The agent merges ${bh.base} into ${b.branch}, resolves the conflicts, tests and pushes`}
         onClick={() => onFix(conflictNote(b.branch, bh.base, bh.commits, bh.conflicts))}><Icon name="sparkles" size={13} />Fix with agent</button>}
-      {canDeploy && bh?.clean && <button type="button" className="btn sm" disabled={busy || !!starting}
-        title={`Merge ${bh.base} into ${b.branch}, push it, then put it on ${where}`} onClick={() => onStart(b, true)}>
-        <Icon name="git-branch" size={13} />{starting === b.branch ? 'Merging…' : `Merge ${bh.base} & deploy`}</button>}
-      {canDeploy && <button type="button" className={`btn sm${bh ? ' ghost' : ''}`} disabled={busy || !!starting}
-        title={busy ? 'A deploy is running; one at a time' : `Put ${b.branch} on ${where}${isLive ? ' again' : ''}${bh ? `, without ${bh.base}'s newer commits` : ''}`} onClick={() => onStart(b, false)}>
-        <Icon name="upload" size={13} />{bh ? (starting === b.branch ? 'Starting…' : 'Deploy as is') : label}</button>}
+      {canDeploy && !blocked && <button type="button" className="btn sm" disabled={busy || !!starting}
+        title={busy ? 'A deploy is running; one at a time' : `Put ${b.branch} on ${where}${isLive ? ' again' : ''}`} onClick={() => onStart(b)}>
+        <Icon name="upload" size={13} />{label}</button>}
     </div>
   )
 }
@@ -153,10 +150,10 @@ export function IssueDeploy({ issue, deploy, onFixStarted = () => {} }: { issue:
   const where = info.host_name || 'the deploy server'
   const liveSha = cur && info.live?.live ? cur.sha : ''
 
-  const start = async (b: DeployBranch, mergeBase = false) => {
+  const start = async (b: DeployBranch) => {
     setStarting(b.branch)
     try {
-      const d = await api.post<DeployRun>(`${V1}/issues/${issue.id}/deploy`, { branch: b.branch, merge_base: mergeBase })
+      const d = await api.post<DeployRun>(`${V1}/issues/${issue.id}/deploy`, { branch: b.branch })
       setRun(d); setShowLog(false); reload(); refreshDeployLive()
     } catch (e) { toast(errMsg(e), 'err') } finally { setStarting('') }
   }
