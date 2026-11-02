@@ -28,7 +28,7 @@ function pageContext(node) {
  for(const key of [...itemURL.searchParams.keys()])if(/token|secret|password|code|key/i.test(key))itemURL.searchParams.delete(key);
  return {app:config.app,url:itemURL.href,title:title.slice(0,300),selection:(selected||(item?.innerText||'')).slice(0,12000)};
 }
-function sendContext(){if(frame?.contentWindow)frame.contentWindow.postMessage({type:'pocket-ask-context',source,prompt,dark:document.documentElement.dataset.theme==='dark'||document.documentElement.classList.contains('dark')},coreOrigin)}
+function sendContext(){if(frame?.contentWindow)frame.contentWindow.postMessage({type:'pocket-ask-context',source,prompt,navigate:true,dark:document.documentElement.dataset.theme==='dark'||document.documentElement.classList.contains('dark')},coreOrigin)}
 function open(node,detail){
  source=pageContext(node);prompt='';
  if(detail?.source){
@@ -73,7 +73,9 @@ function pick(on){picking=on;hint.hidden=!on;launch.hidden=on;document.documentE
 launch.querySelector('.open').onclick=()=>open();launch.querySelector('.pick').onclick=()=>pick(true);close.onclick=hide;hint.onclick=()=>pick(false);
 document.addEventListener('click',e=>{if(!picking||e.composedPath().includes(host))return;e.preventDefault();e.stopImmediatePropagation();pick(false);open(e.target)},true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(picking){e.stopPropagation();pick(false)}else if(!panel.hidden){e.stopPropagation();hide()}}});
-window.addEventListener('message',e=>{if(e.origin!==coreOrigin||e.source!==frame?.contentWindow)return;if(e.data?.type==='pocket-ask-ready')sendContext();if(e.data?.type==='pocket-ask-close')hide()});
+window.addEventListener('message',e=>{if(e.origin!==coreOrigin||e.source!==frame?.contentWindow)return;if(e.data?.type==='pocket-ask-ready')sendContext();if(e.data?.type==='pocket-ask-close')hide();if(e.data?.type==='pocket-ask-navigate')navigate(e.data.url)});
+// Every Pocket app routes with BrowserRouter, which follows pushState + popstate without a reload.
+function navigate(url){let u;try{u=new URL(url,location.href)}catch{return}if(u.origin!==location.origin)return;if(u.href!==location.href)history.pushState({usr:null,key:Math.random().toString(36).slice(2,10),idx:(history.state?.idx??0)+1},'',u.href);dispatchEvent(new PopStateEvent('popstate',{state:history.state}))}
 window.addEventListener('pocket-ask',e=>open(e.detail?.element,e.detail));
 window.addEventListener('pocket-ask-pick',()=>pick(true));
 // App integrations may dispatch pocket-ask with an item element; the picker also
