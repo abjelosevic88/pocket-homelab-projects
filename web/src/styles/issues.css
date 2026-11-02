@@ -582,6 +582,19 @@ button.ic-chip:hover { background: var(--hover); }
 .pr-comment.bot { opacity: .75; }
 .pr-comment.resolved { opacity: .55; }
 .att-fix { color: var(--danger); }
+/* a pull request row: title + state, where it is, then checks · comments on the left and the actions on the right */
+.att-row.pr-row { align-items: flex-start; padding: 10px 8px 8px 12px; }
+.pr-row .att-ico { margin-top: 1px; }
+.pr-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pr-head { display: flex; align-items: flex-start; gap: 8px; }
+.pr-head > a, .pr-head > span:first-child { flex: 1; min-width: 0; color: var(--text); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.pr-head .att-state, .pr-head .att-warn { flex: none; margin-top: 2px; }
+.pr-head .x-btn { flex: none; margin: -2px -4px 0 -4px; }
+.pr-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 2px; min-height: 28px; }
+.pr-foot .pr-sum { margin-top: 0; flex: 0 1 auto; }
+.pr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-left: auto; }
+.pr-actions:empty { display: none; }
 .pr-comment-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
 .pr-comment-head a { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; white-space: nowrap; text-decoration: none; }
 .pr-comment-body { font-size: 13px; margin-top: 2px; max-height: 260px; overflow: auto; overflow-wrap: anywhere; }
