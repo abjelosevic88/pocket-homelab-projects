@@ -17,6 +17,10 @@ type ctxKey int
 
 const userKey ctxKey = 1
 
+// agentPathKey: the path an agent call asked for before the workspace guard
+// sent it to a connection (/api/v1/issues → /r/3/api/v1/issues).
+const agentPathKey ctxKey = 2
+
 const sessionCookie = "ppr_session"
 
 func userFrom(ctx context.Context) *store.User {

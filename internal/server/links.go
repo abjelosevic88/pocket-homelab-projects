@@ -48,8 +48,12 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
+	path := r.URL.Path
+	if p, ok := r.Context().Value(agentPathKey).(string); ok && p != "" {
+		path = p // the workspace guard's own /r/{id} detour, checked as asked
+	}
 	for _, lr := range linkRoutes {
-		if !strings.Contains(" "+lr.methods+" ", " "+r.Method+" ") || !lr.path.MatchString(r.URL.Path) {
+		if !strings.Contains(" "+lr.methods+" ", " "+r.Method+" ") || !lr.path.MatchString(path) {
 			continue
 		}
 		if lr.scope == "" {
