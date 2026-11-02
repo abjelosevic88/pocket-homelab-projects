@@ -264,7 +264,10 @@ export interface DeployRun {
 export interface DeployConfig { host_id: number; dir: string; run: string[]; url: string; current?: string; check?: string }
 
 /** What deploying a branch would do (the project's check command); warn lines start with "!" there. */
-export interface DeployCheck { lines: { text: string; warn: boolean }[]; error?: string }
+/** The branch lacks commits of the repository's default branch; clean = merging it in has no conflicts. */
+export interface DeployBehind { base: string; commits: number; clean: boolean; conflicts: string[] }
+
+export interface DeployCheck { lines: { text: string; warn: boolean }[]; error?: string; behind?: DeployBehind }
 
 /** An issue a branch belongs to (by pull request or by the identifier in its name). */
 export interface BranchIssue { identifier: string; title: string; pr_url?: string; pr_state?: string }
