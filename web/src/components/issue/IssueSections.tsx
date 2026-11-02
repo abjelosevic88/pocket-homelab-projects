@@ -190,20 +190,42 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
         {list.map(a => {
           const sub = [ATT_KIND[a.kind], a.subtitle && a.kind !== 'event' ? a.subtitle : a.kind === 'event' && a.subtitle ? a.subtitle.replace('T', ' ').slice(0, 16) : '', a.kind === 'file' && a.size ? bytes(a.size) : '', ago(a.created_at)].filter(Boolean).join(' · ')
           const pr = prs[a.id]
+          const statusError = a.kind === 'pull_request' ? (a.meta as { status_error?: string } | null)?.status_error : ''
+          const remove_ = canEdit && <button type="button" className="btn ghost icon-only xs x-btn" aria-label="Remove the attachment" title="Remove" onClick={() => remove(a)}><Icon name="x" size={13} /></button>
+          // a pull request: the title across the row with its state, then where it is, then checks, comments and actions
+          if (a.kind === 'pull_request') return (
+            <Fragment key={a.id}>
+            <div className="att-row pr-row">
+              <span className="att-ico pull_request"><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
+              <div className="pr-body">
+                <div className="pr-head">
+                  {a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.url}</a> : <span>{a.title}</span>}
+                  {statusError && <span className="att-warn" title={`Status not updated: ${statusError}`}><Icon name="alert-triangle" size={13} /></span>}
+                  {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
+                  {remove_}
+                </div>
+                <small className="pr-meta">{[a.subtitle, ago(a.created_at)].filter(Boolean).join(' · ')}</small>
+                <div className="pr-foot">
+                  {pr && <PRSummary d={pr} open={prOpen === a.id} onToggle={() => setPrOpen(v => v === a.id ? null : a.id)} />}
+                  <span className="pr-actions">
+                    {pr && <FixPromptButton d={pr} issue={issue} />}
+                    {a.url && <PRReviewButton pr={a} state={review} />}
+                    {canEdit && a.url && <button type="button" className="btn ghost sm att-slack" title="Send this pull request to Slack with a short summary" onClick={() => setSlack(a)}><Icon name="message" size={13} />Slack</button>}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {pr && prOpen === a.id && <PRDetailsList d={pr} />}
+            </Fragment>
+          )
           return (
             <Fragment key={a.id}>
             <div className="att-row">
               <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
-              <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small>
-                {pr && <PRSummary d={pr} open={prOpen === a.id} onToggle={() => setPrOpen(v => v === a.id ? null : a.id)} />}</span>
+              <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
-              {a.kind === 'pull_request' && (a.meta as { status_error?: string } | null)?.status_error && <span className="att-warn" title={`Status not updated: ${(a.meta as { status_error?: string }).status_error}`}><Icon name="alert-triangle" size={13} /></span>}
-              {pr && <FixPromptButton d={pr} issue={issue} />}
-              {a.kind === 'pull_request' && a.url && <PRReviewButton pr={a} state={review} />}
-              {canEdit && a.kind === 'pull_request' && a.url && <button type="button" className="btn ghost sm att-slack" title="Send this pull request to Slack with a short summary" onClick={() => setSlack(a)}><Icon name="message" size={13} />Slack</button>}
-              {canEdit && <button type="button" className="btn ghost icon-only xs x-btn" aria-label="Remove the attachment" title="Remove" onClick={() => remove(a)}><Icon name="x" size={13} /></button>}
+              {remove_}
             </div>
-            {pr && prOpen === a.id && <PRDetailsList d={pr} />}
             </Fragment>
           )
         })}
