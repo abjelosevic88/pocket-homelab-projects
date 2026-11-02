@@ -2,7 +2,8 @@
 // "New issue" dialog and the global keyboard shortcuts.
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { api, BASE, V1 } from '../lib/api'
+import { api, BASE, REMOTE, V1 } from '../lib/api'
+import { type Remote, useRemotes } from '../lib/remotes'
 import { useApp } from '../lib/app-context'
 import { setKnownKeys } from '../lib/markdown'
 import { Icon } from './icons'
@@ -26,20 +27,32 @@ export function keysBusy(e: KeyboardEvent): boolean {
 }
 
 /** The router path for a URL in the open workspace, or null when it belongs
- *  to another workspace or site (switching workspaces is a page load). */
-function workspaceRoute(url?: string): string | null {
+ *  to another workspace or site (switching workspaces is a page load).
+ *  A workspace is addressed by id (/r/2/…) or by its host (/r/host/…). */
+function workspaceRoute(url: string | undefined, remotes: Remote[]): string | null {
   let u: URL
   try { u = new URL(url || '', location.href) } catch { return null }
   if (u.origin !== location.origin) return null
-  const p = u.pathname
-  let rest: string | null
-  if (BASE) rest = p === BASE || p.startsWith(BASE + '/') ? p.slice(BASE.length) || '/' : null
-  else rest = /^\/r\/\d+(\/|$)/.test(p) ? null : p
-  return rest == null ? null : rest + u.search + u.hash
+  const m = u.pathname.match(/^\/r\/([^/]+)(\/.*)?$/)
+  let ws = 0, rest = u.pathname
+  if (m) {
+    const addr = m[1].toLowerCase()
+    rest = m[2] || '/'
+    if (/^\d+$/.test(addr)) ws = Number(addr)
+    else if (addr === location.host.toLowerCase()) ws = 0
+    else {
+      const rem = remotes.find(r => r.host.toLowerCase() === addr)
+      if (!rem) return null
+      ws = rem.id
+    }
+  }
+  return ws === REMOTE ? rest + u.search + u.hash : null
 }
 
 export default function Layout() {
   const navigate = useNavigate()
+  const remotes = useRef<Remote[]>([])
+  remotes.current = useRemotes()
   // Installed app: a Projects link opened from elsewhere (Pocket AI's sidebar,
   // a notification) focuses this window (manifest launch_handler) and lands
   // here, so the issue opens as a tab instead of in a second window.
@@ -48,7 +61,7 @@ export default function Layout() {
     if (!lq || window.self !== window.top) return
     lq.setConsumer(p => {
       if (!p.targetURL) return
-      const to = workspaceRoute(p.targetURL)
+      const to = workspaceRoute(p.targetURL, remotes.current)
       if (to == null) location.assign(p.targetURL)
       else if (to !== location.pathname.slice(BASE.length) + location.search + location.hash) navigate(to)
       window.focus()
@@ -58,7 +71,7 @@ export default function Layout() {
   // workspace are left to it, and it loads them in this window.
   useEffect(() => {
     const h = (e: Event) => {
-      const to = workspaceRoute((e as CustomEvent<{ url?: string }>).detail?.url)
+      const to = workspaceRoute((e as CustomEvent<{ url?: string }>).detail?.url, remotes.current)
       if (to == null) return
       e.preventDefault()
       navigate(to)
