@@ -2,7 +2,7 @@
 // "New issue" dialog and the global keyboard shortcuts.
 import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { api, V1 } from '../lib/api'
+import { api, BASE, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
 import { setKnownKeys } from '../lib/markdown'
 import { Icon } from './icons'
@@ -25,6 +25,19 @@ export function keysBusy(e: KeyboardEvent): boolean {
   return !!t.closest?.('input, textarea, select, [contenteditable="true"]') || modalOpen() || !!document.querySelector('.menu, .popover, .select-pop, .pick-menu, .sheet-backdrop')
 }
 
+/** The router path for a URL in the open workspace, or null when it belongs
+ *  to another workspace or site (switching workspaces is a page load). */
+function workspaceRoute(url?: string): string | null {
+  let u: URL
+  try { u = new URL(url || '', location.href) } catch { return null }
+  if (u.origin !== location.origin) return null
+  const p = u.pathname
+  let rest: string | null
+  if (BASE) rest = p === BASE || p.startsWith(BASE + '/') ? p.slice(BASE.length) || '/' : null
+  else rest = /^\/r\/\d+(\/|$)/.test(p) ? null : p
+  return rest == null ? null : rest + u.search + u.hash
+}
+
 export default function Layout() {
   const navigate = useNavigate()
   // Installed app: a Projects link opened from elsewhere (Pocket AI's sidebar,
@@ -35,11 +48,23 @@ export default function Layout() {
     if (!lq || window.self !== window.top) return
     lq.setConsumer(p => {
       if (!p.targetURL) return
-      const u = new URL(p.targetURL)
-      const path = u.pathname + u.search + u.hash
-      if (u.origin === location.origin && path !== location.pathname + location.search + location.hash) navigate(path)
+      const to = workspaceRoute(p.targetURL)
+      if (to == null) location.assign(p.targetURL)
+      else if (to !== location.pathname.slice(BASE.length) + location.search + location.hash) navigate(to)
       window.focus()
     })
+  }, [navigate])
+  // Pocket Ask's widget hands over links into this app; ones outside this
+  // workspace are left to it, and it loads them in this window.
+  useEffect(() => {
+    const h = (e: Event) => {
+      const to = workspaceRoute((e as CustomEvent<{ url?: string }>).detail?.url)
+      if (to == null) return
+      e.preventDefault()
+      navigate(to)
+    }
+    window.addEventListener('pocket-ask-navigate', h)
+    return () => window.removeEventListener('pocket-ask-navigate', h)
   }, [navigate])
   const loc = useLocation()
   const app = useApp()
