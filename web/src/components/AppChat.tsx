@@ -46,6 +46,9 @@ function threadURL(ai: string, id: string) {
   return u.href
 }
 
+/** The conversation last open, if it is on this Pocket AI (else a new one). */
+const savedURL = (ai: string) => { const u = localStorage.getItem(URL_KEY) || ''; return u.startsWith(ai + '/') ? u : '' }
+
 /** What the person is looking at, for "@": the top bar's title and the page's text. */
 function pageTitle() {
   const crumbs = document.querySelector('.topbar h1')?.textContent?.replace(/\s+/g, ' ').trim()
@@ -76,7 +79,7 @@ export function AppChat() {
 
   useEffect(() => { if (desktop) pocketAI().then(setAI) }, [desktop])
   // docked last time: the sidebar comes back with the conversation it had
-  useEffect(() => { if (ai && docked && !src) { setSrc(localStorage.getItem(URL_KEY) || startURL(ai)); setOpen(true) } }, [ai]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ai && docked && !src) { setSrc(savedURL(ai) || startURL(ai)); setOpen(true) } }, [ai]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // text selected on the page before the person clicks into the conversation
   useEffect(() => {
@@ -150,7 +153,7 @@ export function AppChat() {
 
   if (!desktop || !ai) return null
 
-  const show = () => { if (!src) setSrc(localStorage.getItem(URL_KEY) || startURL(ai)); setOpen(true) }
+  const show = () => { if (!src) setSrc(savedURL(ai) || startURL(ai)); setOpen(true) }
   const newChat = () => { localStorage.removeItem(URL_KEY); setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&n=' + Date.now().toString(36)) }
   const dock = (on: boolean) => { setDocked(on); localStorage.setItem(DOCKED, on ? '1' : '0') }
   const close = () => { setOpen(false); if (docked) dock(false) }
