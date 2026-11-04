@@ -53,6 +53,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		DefaultTeamID *int64          `json:"default_team_id"`
 		HomeView      *string         `json:"home_view"`
 		AIModel       *string         `json:"ai_model"`
+		ChatKey       *string         `json:"chat_key"`
 		NotifyKind    *string         `json:"notify_kind"`
 		NotifyURL     *string         `json:"notify_url"`
 		NotifyToken   *string         `json:"notify_token"`
@@ -100,6 +101,17 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.AIModel != nil {
 		st.AIModel = strings.TrimSpace(*in.AIModel)
+	}
+	if in.ChatKey != nil {
+		k := strings.ToLower(strings.TrimSpace(*in.ChatKey))
+		if k == "" {
+			k = "mod+i"
+		}
+		if !validChatKey(k) {
+			writeErr(w, http.StatusBadRequest, "chat_key: a key with ⌘/Ctrl or Alt (like mod+i or mod+shift+l), or off")
+			return
+		}
+		st.ChatKey = k
 	}
 	if in.NotifyKind != nil {
 		switch *in.NotifyKind {
@@ -219,4 +231,25 @@ func clockOf(v string) (int, int) {
 		return 8, 0
 	}
 	return h, m
+}
+
+// validChatKey: "off", or modifiers in the web app's order (mod, alt, shift;
+// at least ⌘/Ctrl or Alt, so typing never fires it) and one key.
+func validChatKey(k string) bool {
+	if k == "off" {
+		return true
+	}
+	parts := strings.Split(k, "+")
+	key, mods := parts[len(parts)-1], parts[:len(parts)-1]
+	if len(key) != 1 || !strings.ContainsAny(key, "abcdefghijklmnopqrstuvwxyz0123456789[].,/;'`-=\\") {
+		return false
+	}
+	order, last, strong := map[string]int{"mod": 1, "alt": 2, "shift": 3}, 0, false
+	for _, m := range mods {
+		if order[m] <= last {
+			return false
+		}
+		last, strong = order[m], strong || m != "shift"
+	}
+	return strong
 }

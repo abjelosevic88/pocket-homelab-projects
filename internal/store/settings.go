@@ -24,6 +24,7 @@ type Settings struct {
 	DefaultTeamID int64  `json:"default_team_id"`
 	HomeView      string `json:"home_view"` // my-issues | inbox | team | projects
 	AIModel       string `json:"ai_model"`  // Pocket AI model override ("" = Pocket AI's default)
+	ChatKey       string `json:"chat_key"`  // opens/closes the chat: "mod+i" (mod = ⌘ or Ctrl), "off" = none
 
 	NotifyKind  string          `json:"notify_kind"` // apprise | ntfy | webhook
 	NotifyURL   string          `json:"notify_url"`
@@ -43,7 +44,7 @@ func defaults() Settings {
 		push[k] = k == "assigned" || k == "mentioned" || k == "due" || k == "update_due"
 	}
 	return Settings{
-		Title: DefaultTitle, WeekStart: 1, Density: "comfortable", HomeView: "my-issues",
+		Title: DefaultTitle, WeekStart: 1, Density: "comfortable", HomeView: "my-issues", ChatKey: "mod+i",
 		NotifyKind: "apprise", Push: push, DigestTime: "08:00",
 		Integrations: map[string]string{}, IntegrationURLs: map[string]string{}, IntegrationToken: map[string]bool{},
 	}
@@ -83,6 +84,10 @@ func (s *Store) GetSettings(ctx context.Context, userID int64) (Settings, error)
 			st.HomeView = v
 		case k == "ai_model":
 			st.AIModel = v
+		case k == "chat_key":
+			if v != "" {
+				st.ChatKey = v
+			}
 		case k == "notify_kind":
 			st.NotifyKind = v
 		case k == "notify_url":
@@ -115,7 +120,7 @@ func b2s(b bool) string {
 func (s *Store) SaveSettings(ctx context.Context, userID int64, st Settings) error {
 	kv := map[string]string{
 		"timezone": st.Timezone, "week_start": strconv.Itoa(st.WeekStart), "density": st.Density,
-		"default_team_id": strconv.FormatInt(st.DefaultTeamID, 10), "home_view": st.HomeView, "ai_model": st.AIModel,
+		"default_team_id": strconv.FormatInt(st.DefaultTeamID, 10), "home_view": st.HomeView, "ai_model": st.AIModel, "chat_key": st.ChatKey,
 		"notify_kind": st.NotifyKind, "notify_url": st.NotifyURL, "digest_time": st.DigestTime,
 	}
 	for k, v := range st.Push {
