@@ -208,7 +208,8 @@
 /* The app's own chat (components/AppChat.tsx): a round button bottom-right, a
    panel floating above it, or the same panel as a sidebar beside the page. */
 .app-chat-fab { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 50px; height: 50px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
-  background: var(--accent); color: #fff; box-shadow: 0 6px 22px -6px color-mix(in srgb, var(--accent) 70%, transparent), var(--shadow); transition: transform .15s var(--ease), box-shadow .15s; animation: pop-in .18s var(--ease); }
+  --accent: #7c3aed; /* Pocket AI's violet (its icon tile), not the app's accent */
+  background: linear-gradient(150deg, #a78bfa, #7c3aed 55%, #6d28d9); color: #fff; box-shadow: 0 6px 22px -6px color-mix(in srgb, var(--accent) 70%, transparent), var(--shadow); transition: transform .15s var(--ease), box-shadow .15s; animation: pop-in .18s var(--ease); }
 .app-chat-fab:hover { transform: translateY(-1px) scale(1.04); }
 .app-chat-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .app-chat-fab-dot { position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); animation: app-chat-pulse 1.4s ease-in-out infinite; }
