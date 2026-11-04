@@ -4,7 +4,7 @@
 // switches). "@" in the conversation adds the page the person is looking at.
 // Desktop only. The frame stays mounted while hidden, so a running answer goes on.
 import { useEffect, useRef, useState } from 'react'
-import { api, V1 } from '../lib/api'
+import { api, HOME_V1 } from '../lib/api'
 import type { Integration } from '../lib/types'
 import { Icon } from './icons'
 import { useMediaQuery } from './ui'
@@ -18,9 +18,11 @@ const APP_NAME = 'Pocket Projects'
 const clampW = (w: number) => Math.round(Math.max(340, Math.min(w, window.innerWidth - 480, 900)))
 
 let aiURL: Promise<string> | null = null
-/** Pocket AI's address as this person reaches it ('' = not connected). */
+/** Pocket AI's address as this person reaches it ('' = not connected): always
+ *  this instance's, also in a connected workspace (/r/{id}), whose own Pocket AI
+ *  is someone else's server the person isn't signed in to. */
 function pocketAI(): Promise<string> {
-  aiURL ??= api.get<Integration[]>(`${V1}/integrations`)
+  aiURL ??= api.get<Integration[]>(`${HOME_V1}/integrations`)
     .then(list => (list.find(a => a.id === 'ai')?.public_url || '').replace(/\/+$/, ''))
     .catch(() => { aiURL = null; return '' })
   return aiURL
