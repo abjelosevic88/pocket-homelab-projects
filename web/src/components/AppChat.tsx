@@ -155,6 +155,8 @@ export function AppChat() {
 
   const show = () => { if (!src) setSrc(savedURL(ai) || startURL(ai)); setOpen(true) }
   const newChat = () => { localStorage.removeItem(URL_KEY); setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&n=' + Date.now().toString(36)) }
+  // every earlier chat about Projects, in the frame (Pocket AI lists them, with a search)
+  const history = () => { setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&history=1&n=' + Date.now().toString(36)) }
   const dock = (on: boolean) => { setDocked(on); localStorage.setItem(DOCKED, on ? '1' : '0') }
   const close = () => { setOpen(false); if (docked) dock(false) }
   const resize = (e: React.PointerEvent) => {
@@ -183,9 +185,10 @@ export function AppChat() {
           <div className="app-chat-head">
             <Icon name="sparkles" size={15} className="ai-dock-ico" />
             <span className="app-chat-title ellipsis">Ask {APP_NAME}</span>
+            <button type="button" className="btn ghost icon-only sm" onClick={history} title="Earlier chats" aria-label="Earlier chats"><Icon name="clock" size={15} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={newChat} title="New chat" aria-label="New chat"><Icon name="plus" size={16} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={() => dock(!docked)} title={docked ? 'Float over the page' : 'Open in the sidebar'} aria-label={docked ? 'Float over the page' : 'Open in the sidebar'}>
-              <Icon name={docked ? 'maximize' : 'sidebar'} size={15} />
+              <Icon name={docked ? 'message' : 'sidebar'} size={15} />
             </button>
             <a className="btn ghost icon-only sm" href={threadId ? `${ai}/t/${encodeURIComponent(threadId)}` : `${ai}/`} target="_blank" rel="noreferrer" title="Open in Pocket AI" aria-label="Open in Pocket AI"><Icon name="external" size={15} /></a>
             <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : 'Hide (Esc)'} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
