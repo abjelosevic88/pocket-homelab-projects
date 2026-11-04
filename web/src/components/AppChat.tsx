@@ -4,7 +4,9 @@
 // switches). "@" in the conversation adds the page the person is looking at.
 // Desktop only. The frame stays mounted while hidden, so a running answer goes on.
 import { useEffect, useRef, useState } from 'react'
-import { api, HOME_V1 } from '../lib/api'
+import { useNavigate } from 'react-router-dom'
+import { api, BASE, HOME_V1 } from '../lib/api'
+import { loadRemotes } from '../lib/remotes'
 import type { Integration } from '../lib/types'
 import { Icon } from './icons'
 import { useMediaQuery } from './ui'
@@ -32,6 +34,7 @@ function startURL(ai: string) {
   const u = new URL(ai + '/')
   u.searchParams.set('embed', '1')
   u.searchParams.set('tabs', '1') // "@" asks this page for its items
+  u.searchParams.set('links', '1') // links into Projects come back here (follow)
   u.searchParams.set('ask', APP)
   u.searchParams.set('app_url', location.origin + '/')
   u.searchParams.set('app_name', APP_NAME)
@@ -43,11 +46,38 @@ function threadURL(ai: string, id: string) {
   const u = new URL(`${ai}/t/${encodeURIComponent(id)}`)
   u.searchParams.set('embed', '1')
   u.searchParams.set('tabs', '1')
+  u.searchParams.set('links', '1')
   return u.href
 }
 
 /** The conversation last open, if it is on this Pocket AI (else a new one). */
-const savedURL = (ai: string) => { const u = localStorage.getItem(URL_KEY) || ''; return u.startsWith(ai + '/') ? u : '' }
+const savedURL = (ai: string) => {
+  const u = localStorage.getItem(URL_KEY) || ''
+  if (!u.startsWith(ai + '/')) return ''
+  const url = new URL(u)
+  url.searchParams.set('links', '1') // remembered before links came back here
+  return url.href
+}
+
+/** A link the conversation's answer pointed at: one into Projects opens in this
+ *  window (the chat stays), in this workspace without a reload; another app's in
+ *  a new tab. Core's links name a connection by address (/r/<host>/…). */
+async function follow(href: string, go: (path: string) => void) {
+  const u = new URL(href, location.href)
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return
+  if (u.origin !== location.origin) { window.open(u.href, '_blank', 'noopener'); return }
+  let path = u.pathname
+  const m = path.match(/^\/r\/([^/]+)(\/.*)?$/)
+  if (m && !/^\d+$/.test(m[1])) {
+    const host = m[1].toLowerCase()
+    const rem = host === location.host.toLowerCase() ? null : (await loadRemotes()).find(r => r.host.toLowerCase() === host)
+    path = host === location.host.toLowerCase() ? m[2] || '/' : rem ? `/r/${rem.id}${m[2] || '/'}` : path
+  }
+  const here = BASE ? path === BASE || path.startsWith(BASE + '/') : !path.startsWith('/r/')
+  const rest = u.search + u.hash
+  if (here) go(((BASE ? path.slice(BASE.length) : path) || '/') + rest)
+  else location.assign(path + rest) // another workspace: a page load (the sidebar chat comes back)
+}
 
 /** What the person is looking at, for "@": the top bar's title and the page's text. */
 function pageTitle() {
@@ -76,6 +106,9 @@ export function AppChat() {
   const [drag, setDrag] = useState(false)
   const frame = useRef<HTMLIFrameElement>(null)
   const selection = useRef('')
+  const navigate = useNavigate()
+  const go = useRef(navigate)
+  go.current = navigate
 
   useEffect(() => { if (desktop) pocketAI().then(setAI) }, [desktop])
   // docked last time: the sidebar comes back with the conversation it had
@@ -113,6 +146,7 @@ export function AppChat() {
         return
       }
       if (e.data.open?.thread_id) { setSrc(threadURL(ai, String(e.data.open.thread_id))); return }
+      if (typeof e.data.link === 'string') { follow(e.data.link, p => go.current(p)).catch(() => {}); return }
       // where the frame is: remembered, so a reload comes back to the same conversation
       const id = e.data.thread_id ? String(e.data.thread_id) : ''
       setThreadId(id)
