@@ -76,10 +76,10 @@ export function ConnectionsTab() {
       </Section>
       <Section title="Pocket AI and your workspaces" sub="Every change an agent makes always names its workspace and its issue, so a wrong guess finds nothing. This goes further.">
         <label className="row" style={{ alignItems: 'flex-start', gap: 12 }}>
-          <Switch checked={!!rule.data?.one_workspace} disabled={!rule.data} onChange={v => api.put(`${HOME_V1}/workspaces/rule`, { one_workspace: v }).then(() => { rule.reload(); toast(v ? 'Pocket AI now works only in the workspace open here' : 'Pocket AI may now use all your workspaces') }).catch(e => toast(errMsg(e), 'err'))} />
+          <Switch checked={!!rule.data?.one_workspace} disabled={!rule.data} onChange={v => api.put(`${HOME_V1}/workspaces/rule`, { one_workspace: v }).then(() => { rule.reload(); toast(v ? 'Pocket AI now works only in the workspaces open here' : 'Pocket AI may now use all your workspaces') }).catch(e => toast(errMsg(e), 'err'))} />
           <span className="grow">
-            <span className="set-person-name">Only the workspace open in Projects</span>
-            <span className="muted small" style={{ display: 'block' }}>Agents can reach only the workspace you have open here (the tab you looked at last); every other one refuses them, reads too. Conversations about the others show as paused in Pocket AI. Off: they may use any of your workspaces, still naming which.</span>
+            <span className="set-person-name">Only the workspaces open in Projects</span>
+            <span className="muted small" style={{ display: 'block' }}>Agents can reach only the workspaces you have open here, in any window or tab; every other one refuses them, reads too. A workspace closes to them a few minutes after its last window does. Conversations about the others show as paused in Pocket AI. Off: they may use any of your workspaces, still naming which.</span>
           </span>
         </label>
       </Section>

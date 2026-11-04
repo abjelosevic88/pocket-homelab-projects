@@ -55,6 +55,9 @@ type Server struct {
 
 	linkApps sync.Map // pcx_ token → acting app slug
 
+	tabsMu sync.Mutex
+	tabs   map[int64]map[string]time.Time // person → workspace a window shows ("" = here) → last said (workspace_guard.go)
+
 	hub *hub // live change stream
 }
 
