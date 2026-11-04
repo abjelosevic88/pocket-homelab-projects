@@ -157,7 +157,7 @@ export interface Webhook { id: number; team_id: number; name: string; url: strin
 
 export interface Settings {
   title: string; setup_complete: boolean; timezone: string; week_start: number; density: 'comfortable' | 'compact'
-  default_team_id: number; home_view: string; ai_model: string; notify_kind: 'apprise' | 'ntfy' | 'webhook'; notify_url: string
+  default_team_id: number; home_view: string; ai_model: string; chat_key?: string; notify_kind: 'apprise' | 'ntfy' | 'webhook'; notify_url: string
   push: Record<string, boolean>; digest_time: string
   integrations: Record<string, string>; integration_urls: Record<string, string>; integration_tokens: Record<string, boolean>
 }

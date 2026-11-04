@@ -16,6 +16,7 @@ import { PersonAvatar } from './issue-bits'
 import { type MenuItem, MenuButton, modalOpen, useIsMobile, useMediaQuery } from './ui'
 import { AskButton } from './AskButton'
 import { AppChat } from './AppChat'
+import { keyLabel, useChatKey } from '../lib/chat-key'
 import { IssueTabs } from './IssueTabs'
 
 const SIDEBAR_KEY = 'pp-sidebar'
@@ -107,6 +108,7 @@ export default function Layout() {
 
   // Global keys: ⌘K palette, C new issue, G then a letter to go somewhere.
   const goPending = useRef(0)
+  const chatKey = useChatKey()
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
@@ -141,7 +143,7 @@ export default function Layout() {
 
   const commands: PaletteCommand[] = [
     { id: 'new', label: 'New issue', icon: 'plus', hint: 'C', keywords: 'add create bug task', run: () => openCreateIssue(currentDefaults(loc.pathname)) },
-    { id: 'chat', label: 'Ask Pocket Projects (chat)', icon: 'message', hint: '⌘I', keywords: 'ai assistant help question pocket ai', run: () => window.dispatchEvent(new Event('pp:app-chat')) },
+    { id: 'chat', label: 'Ask Pocket Projects (chat)', icon: 'message', hint: chatKey === 'off' ? undefined : keyLabel(chatKey), keywords: 'ai assistant help question pocket ai', run: () => window.dispatchEvent(new Event('pp:app-chat')) },
     { id: 'new-project', label: 'New project', icon: 'briefcase', keywords: 'add create', run: () => navigate('/projects?new=1') },
     { id: 'new-team', label: 'New team', icon: 'users', keywords: 'add create workspace', run: () => navigate('/teams/new') },
     { id: 'inbox', label: 'Go to Inbox', icon: 'inbox', hint: 'G I', run: () => navigate('/inbox') },

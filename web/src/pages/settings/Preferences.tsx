@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import { useApp } from '../../lib/app-context'
+import { chatKeyProblem, comboOf, DEFAULT_CHAT_KEY, keyCaps, keyLabel, saveChatKey, useChatKey } from '../../lib/chat-key'
 import { Icon } from '../../components/icons'
 import { TeamMark } from '../../components/pickers'
 import { type Option, Select } from '../../components/Select'
-import { Loading, Segmented, SettingRow } from '../../components/ui'
+import { errMsg, Loading, Segmented, SettingRow, Switch, useToast } from '../../components/ui'
 import { browserZone, Section, TimezoneSelect, useSaveSettings, useSettingsResponse } from './common'
 
 export function PreferencesTab() {
@@ -48,6 +50,10 @@ export function PreferencesTab() {
         </SettingRow>
       </Section>
 
+      <Section title="Shortcuts">
+        <ChatKeySetting />
+      </Section>
+
       <Section title="Starting point">
         <SettingRow title="Home page" help="What opens when you visit the app.">
           <div className="ui-ctl-w"><Select value={s.home_view || 'my-issues'} options={homeOpts} onChange={v => save({ home_view: v })} label="Home page" /></div>
@@ -57,5 +63,45 @@ export function PreferencesTab() {
         </SettingRow>
       </Section>
     </div>
+  )
+}
+
+/** The key that opens and closes the chat: press it to record, Esc cancels. */
+function ChatKeySetting() {
+  const keys = useChatKey()
+  const { toast } = useToast()
+  const [recording, setRecording] = useState(false)
+  const set = (k: string, msg: string) => saveChatKey(k).then(() => toast(msg)).catch(e => toast(errMsg(e), 'err'))
+  useEffect(() => {
+    if (!recording) return
+    const h = (e: KeyboardEvent) => {
+      e.preventDefault(); e.stopPropagation()
+      if (e.key === 'Escape') { setRecording(false); return }
+      const c = comboOf(e)
+      if (!c) return // a modifier on its own: wait for the key
+      const problem = chatKeyProblem(c)
+      if (problem) { toast(problem, 'err'); return }
+      setRecording(false)
+      set(c, `The chat now opens with ${keyLabel(c)}`)
+    }
+    window.addEventListener('keydown', h, true) // before the app's own keys
+    return () => window.removeEventListener('keydown', h, true)
+  }, [recording]) // eslint-disable-line react-hooks/exhaustive-deps
+  const off = keys === 'off'
+  return (
+    <SettingRow title="Open or close the chat" help={<>The Ask Pocket Projects chat (the round button bottom right). Works in the conversation too. Saved for you on this server, in every workspace.</>}>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        {!off && (
+          <button type="button" className={`btn ${recording ? 'primary' : ''}`} onClick={() => setRecording(r => !r)} aria-label={recording ? 'Press the keys, Esc to cancel' : `Change the chat key (${keyLabel(keys)})`}>
+            {recording ? 'Press the keys… (Esc cancels)' : <span className="sc-keys">{keyCaps(keys).map(k => <kbd key={k}>{k}</kbd>)}</span>}
+          </button>
+        )}
+        {!off && !recording && keys !== DEFAULT_CHAT_KEY && <button type="button" className="btn ghost sm" onClick={() => set(DEFAULT_CHAT_KEY, `The chat opens with ${keyLabel(DEFAULT_CHAT_KEY)} again`)}>Reset</button>}
+        <label className="row" style={{ gap: 6 }}>
+          <Switch label="A key for the chat" checked={!off} onChange={v => { setRecording(false); set(v ? DEFAULT_CHAT_KEY : 'off', v ? `The chat opens with ${keyLabel(DEFAULT_CHAT_KEY)}` : 'No key opens the chat now') }} />
+          <span className="small muted">{off ? 'Off' : 'On'}</span>
+        </label>
+      </div>
+    </SettingRow>
   )
 }

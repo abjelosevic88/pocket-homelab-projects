@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, BASE, HOME_V1 } from '../lib/api'
 import { loadRemotes } from '../lib/remotes'
+import { comboOf, keyLabel, useChatKey } from '../lib/chat-key'
 import type { Integration } from '../lib/types'
 import { Icon } from './icons'
 import { useMediaQuery } from './ui'
@@ -15,7 +16,7 @@ const DESKTOP = '(min-width: 768px) and (hover: hover) and (pointer: fine)'
 const DOCKED = 'pp-app-chat-docked'
 const URL_KEY = 'pp-app-chat-url'
 const WIDTH = 'pp-app-chat-w'
-const SHOWN = 'pp-app-chat-open' // '0' = hidden with ⌘I while in the sidebar (a reload keeps it hidden)
+const SHOWN = 'pp-app-chat-open' // '0' = hidden with the chat key while in the sidebar (a reload keeps it hidden)
 const APP = 'projects'
 const APP_NAME = 'Pocket Projects'
 const clampW = (w: number) => Math.round(Math.max(340, Math.min(w, window.innerWidth - 480, 900)))
@@ -31,11 +32,12 @@ function pocketAI(): Promise<string> {
   return aiURL
 }
 
-function startURL(ai: string) {
+function startURL(ai: string, keys: string) {
   const u = new URL(ai + '/')
   u.searchParams.set('embed', '1')
   u.searchParams.set('tabs', '1') // "@" asks this page for its items
   u.searchParams.set('links', '1') // links into Projects come back here (follow)
+  u.searchParams.set('chat_key', keys) // typed in the conversation, it comes back here too
   u.searchParams.set('ask', APP)
   u.searchParams.set('app_url', location.origin + '/')
   u.searchParams.set('app_name', APP_NAME)
@@ -43,20 +45,22 @@ function startURL(ai: string) {
 }
 
 /** A conversation's address in the frame (it remembers being embedded itself). */
-function threadURL(ai: string, id: string) {
+function threadURL(ai: string, id: string, keys: string) {
   const u = new URL(`${ai}/t/${encodeURIComponent(id)}`)
   u.searchParams.set('embed', '1')
   u.searchParams.set('tabs', '1')
   u.searchParams.set('links', '1')
+  u.searchParams.set('chat_key', keys)
   return u.href
 }
 
 /** The conversation last open, if it is on this Pocket AI (else a new one). */
-const savedURL = (ai: string) => {
+const savedURL = (ai: string, keys: string) => {
   const u = localStorage.getItem(URL_KEY) || ''
   if (!u.startsWith(ai + '/')) return ''
   const url = new URL(u)
   url.searchParams.set('links', '1') // remembered before links came back here
+  url.searchParams.set('chat_key', keys)
   return url.href
 }
 
@@ -110,10 +114,13 @@ export function AppChat() {
   const navigate = useNavigate()
   const go = useRef(navigate)
   go.current = navigate
+  const chatKey = useChatKey()
+  const keyRef = useRef(chatKey)
+  keyRef.current = chatKey
 
   useEffect(() => { if (desktop) pocketAI().then(setAI) }, [desktop])
   // docked last time: the sidebar comes back with the conversation it had
-  useEffect(() => { if (ai && docked && !src && localStorage.getItem(SHOWN) !== '0') { setSrc(savedURL(ai) || startURL(ai)); setOpen(true) } }, [ai]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ai && docked && !src && localStorage.getItem(SHOWN) !== '0') { setSrc(savedURL(ai, chatKey) || startURL(ai, chatKey)); setOpen(true) } }, [ai]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // text selected on the page before the person clicks into the conversation
   useEffect(() => {
@@ -146,24 +153,27 @@ export function AppChat() {
         else reply({ error: 'That is not on the page any more' })
         return
       }
-      if (e.data.open?.thread_id) { setSrc(threadURL(ai, String(e.data.open.thread_id))); return }
-      if (e.data.key === 'toggle-chat') { window.dispatchEvent(new Event('pp:app-chat')); return } // ⌘I typed in the conversation
+      if (e.data.open?.thread_id) { setSrc(threadURL(ai, String(e.data.open.thread_id), keyRef.current)); return }
+      if (e.data.key === 'toggle-chat') { window.dispatchEvent(new Event('pp:app-chat')); return } // the chat key typed in the conversation
       if (typeof e.data.link === 'string') { follow(e.data.link, p => go.current(p)).catch(() => {}); return }
       // where the frame is: remembered, so a reload comes back to the same conversation
       const id = e.data.thread_id ? String(e.data.thread_id) : ''
       setThreadId(id)
       setStatus(String(e.data.status || ''))
-      if (id) localStorage.setItem(URL_KEY, threadURL(ai, id))
+      if (id) localStorage.setItem(URL_KEY, threadURL(ai, id, keyRef.current))
     }
     window.addEventListener('message', h)
     return () => window.removeEventListener('message', h)
   }, [ai])
 
   // an issue's own panel on the right (its conversations): the button and the
-  // floating chat move left of it instead of covering its composer
+  // floating chat move left of it instead of covering its composer, and while
+  // it shows a Pocket AI conversation the button goes (one chat on screen is enough)
   const [offset, setOffset] = useState(0)
+  const [otherChat, setOtherChat] = useState(false)
   useEffect(() => {
-    if (!desktop) return
+    if (!desktop || !ai) return
+    const origin = new URL(ai).origin
     const main = document.querySelector('main.content')
     if (!main) return
     let dock: Element | null = null
@@ -172,13 +182,14 @@ export function AppChat() {
       const d = main.querySelector('.ai-dock:not(.sheet)')
       if (d !== dock) { if (dock) sizes.unobserve(dock); if (d) sizes.observe(d); dock = d }
       setOffset(d ? Math.max(0, Math.round(window.innerWidth - d.getBoundingClientRect().left)) : 0)
+      setOtherChat(!!d && [...d.querySelectorAll('iframe')].some(f => f.src.startsWith(origin + '/')))
     }
     const changes = new MutationObserver(measure)
-    changes.observe(main, { childList: true, subtree: true })
+    changes.observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'class'] })
     window.addEventListener('resize', measure)
     measure()
     return () => { changes.disconnect(); sizes.disconnect(); window.removeEventListener('resize', measure) }
-  }, [desktop])
+  }, [desktop, ai])
 
   useEffect(() => {
     if (!open || docked) return
@@ -187,15 +198,17 @@ export function AppChat() {
     return () => window.removeEventListener('keydown', h)
   }, [open, docked])
 
-  // ⌘I (Ctrl+I) opens and closes it from anywhere on the page but a text editor
-  // (italic there); the palette and the conversation itself (it hands the key
-  // over) send pp:app-chat. Pocket AI keeps ⌘J (recipes) and its other keys.
+  // The chat key (Settings → Preferences, ⌘I by default) opens and closes it from
+  // anywhere on the page but a text editor (⌘I is italic there); the palette and
+  // the conversation itself (it hands the key over) send pp:app-chat.
   const toggle = useRef(() => {})
   useEffect(() => {
     if (!desktop || !ai) return
     const key = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'i') return
-      if ((e.target as HTMLElement | null)?.closest?.('[contenteditable="true"], .ProseMirror')) return
+      const keys = keyRef.current
+      if (keys === 'off' || comboOf(e) !== keys) return
+      // a text editor keeps ⌘I (italic) and the other formatting keys
+      if (keys === 'mod+i' && (e.target as HTMLElement | null)?.closest?.('[contenteditable="true"], .ProseMirror')) return
       e.preventDefault(); toggle.current()
     }
     const ev = () => toggle.current()
@@ -204,14 +217,19 @@ export function AppChat() {
     return () => { window.removeEventListener('keydown', key); window.removeEventListener('pp:app-chat', ev) }
   }, [desktop, ai])
 
+  // a key changed in Settings reaches a conversation already open
+  useEffect(() => {
+    if (ai) frame.current?.contentWindow?.postMessage({ type: 'pocket-ai-chat-key', keys: chatKey }, new URL(ai).origin)
+  }, [ai, chatKey])
+
   if (!desktop || !ai) return null
 
-  const show = () => { if (!src) setSrc(savedURL(ai) || startURL(ai)); setOpen(true); localStorage.removeItem(SHOWN); window.setTimeout(() => frame.current?.focus(), 60) }
+  const show = () => { if (!src) setSrc(savedURL(ai, chatKey) || startURL(ai, chatKey)); setOpen(true); localStorage.removeItem(SHOWN); window.setTimeout(() => frame.current?.focus(), 60) }
   const hide = () => { setOpen(false); if (docked) localStorage.setItem(SHOWN, '0') } // keeps its shape for next time
   toggle.current = () => { if (open) hide(); else show() }
-  const newChat = () => { localStorage.removeItem(URL_KEY); setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&n=' + Date.now().toString(36)) }
+  const newChat = () => { localStorage.removeItem(URL_KEY); setThreadId(''); setStatus(''); setSrc(startURL(ai, chatKey) + '&n=' + Date.now().toString(36)) }
   // every earlier chat about Projects, in the frame (Pocket AI lists them, with a search)
-  const history = () => { setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&history=1&n=' + Date.now().toString(36)) }
+  const history = () => { setThreadId(''); setStatus(''); setSrc(startURL(ai, chatKey) + '&history=1&n=' + Date.now().toString(36)) }
   const dock = (on: boolean) => { setDocked(on); localStorage.setItem(DOCKED, on ? '1' : '0') }
   const close = () => { setOpen(false); if (docked) dock(false) }
   const resize = (e: React.PointerEvent) => {
@@ -246,13 +264,13 @@ export function AppChat() {
               <Icon name={docked ? 'message' : 'sidebar'} size={15} />
             </button>
             <a className="btn ghost icon-only sm" href={threadId ? `${ai}/t/${encodeURIComponent(threadId)}` : `${ai}/`} target="_blank" rel="noreferrer" title="Open in Pocket AI" aria-label="Open in Pocket AI"><Icon name="external" size={15} /></a>
-            <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : 'Hide (Esc, ⌘I)'} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
+            <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : `Hide (Esc${chatKey === 'off' ? '' : ', ' + keyLabel(chatKey)})`} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
           </div>
           <iframe ref={frame} key={src} src={src} title={`Chat about ${APP_NAME}`} allow="clipboard-read; clipboard-write; camera; microphone" />
         </aside>
       )}
-      {!open && (
-        <button type="button" className={`app-chat-fab ${busy ? status : ''}`} style={offset ? { right: offset + 22 } : undefined} onClick={show} title={`Ask about ${APP_NAME} (⌘I)`} aria-label={`Ask about ${APP_NAME}`} aria-keyshortcuts="Meta+I Control+I">
+      {!open && !otherChat && (
+        <button type="button" className={`app-chat-fab ${busy ? status : ''}`} style={offset ? { right: offset + 22 } : undefined} onClick={show} title={`Ask about ${APP_NAME}${chatKey === 'off' ? '' : ` (${keyLabel(chatKey)})`}`} aria-label={`Ask about ${APP_NAME}`}>
           <Icon name="sparkles" size={22} />
           {busy && <span className="app-chat-fab-dot" />}
         </button>
