@@ -15,7 +15,7 @@ const DESKTOP = '(min-width: 768px) and (hover: hover) and (pointer: fine)'
 const DOCKED = 'pp-app-chat-docked'
 const URL_KEY = 'pp-app-chat-url'
 const WIDTH = 'pp-app-chat-w'
-const SHOWN = 'pp-app-chat-open' // '0' = hidden with ⌘J while in the sidebar (a reload keeps it hidden)
+const SHOWN = 'pp-app-chat-open' // '0' = hidden with ⌘I while in the sidebar (a reload keeps it hidden)
 const APP = 'projects'
 const APP_NAME = 'Pocket Projects'
 const clampW = (w: number) => Math.round(Math.max(340, Math.min(w, window.innerWidth - 480, 900)))
@@ -147,7 +147,7 @@ export function AppChat() {
         return
       }
       if (e.data.open?.thread_id) { setSrc(threadURL(ai, String(e.data.open.thread_id))); return }
-      if (e.data.key === 'toggle-chat') { window.dispatchEvent(new Event('pp:app-chat')); return } // ⌘J typed in the conversation
+      if (e.data.key === 'toggle-chat') { window.dispatchEvent(new Event('pp:app-chat')); return } // ⌘I typed in the conversation
       if (typeof e.data.link === 'string') { follow(e.data.link, p => go.current(p)).catch(() => {}); return }
       // where the frame is: remembered, so a reload comes back to the same conversation
       const id = e.data.thread_id ? String(e.data.thread_id) : ''
@@ -187,13 +187,16 @@ export function AppChat() {
     return () => window.removeEventListener('keydown', h)
   }, [open, docked])
 
-  // ⌘J (Ctrl+J) opens and closes it from anywhere on the page; the palette and
-  // the conversation itself (it hands the key over) send pp:app-chat
+  // ⌘I (Ctrl+I) opens and closes it from anywhere on the page but a text editor
+  // (italic there); the palette and the conversation itself (it hands the key
+  // over) send pp:app-chat. Pocket AI keeps ⌘J (recipes) and its other keys.
   const toggle = useRef(() => {})
   useEffect(() => {
     if (!desktop || !ai) return
     const key = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') { e.preventDefault(); toggle.current() }
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'i') return
+      if ((e.target as HTMLElement | null)?.closest?.('[contenteditable="true"], .ProseMirror')) return
+      e.preventDefault(); toggle.current()
     }
     const ev = () => toggle.current()
     window.addEventListener('keydown', key)
@@ -243,13 +246,13 @@ export function AppChat() {
               <Icon name={docked ? 'message' : 'sidebar'} size={15} />
             </button>
             <a className="btn ghost icon-only sm" href={threadId ? `${ai}/t/${encodeURIComponent(threadId)}` : `${ai}/`} target="_blank" rel="noreferrer" title="Open in Pocket AI" aria-label="Open in Pocket AI"><Icon name="external" size={15} /></a>
-            <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : 'Hide (Esc, ⌘J)'} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
+            <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : 'Hide (Esc, ⌘I)'} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
           </div>
           <iframe ref={frame} key={src} src={src} title={`Chat about ${APP_NAME}`} allow="clipboard-read; clipboard-write; camera; microphone" />
         </aside>
       )}
       {!open && (
-        <button type="button" className={`app-chat-fab ${busy ? status : ''}`} style={offset ? { right: offset + 22 } : undefined} onClick={show} title={`Ask about ${APP_NAME} (⌘J)`} aria-label={`Ask about ${APP_NAME}`} aria-keyshortcuts="Meta+J Control+J">
+        <button type="button" className={`app-chat-fab ${busy ? status : ''}`} style={offset ? { right: offset + 22 } : undefined} onClick={show} title={`Ask about ${APP_NAME} (⌘I)`} aria-label={`Ask about ${APP_NAME}`} aria-keyshortcuts="Meta+I Control+I">
           <Icon name="sparkles" size={22} />
           {busy && <span className="app-chat-fab-dot" />}
         </button>
