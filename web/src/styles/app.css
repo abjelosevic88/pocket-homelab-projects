@@ -204,3 +204,23 @@
 .remote-down { flex-direction: column; gap: 12px; text-align: center; padding: 24px; }
 .remote-down h2 { margin: 6px 0 0; font-size: 18px; }
 .remote-down p { margin: 0; max-width: 460px; }
+
+/* The app's own chat (components/AppChat.tsx): a round button bottom-right, a
+   panel floating above it, or the same panel as a sidebar beside the page. */
+.app-chat-fab { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 50px; height: 50px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer;
+  background: var(--accent); color: #fff; box-shadow: 0 6px 22px -6px color-mix(in srgb, var(--accent) 70%, transparent), var(--shadow); transition: transform .15s var(--ease), box-shadow .15s; animation: pop-in .18s var(--ease); }
+.app-chat-fab:hover { transform: translateY(-1px) scale(1.04); }
+.app-chat-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.app-chat-fab-dot { position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); animation: app-chat-pulse 1.4s ease-in-out infinite; }
+.app-chat-fab.waiting .app-chat-fab-dot { background: #f59e0b; animation: none; }
+@keyframes app-chat-pulse { 50% { opacity: .35; } }
+.app-chat { display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.app-chat.closed { display: none; }
+.app-chat.floating { position: fixed; right: 22px; bottom: 22px; z-index: 60; width: 420px; height: min(680px, calc(100dvh - 90px)); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow-lg); animation: pop-in .16s var(--ease); }
+.app-chat.docked { position: relative; flex-shrink: 0; border-left: 1px solid var(--border); animation: pop-in .14s var(--ease); }
+.app-chat.dragging { user-select: none; }
+.app-chat.dragging iframe { pointer-events: none; }
+.app-chat-head { display: flex; align-items: center; gap: 2px; height: 42px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.app-chat-title { flex: 1; min-width: 0; margin-left: 6px; font-size: 13px; font-weight: 600; }
+.app-chat iframe { flex: 1; width: 100%; min-height: 0; border: 0; background: var(--bg); }
+@media (prefers-reduced-motion: reduce) { .app-chat-fab, .app-chat.floating, .app-chat.docked { animation: none; } .app-chat-fab-dot { animation: none; } }

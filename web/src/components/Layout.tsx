@@ -15,6 +15,7 @@ import { CreateIssueModal, openCreateIssue, type IssueDefaults } from './CreateI
 import { PersonAvatar } from './issue-bits'
 import { type MenuItem, MenuButton, modalOpen, useIsMobile, useMediaQuery } from './ui'
 import { AskButton } from './AskButton'
+import { AppChat } from './AppChat'
 import { IssueTabs } from './IssueTabs'
 
 const SIDEBAR_KEY = 'pp-sidebar'
@@ -174,6 +175,7 @@ export default function Layout() {
         {!mobile && <IssueTabs />}
         <div className="content-row">
           <main className="content"><ErrorBoundary key={section(loc.pathname)} where={loc.pathname}><Outlet /></ErrorBoundary></main>
+          <AppChat />
         </div>
       </div>
       {mobile && <button type="button" className="fab" aria-label="New issue" title="New issue" onClick={() => openCreateIssue(currentDefaults(loc.pathname))}><Icon name="plus" size={26} strokeWidth={2.2} /></button>}
