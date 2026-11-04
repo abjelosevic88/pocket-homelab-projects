@@ -44,6 +44,13 @@ function startURL(ai: string, keys: string) {
   return u.href
 }
 
+/** Which app's chat the frame is: a new chat in it starts as this one again. */
+function appChatOf(u: URL) {
+  u.searchParams.set('ask', APP)
+  u.searchParams.set('app_url', location.origin + '/')
+  u.searchParams.set('app_name', APP_NAME)
+}
+
 /** A conversation's address in the frame (it remembers being embedded itself). */
 function threadURL(ai: string, id: string, keys: string) {
   const u = new URL(`${ai}/t/${encodeURIComponent(id)}`)
@@ -51,6 +58,7 @@ function threadURL(ai: string, id: string, keys: string) {
   u.searchParams.set('tabs', '1')
   u.searchParams.set('links', '1')
   u.searchParams.set('chat_key', keys)
+  appChatOf(u)
   return u.href
 }
 
@@ -61,6 +69,7 @@ const savedURL = (ai: string, keys: string) => {
   const url = new URL(u)
   url.searchParams.set('links', '1') // remembered before links came back here
   url.searchParams.set('chat_key', keys)
+  appChatOf(url) // a new chat there (⌘N) is this app's again
   return url.href
 }
 
