@@ -15,6 +15,7 @@ const DESKTOP = '(min-width: 768px) and (hover: hover) and (pointer: fine)'
 const DOCKED = 'pp-app-chat-docked'
 const URL_KEY = 'pp-app-chat-url'
 const WIDTH = 'pp-app-chat-w'
+const SHOWN = 'pp-app-chat-open' // '0' = hidden with ⌘J while in the sidebar (a reload keeps it hidden)
 const APP = 'projects'
 const APP_NAME = 'Pocket Projects'
 const clampW = (w: number) => Math.round(Math.max(340, Math.min(w, window.innerWidth - 480, 900)))
@@ -112,7 +113,7 @@ export function AppChat() {
 
   useEffect(() => { if (desktop) pocketAI().then(setAI) }, [desktop])
   // docked last time: the sidebar comes back with the conversation it had
-  useEffect(() => { if (ai && docked && !src) { setSrc(savedURL(ai) || startURL(ai)); setOpen(true) } }, [ai]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (ai && docked && !src && localStorage.getItem(SHOWN) !== '0') { setSrc(savedURL(ai) || startURL(ai)); setOpen(true) } }, [ai]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // text selected on the page before the person clicks into the conversation
   useEffect(() => {
@@ -146,6 +147,7 @@ export function AppChat() {
         return
       }
       if (e.data.open?.thread_id) { setSrc(threadURL(ai, String(e.data.open.thread_id))); return }
+      if (e.data.key === 'toggle-chat') { window.dispatchEvent(new Event('pp:app-chat')); return } // ⌘J typed in the conversation
       if (typeof e.data.link === 'string') { follow(e.data.link, p => go.current(p)).catch(() => {}); return }
       // where the frame is: remembered, so a reload comes back to the same conversation
       const id = e.data.thread_id ? String(e.data.thread_id) : ''
@@ -185,9 +187,25 @@ export function AppChat() {
     return () => window.removeEventListener('keydown', h)
   }, [open, docked])
 
+  // ⌘J (Ctrl+J) opens and closes it from anywhere on the page; the palette and
+  // the conversation itself (it hands the key over) send pp:app-chat
+  const toggle = useRef(() => {})
+  useEffect(() => {
+    if (!desktop || !ai) return
+    const key = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') { e.preventDefault(); toggle.current() }
+    }
+    const ev = () => toggle.current()
+    window.addEventListener('keydown', key)
+    window.addEventListener('pp:app-chat', ev)
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('pp:app-chat', ev) }
+  }, [desktop, ai])
+
   if (!desktop || !ai) return null
 
-  const show = () => { if (!src) setSrc(savedURL(ai) || startURL(ai)); setOpen(true) }
+  const show = () => { if (!src) setSrc(savedURL(ai) || startURL(ai)); setOpen(true); localStorage.removeItem(SHOWN); window.setTimeout(() => frame.current?.focus(), 60) }
+  const hide = () => { setOpen(false); if (docked) localStorage.setItem(SHOWN, '0') } // keeps its shape for next time
+  toggle.current = () => { if (open) hide(); else show() }
   const newChat = () => { localStorage.removeItem(URL_KEY); setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&n=' + Date.now().toString(36)) }
   // every earlier chat about Projects, in the frame (Pocket AI lists them, with a search)
   const history = () => { setThreadId(''); setStatus(''); setSrc(startURL(ai) + '&history=1&n=' + Date.now().toString(36)) }
@@ -225,13 +243,13 @@ export function AppChat() {
               <Icon name={docked ? 'message' : 'sidebar'} size={15} />
             </button>
             <a className="btn ghost icon-only sm" href={threadId ? `${ai}/t/${encodeURIComponent(threadId)}` : `${ai}/`} target="_blank" rel="noreferrer" title="Open in Pocket AI" aria-label="Open in Pocket AI"><Icon name="external" size={15} /></a>
-            <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : 'Hide (Esc)'} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
+            <button type="button" className="btn ghost icon-only sm" onClick={close} title={docked ? 'Close the sidebar' : 'Hide (Esc, ⌘J)'} aria-label="Close"><Icon name={docked ? 'x' : 'chevron-down'} size={16} /></button>
           </div>
           <iframe ref={frame} key={src} src={src} title={`Chat about ${APP_NAME}`} allow="clipboard-read; clipboard-write; camera; microphone" />
         </aside>
       )}
       {!open && (
-        <button type="button" className={`app-chat-fab ${busy ? status : ''}`} style={offset ? { right: offset + 22 } : undefined} onClick={show} title={`Ask about ${APP_NAME}`} aria-label={`Ask about ${APP_NAME}`}>
+        <button type="button" className={`app-chat-fab ${busy ? status : ''}`} style={offset ? { right: offset + 22 } : undefined} onClick={show} title={`Ask about ${APP_NAME} (⌘J)`} aria-label={`Ask about ${APP_NAME}`} aria-keyshortcuts="Meta+J Control+J">
           <Icon name="sparkles" size={22} />
           {busy && <span className="app-chat-fab-dot" />}
         </button>
