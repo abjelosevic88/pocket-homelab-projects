@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/abjelosevic88/pocket-homelab-projects/internal/store"
 )
@@ -147,6 +148,23 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	if len(ws) != 2 || ws[0].Active || !ws[1].Active || !ws[1].Open || ws[1].Address != addr {
 		t.Fatalf("workspaces: %+v", ws)
 	}
+	// a second window on the own instance: both open to agents, the last looked at is the default
+	alex.do("PUT", "/api/v1/workspaces/agent", map[string]any{"id": 0}, 200, nil)
+	alex.do("PUT", "/api/v1/workspaces/agent", map[string]any{"id": rem.ID, "still": true}, 200, nil)
+	expect(201, "POST", "/api/v1/issues/ATH-1/comments", addr, map[string]any{"body": "two windows"}, "the other window's workspace")
+	expect(201, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "two windows"}, "this window's workspace")
+	alex.do("GET", "/api/v1/workspaces", nil, 200, &ws)
+	if !ws[0].Active || !ws[1].Active || !ws[0].Open || ws[1].Open {
+		t.Fatalf("workspaces with two windows: %+v", ws)
+	}
+	// the own window closed: it goes quiet and closes to agents after a while
+	sA.tabsMu.Lock()
+	for _, seen := range sA.tabs {
+		seen[""] = time.Now().Add(-tabOpenFor - time.Second)
+	}
+	sA.tabsMu.Unlock()
+	alex.do("PUT", "/api/v1/workspaces/agent", map[string]any{"id": rem.ID}, 200, nil)
+	expect(409, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "x"}, "own window gone quiet")
 	// the rule off: every workspace, still naming which
 	alex.do("PUT", "/api/v1/workspaces/rule", map[string]any{"one_workspace": false}, 200, nil)
 	expect(201, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "rule off"}, "rule off")

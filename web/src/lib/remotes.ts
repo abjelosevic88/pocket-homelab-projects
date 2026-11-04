@@ -21,15 +21,19 @@ export function useRemotes(): Remote[] {
   return list
 }
 
-// The workspace open here is the one Pocket AI may use (its tools reach no
-// other): claimed when the app starts and whenever this tab is looked at again.
-export function claimAgentWorkspace(): Promise<unknown> {
-  return api.put(`${HOME_V1}/workspaces/agent`, { id: REMOTE }).catch(() => {})
+// The workspaces open in Projects windows are the ones Pocket AI may use (its
+// tools reach no other). The one looked at last is its default: claimed when
+// the app starts and whenever this tab is looked at again. Every window also
+// says once a minute that it is still open, hidden ones too, so a second
+// window on another workspace doesn't close this one to Pocket AI.
+export function claimAgentWorkspace(still = false): Promise<unknown> {
+  return api.put(`${HOME_V1}/workspaces/agent`, still ? { id: REMOTE, still } : { id: REMOTE }).catch(() => {})
 }
 
 export function watchAgentWorkspace(): () => void {
   claimAgentWorkspace()
   const on = () => { if (document.visibilityState === 'visible') claimAgentWorkspace() }
   document.addEventListener('visibilitychange', on)
-  return () => document.removeEventListener('visibilitychange', on)
+  const beat = window.setInterval(() => claimAgentWorkspace(true), 60_000)
+  return () => { document.removeEventListener('visibilitychange', on); window.clearInterval(beat) }
 }

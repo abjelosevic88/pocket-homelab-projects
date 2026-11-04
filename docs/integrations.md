@@ -44,9 +44,11 @@ the person's own instance and connections with `active`/`open`. A call for a con
   identifier (`ATH-12`, never a number, parents too), new issues and team memory by team key, new projects by `teams`
   (keys; mapped to the workspace's own `team_ids`), a project by number **and** exact name (`project`);
 - the key must exist in the workspace said, and a key used in two of the person's workspaces is off limits to agents;
-- **only the workspace open in Projects** (Settings → Connected instances, on by default): the web app claims the
-  workspace of the tab looked at last (`PUT /workspaces/agent`); every other one refuses agents, reads too, and Code
-  there offers to switch. Only the person changes either (`PUT /workspaces/agent`, `PUT /workspaces/rule`); agent and
+- **only the workspaces open in Projects** (Settings → Connected instances, on by default): every window claims its
+  workspace when it opens and is looked at again (`PUT /workspaces/agent`; the last one is the default for reads that
+  say none, `open` in `/workspaces`) and says once a minute that it is still open (`{still: true}`, hidden windows
+  too); a workspace stays `active` until 3 minutes after its last window went quiet. Every other one refuses agents,
+  reads too, and Code there offers to switch. Only the person changes either (`PUT /workspaces/agent`, `PUT /workspaces/rule`); agent and
   link calls get 403. Pocket AI reads `GET /workspaces` (projects:read link) and shows conversations about the other
   workspaces as paused.
 

@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/abjelosevic88/pocket-homelab-projects/internal/store"
 )
@@ -102,10 +104,10 @@ func (s *Server) agentWorkspace(next http.Handler) http.Handler {
 				return
 			}
 		}
-		if said != active && s.oneWorkspace(ctx, u.ID) {
-			// one workspace at a time: the others are closed to agents, reads too
-			writeErr(w, http.StatusConflict, "Pocket AI may use only the workspace open in Pocket Projects, "+active+" right now, so "+said+" is closed to it (reads too). "+
-				"The person opens "+said+" in Pocket Projects to use it. Nothing was changed.")
+		if s.oneWorkspace(ctx, u.ID) && !slices.Contains(s.agentOpen(u.ID, own, active, remotes), said) {
+			// only the workspaces open in Projects: the others are closed to agents, reads too
+			writeErr(w, http.StatusConflict, "Pocket AI may use only the workspaces open in Pocket Projects ("+strings.Join(s.agentOpen(u.ID, own, active, remotes), ", ")+" right now), so "+said+" is closed to it (reads too). "+
+				"The person opens "+said+" in a Pocket Projects window to use it. Nothing was changed.")
 			return
 		}
 		if write {
@@ -314,8 +316,8 @@ func (s *Server) oneWorkspace(ctx context.Context, uid int64) bool {
 	return s.store.UserSetting(ctx, uid, agentOneKey) != "0"
 }
 
-// agentActive is the workspace agents may use: the person's choice while that
-// connection exists, else this instance.
+// agentActive is the workspace agents use when a call says none: the one the
+// person looked at last while that connection exists, else this instance.
 func (s *Server) agentActive(ctx context.Context, uid int64, own string, remotes []store.Remote) string {
 	v := strings.ToLower(s.store.UserSetting(ctx, uid, agentWorkspaceKey))
 	for i := range remotes {
@@ -326,13 +328,59 @@ func (s *Server) agentActive(ctx context.Context, uid int64, own string, remotes
 	return own
 }
 
+// A workspace stays open to agents while a Projects window shows it: every
+// window says so when it opens, when it is looked at again and once a minute
+// (hidden ones too), so two windows on two workspaces both count.
+const tabOpenFor = 3 * time.Minute
+
+// sawTab notes that a window of the person's shows addr ("" = this instance).
+func (s *Server) sawTab(uid int64, addr string) {
+	s.tabsMu.Lock()
+	defer s.tabsMu.Unlock()
+	if s.tabs == nil {
+		s.tabs = map[int64]map[string]time.Time{}
+	}
+	if s.tabs[uid] == nil {
+		s.tabs[uid] = map[string]time.Time{}
+	}
+	s.tabs[uid][addr] = time.Now()
+}
+
+// agentOpen: the workspaces agents may use under the rule, the one looked at
+// last first, then every other one a window shows now.
+func (s *Server) agentOpen(uid int64, own, active string, remotes []store.Remote) []string {
+	out := []string{active}
+	s.tabsMu.Lock()
+	defer s.tabsMu.Unlock()
+	for addr, at := range s.tabs[uid] {
+		if time.Since(at) > tabOpenFor {
+			delete(s.tabs[uid], addr)
+			continue
+		}
+		host := own
+		if addr != "" {
+			host = ""
+			for i := range remotes {
+				if strings.ToLower(remotes[i].Host()) == addr {
+					host = addr
+				}
+			}
+		}
+		if host != "" && !slices.Contains(out, host) {
+			out = append(out, host)
+		}
+	}
+	slices.Sort(out[1:])
+	return out
+}
+
 type workspaceOut struct {
 	Address string `json:"address"`
 	Name    string `json:"name"`
 	ID      int64  `json:"id,omitempty"` // the connection (/r/{id}); 0 = this instance
 	Own     bool   `json:"own"`
-	Active  bool   `json:"active"` // Pocket AI may work here (every workspace when the rule is off)
-	Open    bool   `json:"open"`   // the one open in Projects now
+	Active  bool   `json:"active"` // Pocket AI may work here: open in a Projects window (every workspace when the rule is off)
+	Open    bool   `json:"open"`   // the one looked at last (calls that say no workspace mean it)
 	Unread  int    `json:"unread"`
 }
 
@@ -348,10 +396,11 @@ func (s *Server) handleWorkspaces(w http.ResponseWriter, r *http.Request) {
 	own := s.ownAddress(r)
 	open := s.agentActive(ctx, me(r), own, remotes)
 	all := !s.oneWorkspace(ctx, me(r))
-	out := []workspaceOut{{Address: own, Name: "Your own", Own: true, Open: open == own, Active: all || open == own}}
+	may := s.agentOpen(me(r), own, open, remotes)
+	out := []workspaceOut{{Address: own, Name: "Your own", Own: true, Open: open == own, Active: all || slices.Contains(may, own)}}
 	for _, rem := range remotes {
 		h := strings.ToLower(rem.Host())
-		out = append(out, workspaceOut{Address: h, Name: rem.Name, ID: rem.ID, Open: open == h, Active: all || open == h, Unread: rem.Unread})
+		out = append(out, workspaceOut{Address: h, Name: rem.Name, ID: rem.ID, Open: open == h, Active: all || slices.Contains(may, h), Unread: rem.Unread})
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -386,9 +435,11 @@ func (s *Server) handleAgentRule(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSetAgentWorkspace: PUT {address}, sent by the web app whenever the
-// person opens a workspace (the one open in Projects is the one Pocket AI
-// works in). Only the person, never an agent: an agent that could pick its
-// workspace would make the choice pointless.
+// person opens a workspace or looks at its window again (that one becomes
+// the default for calls that say none), and with still: true once a minute
+// from every window (it only stays open to agents). Only the person, never
+// an agent: an agent that could pick its workspace would make the choice
+// pointless.
 func (s *Server) handleSetAgentWorkspace(w http.ResponseWriter, r *http.Request) {
 	if isAgentCall(r) || s.linkApp(r) != "" {
 		writeErr(w, http.StatusForbidden, "only the person chooses where Pocket AI works, in Pocket Projects itself")
@@ -397,6 +448,7 @@ func (s *Server) handleSetAgentWorkspace(w http.ResponseWriter, r *http.Request)
 	var in struct {
 		Address string `json:"address"`
 		ID      *int64 `json:"id"` // the web app's workspace: 0 = this instance, else /r/{id}
+		Still   bool   `json:"still"`
 	}
 	if err := decode(r, &in); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid json")
@@ -429,6 +481,11 @@ func (s *Server) handleSetAgentWorkspace(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
+	s.sawTab(me(r), val)
+	if in.Still {
+		s.handleWorkspaces(w, r)
+		return
+	}
 	if s.store.UserSetting(ctx, me(r), agentWorkspaceKey) != val {
 		if err := s.store.SetUserSetting(ctx, me(r), agentWorkspaceKey, val); err != nil {
 			s.fail(w, err, "workspace")
@@ -449,7 +506,7 @@ func (s *Server) codeHere(w http.ResponseWriter, r *http.Request, addr string) b
 		return true
 	}
 	active := s.agentActive(ctx, me(r), s.ownAddress(r), remotes)
-	if strings.EqualFold(addr, active) || !s.oneWorkspace(ctx, me(r)) {
+	if slices.Contains(s.agentOpen(me(r), s.ownAddress(r), active, remotes), strings.ToLower(addr)) || !s.oneWorkspace(ctx, me(r)) {
 		return true
 	}
 	writeJSON(w, http.StatusConflict, map[string]any{"error": "Pocket AI works in " + active + " right now; switch it to " + addr + " to code on this issue.", "switch_to": addr})
