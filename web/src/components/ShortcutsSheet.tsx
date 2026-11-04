@@ -1,7 +1,7 @@
 import { Modal } from './ui'
 
 const GROUPS: { title: string; keys: [string[], string][] }[] = [
-  { title: 'Anywhere', keys: [[['⌘', 'K'], 'Search & commands'], [['C'], 'New issue'], [['⌘', 'J'], 'Open or close the chat'], [['/'], 'Search page'], [[','], 'Settings'], [['['], 'Show or hide the sidebar'], [['?'], 'This sheet'], [['esc'], 'Close a dialog or menu']] },
+  { title: 'Anywhere', keys: [[['⌘', 'K'], 'Search & commands'], [['C'], 'New issue'], [['⌘', 'I'], 'Open or close the chat'], [['/'], 'Search page'], [[','], 'Settings'], [['['], 'Show or hide the sidebar'], [['?'], 'This sheet'], [['esc'], 'Close a dialog or menu']] },
   { title: 'Go to', keys: [[['G', 'I'], 'Inbox'], [['G', 'M'], 'My issues'], [['G', 'P'], 'Projects'], [['G', 'R'], 'Roadmap'], [['G', 'V'], 'Views'], [['G', 'C'], 'Calendar'], [['G', 'T'], 'Time'], [['G', 'N'], 'Insights']] },
   { title: 'In a list or board', keys: [[['J', 'K'], 'Move down / up'], [['↵'], 'Open the issue'], [['X'], 'Select'], [['⇧', 'click'], 'Select a range'], [['⌘', 'A'], 'Select all'], [['B'], 'List / board']] },
   { title: 'The focused or selected issues', keys: [[['S'], 'Status'], [['A'], 'Assignee'], [['I'], 'Assign to me'], [['P'], 'Priority'], [['L'], 'Labels'], [['D'], 'Due date'], [['E'], 'Estimate'], [['⌫'], 'Move to the trash']] },
