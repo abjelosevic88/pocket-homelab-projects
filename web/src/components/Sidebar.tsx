@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { REMOTE } from '../lib/api'
 import { useApp } from '../lib/app-context'
-import { useRemotes, watchAgentWorkspace } from '../lib/remotes'
+import { rememberWorkspace, useRemotes, watchAgentWorkspace, watchLastWorkspace } from '../lib/remotes'
 import { useAIActiveList } from '../lib/ai-active'
 import { useTeamDeploy } from '../lib/deploy-live'
 import type { Favorite, Team } from '../lib/types'
@@ -81,14 +81,15 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const favorites = boot?.favorites || []
   const remotes = useRemotes()
   useEffect(() => watchAgentWorkspace(), [])
+  useEffect(() => watchLastWorkspace(), [])
   const [wsMenu, setWsMenu] = useState<Anchor | null>(null)
   const here = remotes.find(r => r.id === REMOTE)
   const otherUnread = remotes.filter(r => r.id !== REMOTE).reduce((n, r) => n + (r.unread || 0), 0)
   // workspaces: this instance and the ones the person connected (a page load each)
   const wsItems: MenuItem[] = [
     { heading: 'Workspaces' },
-    { label: 'Your own', icon: 'home', hint: location.host, checked: !REMOTE, onSelect: () => { location.href = '/' } },
-    ...remotes.map(r => ({ label: r.name, icon: 'globe', hint: r.unread ? `${r.unread} unread · ${r.host}` : r.host, checked: r.id === REMOTE, onSelect: () => { location.href = `/r/${r.id}/` } })),
+    { label: 'Your own', icon: 'home', hint: location.host, checked: !REMOTE, onSelect: () => { rememberWorkspace(0); location.href = '/' } },
+    ...remotes.map(r => ({ label: r.name, icon: 'globe', hint: r.unread ? `${r.unread} unread · ${r.host}` : r.host, checked: r.id === REMOTE, onSelect: () => { rememberWorkspace(r.id); location.href = `/r/${r.id}/` } })),
     'sep',
     { label: 'Connect another…', icon: 'plus', onSelect: () => { location.href = '/settings/connections' } },
   ]

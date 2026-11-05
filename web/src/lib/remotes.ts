@@ -37,3 +37,33 @@ export function watchAgentWorkspace(): () => void {
   const beat = window.setInterval(() => claimAgentWorkspace(true), 60_000)
   return () => { document.removeEventListener('visibilitychange', on); window.clearInterval(beat) }
 }
+
+// The workspace looked at last, like Slack: opening Projects at its plain
+// address (/) goes back to it. Read once when the page loads, before this
+// page records itself, so the landing page still sees the previous one.
+// A page framed in another app (Pocket AI's sidebar) neither counts nor moves.
+const LAST_WS = 'pp-ws-last'
+const framed = window.self !== window.top
+const startedAt = !framed && location.pathname === '/' && !location.search ? Number(localStorage.getItem(LAST_WS) || 0) : 0
+let start: Promise<number | null> | null = null
+
+export function rememberWorkspace(id: number = REMOTE) {
+  try { localStorage.setItem(LAST_WS, String(id)) } catch { /* private mode */ }
+}
+
+/** Keeps this workspace as the last one while it is in view. */
+export function watchLastWorkspace(): () => void {
+  if (framed) return () => {}
+  rememberWorkspace()
+  const on = () => { if (document.visibilityState === 'visible') rememberWorkspace() }
+  document.addEventListener('visibilitychange', on)
+  return () => document.removeEventListener('visibilitychange', on)
+}
+
+/** On the first landing at / : the connected workspace to go back to, if it is still
+ *  connected (null: stay here). Once per page load, so / inside the app stays here. */
+export function startWorkspace(): Promise<number | null> {
+  if (start) return start.then(id => id && location.pathname === '/' ? id : null)
+  start = REMOTE || !startedAt ? Promise.resolve(null) : loadRemotes().then(l => l.some(r => r.id === startedAt) ? startedAt : null)
+  return start
+}
