@@ -19,6 +19,7 @@ import { AppChat } from './AppChat'
 import { keyLabel, useChatKey } from '../lib/chat-key'
 import { IssueTabs } from './IssueTabs'
 import { reopenTab } from '../lib/tabs'
+import { goInApp, inAppPath } from '../lib/follow'
 
 const SIDEBAR_KEY = 'pp-sidebar'
 const section = (path: string) => path.split('/').slice(0, 3).join('/')
@@ -69,6 +70,22 @@ export default function Layout() {
       else if (to !== location.pathname.slice(BASE.length) + location.search + location.hash) navigate(to)
       window.focus()
     })
+  }, [navigate])
+  // A new-tab link to a Projects page (a description, a comment, a PR's
+  // details) opens here as a tab: in the installed app it would open a second
+  // window. ⌘/Ctrl/Shift-click still opens a new one.
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+      const a = (e.target as Element | null)?.closest?.('a[href][target="_blank"]') as HTMLAnchorElement | null
+      if (!a || a.hasAttribute('download')) return
+      const to = inAppPath(a.href, remotes.current)
+      if (to == null) return
+      e.preventDefault()
+      goInApp(to, navigate)
+    }
+    document.addEventListener('click', h)
+    return () => document.removeEventListener('click', h)
   }, [navigate])
   // Pocket Ask's widget hands over links into this app; ones outside this
   // workspace are left to it, and it loads them in this window.

@@ -287,6 +287,7 @@ export function embedURL(u: string, send: boolean) {
   const x = new URL(u, location.href)
   x.searchParams.set('embed', '1')
   x.searchParams.set('tabs', '1') // a fork made in the frame opens as a tab of the panel
+  x.searchParams.set('links', '1') // a link in an answer comes back here: a Projects page opens in this window
   if (send && x.searchParams.has('draft')) x.searchParams.set('send', '1')
   return x.href
 }

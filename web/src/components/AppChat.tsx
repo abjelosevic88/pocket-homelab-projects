@@ -5,8 +5,8 @@
 // Desktop only. The frame stays mounted while hidden, so a running answer goes on.
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, BASE, HOME_V1 } from '../lib/api'
-import { loadRemotes } from '../lib/remotes'
+import { api, HOME_V1 } from '../lib/api'
+import { follow } from '../lib/follow'
 import { comboOf, keyLabel, useChatKey } from '../lib/chat-key'
 import type { Integration } from '../lib/types'
 import { Icon } from './icons'
@@ -71,26 +71,6 @@ const savedURL = (ai: string, keys: string) => {
   url.searchParams.set('chat_key', keys)
   appChatOf(url) // a new chat there (⌘N) is this app's again
   return url.href
-}
-
-/** A link the conversation's answer pointed at: one into Projects opens in this
- *  window (the chat stays), in this workspace without a reload; another app's in
- *  a new tab. Core's links name a connection by address (/r/<host>/…). */
-async function follow(href: string, go: (path: string) => void) {
-  const u = new URL(href, location.href)
-  if (u.protocol !== 'https:' && u.protocol !== 'http:') return
-  if (u.origin !== location.origin) { window.open(u.href, '_blank', 'noopener'); return }
-  let path = u.pathname
-  const m = path.match(/^\/r\/([^/]+)(\/.*)?$/)
-  if (m && !/^\d+$/.test(m[1])) {
-    const host = m[1].toLowerCase()
-    const rem = host === location.host.toLowerCase() ? null : (await loadRemotes()).find(r => r.host.toLowerCase() === host)
-    path = host === location.host.toLowerCase() ? m[2] || '/' : rem ? `/r/${rem.id}${m[2] || '/'}` : path
-  }
-  const here = BASE ? path === BASE || path.startsWith(BASE + '/') : !path.startsWith('/r/')
-  const rest = u.search + u.hash
-  if (here) go(((BASE ? path.slice(BASE.length) : path) || '/') + rest)
-  else location.assign(path + rest) // another workspace: a page load (the sidebar chat comes back)
 }
 
 /** What the person is looking at, for "@": the top bar's title and the page's text. */

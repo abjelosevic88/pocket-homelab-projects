@@ -4,8 +4,10 @@
 // its frame while another one shows, so switching back is instant and a
 // running conversation carries on. + starts another conversation.
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { refreshAIActive } from '../../lib/ai-active'
 import { BASE } from '../../lib/api'
+import { follow } from '../../lib/follow'
 import type { IssueDetail } from '../../lib/types'
 import { Icon } from '../icons'
 import { type Anchor, Menu, type MenuItem, Prompt, useToast } from '../ui'
@@ -34,6 +36,9 @@ function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown
   open.current = onOpen
   const iss = useRef(issue)
   iss.current = issue
+  const navigate = useNavigate()
+  const go = useRef(navigate)
+  go.current = navigate
   useEffect(() => {
     // several frames talk at once: only this frame's messages are this tab's
     const h = (e: MessageEvent) => {
@@ -45,6 +50,11 @@ function DockFrame({ tab, shown, issue, onMoved, onOpen }: { tab: DockTab; shown
           ? contextItems(iss.current).then(items => ({ label: iss.current.identifier, items }))
           : contextItem(iss.current, String(e.data.id || ''))
         work.then(reply, err => reply({ error: (err as Error).message }))
+        return
+      }
+      if (tab.kind === 'ai' && e.data?.type === 'pocket-ai' && typeof e.data.link === 'string') {
+        // a link in an answer: a Projects page opens here as a tab, another site in the browser
+        follow(e.data.link, p => go.current(p)).catch(() => {})
         return
       }
       if (tab.kind === 'ai' && e.data?.type === 'pocket-ai' && e.data.open) {
