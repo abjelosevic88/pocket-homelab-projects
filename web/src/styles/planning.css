@@ -383,7 +383,6 @@
 .tm-grid tfoot td { border-bottom: 0; font-weight: 600; color: var(--text-2); text-align: center; background: var(--surface-2); }
 .tm-issue { padding-left: 16px !important; max-width: 0; width: 42%; }
 .tm-issue-link { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--text); text-decoration: none !important; }
-.tm-issue-link:hover .ellipsis { text-decoration: underline; }
 .tm-grid tfoot .tm-issue { text-align: left; }
 .tm-cell { text-align: center; width: 7.5%; }
 .tm-cell.today { background: color-mix(in srgb, var(--accent) 5%, transparent); }

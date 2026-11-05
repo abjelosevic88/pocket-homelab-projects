@@ -90,7 +90,6 @@
 .issue-link { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--text); text-decoration: none !important; }
 .issue-link .ident { color: var(--muted); font-size: 12.5px; }
 .issue-link.done .ellipsis { text-decoration: line-through; color: var(--muted); }
-.issue-link:hover .ellipsis { text-decoration: underline; }
 
 /* ---------- picker menu ---------- */
 .pick-menu { position: fixed; z-index: 440; background: var(--raised); border-radius: 10px; box-shadow: var(--shadow-lg); overflow: hidden; display: flex; flex-direction: column; animation: pop-in .1s var(--ease); }
