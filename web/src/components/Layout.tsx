@@ -18,6 +18,7 @@ import { AskButton } from './AskButton'
 import { AppChat } from './AppChat'
 import { keyLabel, useChatKey } from '../lib/chat-key'
 import { IssueTabs } from './IssueTabs'
+import { reopenTab } from '../lib/tabs'
 
 const SIDEBAR_KEY = 'pp-sidebar'
 const section = (path: string) => path.split('/').slice(0, 3).join('/')
@@ -113,6 +114,7 @@ export default function Layout() {
     const h = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey
       if (mod && e.key.toLowerCase() === 'k' && !e.shiftKey) { e.preventDefault(); setPalette(p => !p); return }
+      if (mod && e.shiftKey && !e.altKey && e.code === 'KeyT') { const ref = reopenTab(); if (ref) { e.preventDefault(); navigate(`/issue/${ref}`) } return } // none closed: the browser's own
       if (mod || e.altKey || keysBusy(e)) return
       if (performance.now() - goPending.current < 1200) {
         goPending.current = 0
@@ -154,6 +156,7 @@ export default function Layout() {
     { id: 'calendar', label: 'Go to Calendar', icon: 'calendar', hint: 'G C', keywords: 'due dates deadlines', run: () => navigate('/calendar') },
     { id: 'time', label: 'Go to Time', icon: 'timer', hint: 'G T', keywords: 'timesheet hours tracking', run: () => navigate('/time') },
     { id: 'insights', label: 'Go to Insights', icon: 'bar-chart', hint: 'G N', keywords: 'charts velocity analytics reports', run: () => navigate('/insights') },
+    { id: 'reopen-tab', label: 'Reopen closed tab', icon: 'undo', hint: keyLabel('mod+shift+t'), keywords: 'restore undo close issue tab', run: () => { const ref = reopenTab(); if (ref) navigate(`/issue/${ref}`) } },
     { id: 'search', label: 'Search everything', icon: 'search', hint: '/', run: () => navigate('/search') },
     { id: 'trash', label: 'Trash', icon: 'trash', keywords: 'deleted restore', run: () => navigate('/trash') },
     { id: 'settings', label: 'Settings', icon: 'settings', hint: ',', run: () => navigate('/settings') },

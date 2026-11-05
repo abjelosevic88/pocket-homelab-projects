@@ -63,6 +63,14 @@ export function closeTabs(refs: string[]) {
   set(tabs.filter(t => !refs.includes(t.ref)), [...gone.reverse(), ...closed.filter(c => !refs.includes(c.ref))])
 }
 
+/** Brings a closed tab back as it was (its side panel too); the most recently closed one when no ref is given. Its ref, or '' if there's none. */
+export function reopenTab(ref?: string): string {
+  const t = ref ? closed.find(c => c.ref === ref) : closed[0]
+  if (!t) return ''
+  set(tabs.some(x => x.ref === t.ref) ? tabs : [...tabs, t], closed.filter(c => c.ref !== t.ref))
+  return t.ref
+}
+
 export function moveTab(ref: string, before: string) {
   if (ref === before) return
   const tab = tabs.find(t => t.ref === ref)

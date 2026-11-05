@@ -6,7 +6,7 @@ const GROUPS: { title: string; keys: [string[], string][] }[] = [
   { title: 'Go to', keys: [[['G', 'I'], 'Inbox'], [['G', 'M'], 'My issues'], [['G', 'P'], 'Projects'], [['G', 'R'], 'Roadmap'], [['G', 'V'], 'Views'], [['G', 'C'], 'Calendar'], [['G', 'T'], 'Time'], [['G', 'N'], 'Insights']] },
   { title: 'In a list or board', keys: [[['J', 'K'], 'Move down / up'], [['↵'], 'Open the issue'], [['X'], 'Select'], [['⇧', 'click'], 'Select a range'], [['⌘', 'A'], 'Select all'], [['B'], 'List / board']] },
   { title: 'The focused or selected issues', keys: [[['S'], 'Status'], [['A'], 'Assignee'], [['I'], 'Assign to me'], [['P'], 'Priority'], [['L'], 'Labels'], [['D'], 'Due date'], [['E'], 'Estimate'], [['⌫'], 'Move to the trash']] },
-  { title: 'On an issue', keys: [[['⌘', '↵'], 'Send the comment'], [['M'], 'Comment'], [['⌘', '.'], 'Copy the ID']] },
+  { title: 'On an issue', keys: [[['⌘', '↵'], 'Send the comment'], [['M'], 'Comment'], [['⌘', '.'], 'Copy the ID'], [['⌘', '⇧', 'T'], 'Reopen the closed tab']] },
 ]
 
 export function ShortcutsSheet({ onClose }: { onClose: () => void }) {

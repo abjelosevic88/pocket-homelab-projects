@@ -41,7 +41,7 @@ export function chatKeyProblem(keys: string): string {
   const taken: Record<string, string> = {
     'mod+k': 'Search & commands', 'mod+a': 'Select all', 'mod+.': 'Copy the ID', 'mod+c': 'Copy', 'mod+v': 'Paste', 'mod+x': 'Cut', 'mod+z': 'Undo', 'mod+shift+z': 'Redo',
     'mod+e': 'Pocket AI: Recent conversations', 'mod+j': 'Pocket AI: Run a recipe', 'mod+n': 'the browser: New window', 'mod+t': 'the browser: New tab', 'mod+w': 'the browser: Close tab',
-    'mod+shift+t': 'the browser: Reopen closed tab', 'mod+l': 'the browser: Address bar', 'mod+r': 'the browser: Reload', 'mod+q': 'Quit', 'mod+f': 'Find on the page', 'mod+p': 'Print', 'mod+s': 'Save',
+    'mod+shift+t': 'Reopen closed tab', 'mod+l': 'the browser: Address bar', 'mod+r': 'the browser: Reload', 'mod+q': 'Quit', 'mod+f': 'Find on the page', 'mod+p': 'Print', 'mod+s': 'Save',
     'mod+b': 'Bold in text editors', 'mod+u': 'Underline in text editors', 'mod+shift+[': 'Pocket AI: Previous tab', 'mod+shift+]': 'Pocket AI: Next tab',
   }
   return taken[keys] ? `${keyLabel(keys)} is ${taken[keys]}.` : ''

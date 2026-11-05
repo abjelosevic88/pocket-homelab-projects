@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { appURL } from '../lib/api'
 import { useAIActive } from '../lib/ai-active'
-import { closeTabs, type IssueTab, moveTab, useClosedTabs, useIssueTabs } from '../lib/tabs'
+import { keyLabel } from '../lib/chat-key'
+import { closeTabs, type IssueTab, moveTab, reopenTab, useClosedTabs, useIssueTabs } from '../lib/tabs'
 import { Icon } from './icons'
 import { StatusIcon } from './issue-bits'
 import { type Anchor, Menu, type MenuItem, MenuButton, useToast } from './ui'
@@ -54,8 +55,8 @@ export function IssueTabs() {
         { label: 'Close this tab', icon: 'x', disabled: i < 0, onSelect: () => close([active]) },
         { label: 'Close other tabs', disabled: i < 0 || refs.length < 2, onSelect: () => close(refs.filter(r => r !== active)) },
         { label: 'Close tabs to the right', disabled: i < 0 || i === refs.length - 1, onSelect: () => close(refs.slice(i + 1)) },
-        ...(closed.length ? ['sep' as const, { heading: 'Recently closed' }, ...closed.slice(0, 8).map(c => ({
-          label: <span className="ellipsis"><b className="tab-ref">{c.ref}</b> {c.title}</span>, icon: 'undo', onSelect: () => navigate(`/issue/${c.ref}`),
+        ...(closed.length ? ['sep' as const, { heading: 'Recently closed' }, ...closed.slice(0, 8).map((c, n) => ({
+          label: <span className="ellipsis"><b className="tab-ref">{c.ref}</b> {c.title}</span>, icon: 'undo', hint: n ? undefined : keyLabel('mod+shift+t'), onSelect: () => navigate(`/issue/${reopenTab(c.ref)}`),
         }))] : []),
         'sep',
         { label: 'Close all tabs', danger: true, onSelect: () => close(refs) },
