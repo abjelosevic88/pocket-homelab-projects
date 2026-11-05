@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import './styles/base.css'
@@ -7,6 +7,7 @@ import './styles/settings.css'
 import './styles/projects.css'
 import { BASE, REMOTE } from './lib/api'
 import { AppProvider, useApp } from './lib/app-context'
+import { rememberWorkspace, startWorkspace } from './lib/remotes'
 import { Loading, ToastProvider } from './components/ui'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -45,7 +46,7 @@ function RemoteDown({ msg }: { msg: string }) {
       <img src="/favicon.svg" alt="" />
       <h2>This connected instance can't be opened</h2>
       <p className="muted">{msg || 'It did not answer.'}</p>
-      <div className="row"><a className="btn primary" href="/">Back to your workspace</a><a className="btn" href="/settings/connections">Connected instances</a></div>
+      <div className="row"><a className="btn primary" href="/" onClick={() => rememberWorkspace(0)}>Back to your workspace</a><a className="btn" href="/settings/connections">Connected instances</a></div>
     </div>
   )
 }
@@ -63,6 +64,14 @@ function Gate({ children }: { children: React.ReactNode }) {
 
 function Home() {
   const { boot, settings } = useApp()
+  // opened at the plain address: back to the workspace looked at last (Slack-style)
+  const [checked, setChecked] = useState(false)
+  useEffect(() => {
+    let live = true
+    startWorkspace().then(id => { if (!live) return; if (id) location.replace(`/r/${id}/`); else setChecked(true) })
+    return () => { live = false }
+  }, [])
+  if (!checked) return <Loading />
   if (!boot?.teams.length) return <Navigate to="/teams/new?welcome=1" replace />
   const to = { inbox: '/inbox', projects: '/projects', team: `/team/${boot.teams[0].key}/issues` }[settings?.home_view || ''] || '/my-issues'
   return <Navigate to={to} replace />
