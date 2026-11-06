@@ -782,7 +782,7 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 			}
 		}
 	}
-	subs, _, _ := s.store.ListIssues(ctx, store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include", Sort: "manual"})
+	subs, _, _ := s.store.ListIssues(ctx, store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include", Sort: "number"})
 	for _, sub := range subs {
 		state := sub.StateType
 		if st, err := s.store.GetState(ctx, sub.StateID); err == nil {

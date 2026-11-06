@@ -347,6 +347,8 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]*Issue, int, e
 		order = `i.estimate IS NULL, i.estimate DESC`
 	case "identifier":
 		order = `t.key, i.number DESC`
+	case "number": // oldest first, e.g. sub-issues ATH-211, ATH-212, …
+		order = `t.key, i.number`
 	case "completed":
 		order = `COALESCE(i.completed_at, i.canceled_at, i.updated_at) DESC`
 	}
