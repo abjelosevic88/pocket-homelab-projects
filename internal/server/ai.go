@@ -162,7 +162,7 @@ func (s *Server) handleAIBreakdown(w http.ResponseWriter, r *http.Request) {
 		n = 5
 	}
 	var existing []string
-	subs, _, _ := s.store.ListIssues(r.Context(), store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid})
+	subs, _, _ := s.store.ListIssues(r.Context(), store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Sort: "number"})
 	for _, x := range subs {
 		existing = append(existing, "- "+x.Title)
 	}

@@ -254,7 +254,7 @@ func (s *Server) handleGetIssue(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	d.SubIssues, _, _ = s.store.ListIssues(ctx, store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include", Sort: "manual"})
+	d.SubIssues, _, _ = s.store.ListIssues(ctx, store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include", Sort: "number"})
 	d.Relations = s.relationsOut(ctx, a, is.ID)
 	d.Attachments, _ = s.store.Attachments(ctx, is.ID, 0)
 	if d.SharedNotes, _ = s.store.IssueDocs(ctx, is.ID, false); d.SharedNotes == nil {
@@ -334,7 +334,7 @@ func (s *Server) handleSubIssues(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "issue")
 		return
 	}
-	list, _, err := s.store.ListIssues(r.Context(), store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include"})
+	list, _, err := s.store.ListIssues(r.Context(), store.IssueFilter{ParentID: is.ID, AllowedTeamIDs: a.ids(), ViewerID: a.uid, Archived: "include", Sort: "number"})
 	if err != nil {
 		s.fail(w, err, "sub-issues")
 		return
