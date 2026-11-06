@@ -129,6 +129,20 @@
 .md code { background: var(--surface-2); padding: 1px 5px; border-radius: 5px; }
 .md pre code { background: none; padding: 0; }
 .md pre { margin: 0 0 10px; }
+.md li > span > ul, .md li > span > ol, .md li > span > pre, .md li > span > p { margin: 4px 0 0; }
+.md li.check > span { min-width: 0; }
+.md hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+.md .md-table { overflow-x: auto; margin: 0 0 12px; border: 1px solid var(--border); border-radius: 8px; }
+.md table { border-collapse: collapse; width: 100%; font-size: .93em; line-height: 1.5; overflow-wrap: normal; }
+.md th, .md td { padding: 7px 10px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: left; vertical-align: top; min-width: 90px; max-width: 520px; overflow-wrap: anywhere; }
+.md th:last-child, .md td:last-child { border-right: 0; }
+.md tbody tr:last-child td { border-bottom: 0; }
+.md th { background: var(--surface-2); font-weight: 600; }
+.md tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+.md .md-mermaid { margin: 0 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; text-align: center; }
+.md .md-mermaid svg { max-width: 100%; height: auto; }
+.md .md-mermaid-src { margin: 0 0 10px; }
+.md .md-mermaid-src pre { margin: 0 0 4px; }
 .md .md-img { display: inline-block; margin: 4px 0; }
 .md .md-img img { max-width: 100%; max-height: 420px; border-radius: 8px; border: 1px solid var(--border); display: block; }
 .md .md-drawing { position: relative; max-width: 100%; text-decoration: none; }
