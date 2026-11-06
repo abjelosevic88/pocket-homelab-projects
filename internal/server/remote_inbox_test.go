@@ -138,6 +138,17 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	if c := alex.status("PUT", "/api/v1/workspaces/agent", map[string]any{"id": rem.ID}); c != 200 {
 		t.Fatalf("opening the workspace: %d", c)
 	}
+	// a read naming no workspace says which one answered (Core's links go there)
+	{
+		req := httptest.NewRequest("GET", "/api/v1/issues/ATH-1", nil)
+		req.Header.Set("Authorization", "Bearer "+alex.token)
+		req.Header.Set("X-Pocket-Source", "mcp")
+		w := httptest.NewRecorder()
+		hA.ServeHTTP(w, req)
+		if w.Code != 200 || w.Header().Get("X-Pocket-Workspace") != addr {
+			t.Fatalf("the workspace that answered: %d %q", w.Code, w.Header().Get("X-Pocket-Workspace"))
+		}
+	}
 	expect(201, "POST", "/api/v1/issues/ATH-1/comments", addr, map[string]any{"body": "addr"}, "the open workspace")
 	expect(409, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "x"}, "own instance closed now")
 	if c := alex.status("POST", "/api/v1/issues/MINE-1/code", map[string]any{"action": "chat"}); c != 409 {
