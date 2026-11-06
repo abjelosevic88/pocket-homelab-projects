@@ -374,7 +374,8 @@ input.doc-title-input:disabled { opacity: 1; }
 .doc-meta { margin: 2px 0 22px; }
 .doc-editor textarea { font-size: 15px; line-height: 1.7; min-height: 320px; }
 .doc-preview .md { font-size: 15px; line-height: 1.7; }
-.doc-preview .md h1 { font-size: 24px; margin: 22px 0 8px; } .doc-preview .md h2 { font-size: 19px; margin: 20px 0 8px; }
+.doc-preview .md h3 { font-size: 24px; margin: 26px 0 10px; } .doc-preview .md h4 { font-size: 19px; margin: 22px 0 8px; } .doc-preview .md h5 { font-size: 16px; margin: 18px 0 6px; } .doc-preview .md h6 { font-size: 15px; margin: 16px 0 6px; }
+.doc-preview .md > :first-child { margin-top: 0; }
 @media (max-width: 767px) { .doc-body { padding: 18px 16px 120px; } input.doc-title-input { font-size: 24px; } }
 
 /* ---------- roadmap ---------- */
