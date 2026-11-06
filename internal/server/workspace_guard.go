@@ -116,6 +116,9 @@ func (s *Server) agentWorkspace(next http.Handler) http.Handler {
 				return
 			}
 		}
+		// the workspace that answered, also when the call named none: Core's
+		// links then open there (/r/<address>/…), not in this instance
+		w.Header().Set("X-Pocket-Workspace", said)
 		if rem != nil {
 			// a link token's scope is checked against the path it asked for
 			r = r.WithContext(context.WithValue(ctx, agentPathKey, r.URL.Path))
