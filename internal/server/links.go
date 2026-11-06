@@ -17,7 +17,7 @@ import (
 
 var linkOffers = []core.Offer{
 	{Scope: "projects:read", Name: "See your projects and issues", Description: "Read your teams, issues, projects, milestones and cycles, the dates for a calendar, and what links to a contact, a note or a drawing (Pocket Calendar's \"Project deadlines\", Pocket Contacts' projects of a person, Pocket Day's work on a day, Pocket Draw's \"Used in\")."},
-	{Scope: "projects:write", Name: "Create issues", Description: "Create issues and comments, post project updates, link pull requests to issues and add facts to a team's AI memory; change only the issues that app created itself."},
+	{Scope: "projects:write", Name: "Create issues and projects", Description: "Create issues, projects (Pocket Forms' \"Start a project\" from a client's brief) and comments, post project updates, link pull requests to issues and add facts to a team's AI memory; change only the issues that app created itself."},
 	{Scope: "worklog:read", Name: "See time logged on issues", Description: "Read the time you logged on issues (issue, date, length; never your notes) and pick an issue to track time for (Pocket Time)."},
 	{Scope: "worklog:write", Name: "Log time on issues", Description: "Log time you tracked elsewhere on an issue (Pocket Time writes a finished timer back); change or remove only the time that app logged itself."},
 }
@@ -34,6 +34,7 @@ var linkRoutes = []linkRoute{
 	{"GET", regexp.MustCompile(`^/api/v1/day/[0-9]{4}-[0-9]{2}-[0-9]{2}$`), "projects:read"},
 	{"GET", regexp.MustCompile(`^/api/v1/(teams|issues|projects|cycles|milestones)/[A-Za-z0-9-]+(/(states|labels|members|cycles|comments|history|relations|attachments|milestones|updates|docs|links|contacts|sub-issues))?$`), "projects:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/issues$`), "projects:write"},
+	{"POST", regexp.MustCompile(`^/api/v1/projects$`), "projects:write"},
 	{"PATCH", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+$`), "projects:write"},
 	{"POST", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+/comments$`), "projects:write"},
 	{"POST", regexp.MustCompile(`^/api/v1/projects/[0-9]+/updates$`), "projects:write"},
