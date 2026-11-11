@@ -12,7 +12,7 @@ import { IssueRow } from '../IssueRow'
 import { openCreateIssue } from '../CreateIssue'
 import { IssueSearchPicker } from '../issues/IssueSearch'
 import { NoteSearch } from '../project/Resources'
-import { type Anchor, Confirm, Menu, type MenuItem, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
+import { type Anchor, Confirm, Menu, type MenuItem, Modal, Popover, Prompt, Spinner, rectOf, useToast } from '../ui'
 import { sharedNoteURL } from '../../pages/SharedNotePage'
 import { FixPromptButton, PRDetailsList, PRSummary, usePRDetails } from './PRDetails'
 import { SlackSend } from './SlackSend'
@@ -162,6 +162,57 @@ export function useUploader(issue: IssueDetail, onChanged: () => void) {
   return { busy, send }
 }
 
+// What opens in the page instead of a new tab: pictures, plain text, video and sound
+// (PDFs keep their tab: the browser's viewer won't run in the sandboxed frame).
+function previewKind(a: Attachment): '' | 'image' | 'text' | 'video' | 'audio' {
+  if (a.kind !== 'file' || !a.url) return ''
+  const m = (a.mime || '').toLowerCase()
+  const ext = (a.file_name || a.title || '').toLowerCase().split('.').pop() || ''
+  if (m.startsWith('image/') && m !== 'image/svg+xml' || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'bmp'].includes(ext)) return 'image'
+  if (m === 'text/plain' || ['txt', 'log', 'md', 'csv'].includes(ext)) return 'text'
+  if (m.startsWith('video/') || ['mp4', 'webm', 'mov'].includes(ext)) return 'video'
+  if (m.startsWith('audio/') || ['mp3', 'm4a', 'wav', 'ogg'].includes(ext)) return 'audio'
+  return ''
+}
+
+// AttachmentPreview shows a file over the issue; ← → go through the others that preview.
+function AttachmentPreview({ files, index, onIndex, onClose }: { files: Attachment[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
+  const a = files[index]
+  const kind = previewKind(a)
+  const many = files.length > 1
+  const go = (d: number) => onIndex((index + d + files.length) % files.length)
+  useEffect(() => {
+    if (!many) return
+    const h = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.closest?.('input, textarea, [contenteditable]')) return
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(-1) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(1) }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  })
+  const name = a.file_name || a.title
+  const title = <span className="att-pv-title">{name}<small>{[a.size ? bytes(a.size) : '', many ? `${index + 1} of ${files.length}` : ''].filter(Boolean).join(' · ')}</small></span>
+  const dl = a.url + (a.url.includes('?') ? '&' : '?') + 'download=1'
+  return (
+    <Modal title={title} onClose={onClose} size="xl" className="att-preview"
+      footer={<>
+        {many && <><button type="button" className="btn ghost sm" onClick={() => go(-1)} aria-label="Previous file"><Icon name="chevron-left" size={15} /></button>
+          <button type="button" className="btn ghost sm" onClick={() => go(1)} aria-label="Next file"><Icon name="chevron-right" size={15} /></button></>}
+        <span className="spacer" />
+        <a className="btn ghost sm" href={dl} download={name}><Icon name="download" size={14} />Download</a>
+        <a className="btn ghost sm" href={a.url} target="_blank" rel="noreferrer"><Icon name="external" size={14} />Open in a new tab</a>
+      </>}>
+      <div className={`att-pv-body ${kind}`}>
+        {kind === 'image' && <img key={a.id} src={a.url} alt={name} />}
+        {kind === 'text' && <iframe key={a.id} src={a.url} title={name} />}
+        {kind === 'video' && <video key={a.id} src={a.url} controls autoPlay />}
+        {kind === 'audio' && <audio key={a.id} src={a.url} controls autoPlay />}
+      </div>
+    </Modal>
+  )
+}
+
 export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: IssueDetail; canEdit: boolean; onChanged: () => void; uploader: ReturnType<typeof useUploader> }) {
   const { toast } = useToast()
   const file = useRef<HTMLInputElement>(null)
@@ -171,6 +222,16 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const review = usePRReview(issue.attachment_list)
   const [prOpen, setPrOpen] = useState<number | null>(null)
   const list = issue.attachment_list
+  const previews = list.filter(a => previewKind(a))
+  const [preview, setPreview] = useState<number | null>(null)
+  // a plain click previews; ⌘/Ctrl/Shift-click or middle click still opens a tab
+  const openPreview = (a: Attachment) => (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+    const i = previews.findIndex(p => p.id === a.id)
+    if (i < 0) return
+    e.preventDefault()
+    setPreview(i)
+  }
   const remove = async (a: Attachment) => { try { await api.del(`${V1}/attachments/${a.id}`); changed(issue); onChanged() } catch (e) { toast((e as Error).message, 'err') } }
   const addLink = async (url: string) => {
     setLink(false)
@@ -222,7 +283,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
             <Fragment key={a.id}>
             <div className="att-row">
               <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
-              <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
+              <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer" onClick={openPreview(a)} title={previewKind(a) ? 'Preview (⌘-click: new tab)' : undefined}>{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
               {remove_}
             </div>
@@ -232,6 +293,7 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
       </div> : <div className="drop-zone">Drop files here, paste images into the description, or link commits by mentioning {issue.identifier} in git.</div>}
       {link && <Prompt title="Add a link" placeholder="https://…" button="Add" onDone={addLink} onClose={() => setLink(false)} />}
       {slack && <SlackSend issue={issue} pr={slack} onClose={() => setSlack(null)} onSent={onChanged} />}
+      {preview !== null && previews[preview] && <AttachmentPreview files={previews} index={preview} onIndex={setPreview} onClose={() => setPreview(null)} />}
     </section>
   )
 }

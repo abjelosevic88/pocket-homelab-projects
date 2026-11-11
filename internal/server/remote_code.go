@@ -254,12 +254,17 @@ func (s *Server) handleRemoteStartCode(w http.ResponseWriter, r *http.Request) {
 	if in.Worktree && !tai.LinkRefs {
 		ci.Branch = plainBranch(ci.Branch, ri.Identifier)
 	}
+	// the issue's files, read from over there: screenshots the agent looks at, documents it reads
+	files := s.codeFilesPayload(ri.Identifier, ci.Files, func(f *codeFile) ([]byte, error) { return s.remoteFile(ctx, rem, f.Att.ID) })
 	own, _ := s.store.ActionTemplates(ctx, me(r), store.RemoteTemplateScope(rem.ID, teamKeyOf(ri.Identifier)))
 	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree, own)
 	body := map[string]any{"cwd": tai.Cwd, "title": title, "text": text, "system": system, "source": "projects",
 		"ref": remoteRef(rem, ri.Identifier), "ref_url": ci.URL, "ref_label": ri.Identifier + " " + ri.Title}
 	if in.Worktree {
 		body["worktree"] = map[string]any{"name": ci.Branch}
+	}
+	if len(files) > 0 {
+		body["files"] = files
 	}
 	for k, v := range map[string]string{"provider": tai.Provider, "model": tai.Model, "effort": tai.Effort, "mode": mode} {
 		if v != "" {
@@ -272,8 +277,12 @@ func (s *Server) handleRemoteStartCode(w http.ResponseWriter, r *http.Request) {
 		body["account_id"] = *tai.AccountID
 	}
 	var draft struct {
-		ID  string `json:"id"`
-		URL string `json:"url"`
+		ID    string `json:"id"`
+		URL   string `json:"url"`
+		Files []struct {
+			Name string `json:"name"`
+			OK   bool   `json:"ok"`
+		} `json:"files"`
 	}
 	if err := sb.call(ctx, http.MethodPost, "/api/v1/link/drafts", body, &draft); err != nil {
 		writeErr(w, http.StatusBadGateway, "Pocket AI: "+err.Error())
@@ -287,11 +296,20 @@ func (s *Server) handleRemoteStartCode(w http.ResponseWriter, r *http.Request) {
 		label += " in a worktree"
 	}
 	_ = s.store.SaveRemoteThread(ctx, &store.RemoteThread{RemoteID: rem.ID, Issue: ri.Identifier, DraftID: draft.ID, Action: label, Cwd: shortCwd(tai.Cwd), URL: draft.URL, State: "draft"})
-	skipped := []string{}
-	for _, f := range ci.Files {
-		skipped = append(skipped, f.Name)
+	sent, skipped := 0, []string{}
+	for _, f := range draft.Files {
+		if f.OK {
+			sent++
+		} else {
+			skipped = append(skipped, f.Name)
+		}
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"url": draft.URL, "draft_id": draft.ID, "send": tai.SendNow, "files": 0, "skipped": skipped})
+	for _, f := range ci.Files {
+		if !f.Sent {
+			skipped = append(skipped, f.Name)
+		}
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"url": draft.URL, "draft_id": draft.ID, "send": tai.SendNow, "files": sent, "skipped": skipped})
 }
 
 // remoteCodeIssue is the issue's context from the other instance.
@@ -313,7 +331,8 @@ func (s *Server) remoteCodeIssue(r *http.Request, rem *store.Remote, ri *remoteI
 		switch a.Kind {
 		case "ai_thread":
 		case "file":
-			ci.Files = append(ci.Files, codeFile{Name: a.Title}) // on the other instance: not sent
+			// read from the other instance when the draft is made
+			ci.Files = append(ci.Files, codeFile{Name: firstNonEmpty(a.FileName, a.Title), Mime: a.Mime, Size: a.Size, Att: store.Attachment{ID: a.ID}})
 		case "commit", "pull_request":
 			line := strings.ReplaceAll(a.Kind, "_", " ") + ": " + a.Title
 			if a.Subtitle != "" {
@@ -329,6 +348,7 @@ func (s *Server) remoteCodeIssue(r *http.Request, rem *store.Remote, ri *remoteI
 			}
 		}
 	}
+	withinLimits(ci.Files)
 	var shared []store.IssueDoc
 	if err := s.remoteCall(r.Context(), rem, http.MethodGet, "/api/v1/issues/"+url.PathEscape(ri.Identifier)+"/shared-notes?body=1", nil, &shared); err == nil {
 		ci.SharedNotes = shared

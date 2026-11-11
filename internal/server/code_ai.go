@@ -579,7 +579,44 @@ type codeFile struct {
 	Name, Mime string
 	Att        store.Attachment // read through openAttachment: disk or Pocket Files
 	Size       int64
-	Sent       bool // within the limits below
+	Sent       bool   // within the limits below, and read
+	Why        string // why it was not sent, for the prompt
+}
+
+// withinLimits marks the files that go along: the first ones that fit.
+func withinLimits(files []codeFile) {
+	n, total := 0, int64(0)
+	for i := range files {
+		f := &files[i]
+		switch {
+		case f.Size > codeMaxFileBytes:
+			f.Why = "too large to send"
+		case n >= codeMaxFiles || total+f.Size > codeMaxAllBytes:
+			f.Why = "over the limit of files sent with one message"
+		default:
+			f.Sent, n, total = true, n+1, total+f.Size
+		}
+	}
+}
+
+// codeFilesPayload reads the files that go along; one that can't be read
+// stays on the issue (and the prompt says so).
+func (s *Server) codeFilesPayload(ident string, files []codeFile, read func(*codeFile) ([]byte, error)) []map[string]any {
+	out := []map[string]any{}
+	for i := range files {
+		f := &files[i]
+		if !f.Sent {
+			continue
+		}
+		data, err := read(f)
+		if err != nil {
+			s.log.Warn("code: attachment unreadable", "issue", ident, "file", f.Name, "err", err)
+			f.Sent, f.Why = false, "could not be read"
+			continue
+		}
+		out = append(out, map[string]any{"name": f.Name, "data": data})
+	}
+	return out
 }
 
 // What goes along: Pocket AI takes 8 files per draft and 20 MB per file.
@@ -679,25 +716,14 @@ func (s *Server) handleStartCode(w http.ResponseWriter, r *http.Request) {
 	if in.Worktree && !tai.LinkRefs {
 		ci.Branch = plainBranch(ci.Branch, is.Identifier)
 	}
+	// the issue's files: screenshots the agent looks at, documents it reads
+	files := s.codeFilesPayload(is.Identifier, ci.Files, func(f *codeFile) ([]byte, error) { return s.readAttachment(ctx, &f.Att) })
 	mine, _ := s.store.ActionTemplates(ctx, me(r), store.TemplateScope(team.ID))
 	title, text, system := buildCodePrompt(in.Action, in.Note, ci, tai, in.Worktree, mine)
 	body := map[string]any{"cwd": cwd, "title": title, "text": text, "system": system, "source": "projects",
 		"ref": is.Identifier, "ref_url": ci.URL, "ref_label": is.Identifier + " " + is.Title}
 	if in.Worktree {
 		body["worktree"] = map[string]any{"name": ci.Branch}
-	}
-	// the issue's files: screenshots the agent looks at, documents it reads
-	files := []map[string]any{}
-	for _, f := range ci.Files {
-		if !f.Sent {
-			continue
-		}
-		data, err := s.readAttachment(ctx, &f.Att)
-		if err != nil {
-			s.log.Warn("code: attachment unreadable", "issue", is.Identifier, "file", f.Name, "err", err)
-			continue
-		}
-		files = append(files, map[string]any{"name": f.Name, "data": data})
 	}
 	if len(files) > 0 {
 		body["files"] = files
@@ -809,15 +835,10 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 	}
 	ci.SharedNotes, _ = s.store.IssueDocs(ctx, is.ID, true)
 	atts, _ := s.store.Attachments(ctx, is.ID, 0)
-	total := int64(0)
 	for _, att := range atts {
 		switch att.Kind {
 		case "file":
-			f := codeFile{Name: firstNonEmpty(att.FileName, att.Title), Mime: att.Mime, Att: att, Size: att.Size}
-			if len(ci.Files) < codeMaxFiles && f.Size <= codeMaxFileBytes && total+f.Size <= codeMaxAllBytes {
-				f.Sent, total = true, total+f.Size
-			}
-			ci.Files = append(ci.Files, f)
+			ci.Files = append(ci.Files, codeFile{Name: firstNonEmpty(att.FileName, att.Title), Mime: att.Mime, Att: att, Size: att.Size})
 			continue
 		case "commit", "pull_request":
 		default:
@@ -843,6 +864,7 @@ func (s *Server) codeIssueOf(r *http.Request, a *access, is *store.Issue, team, 
 		}
 		ci.Git = append(ci.Git, line)
 	}
+	withinLimits(ci.Files)
 	return ci
 }
 
@@ -934,7 +956,7 @@ func buildCodePrompt(action, note string, ci codeIssue, tai *store.TeamAI, workt
 		if f.Sent {
 			files = append(files, f.Name)
 		} else {
-			left = append(left, f.Name+" (too large to send; open it on the issue)")
+			left = append(left, f.Name+" ("+firstNonEmpty(f.Why, "not sent")+"; open it on the issue)")
 		}
 	}
 	section("Attached files (sent with this message)", files)

@@ -679,3 +679,16 @@ button.ic-chip:hover { background: var(--hover); }
 .cc-state.dp-going .code-pulse { margin: 0; width: 7px; height: 7px; }
 [data-theme="dark"] .cc-state.dp-going { color: #c4b5fd; }
 @media (prefers-reduced-motion: reduce) { .dp-box.running::before { animation: none; width: 100%; opacity: .5; } }
+
+/* attachment preview */
+.modal.att-preview { width: min(1100px, 100%); }
+.att-preview .modal-body { padding: 0; display: flex; min-height: 0; }
+.att-pv-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.att-pv-title > :first-child, .att-pv-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att-pv-title small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.att-pv-body { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--surface-2); min-height: 240px; overflow: auto; }
+.att-pv-body img, .att-pv-body video { display: block; max-width: 100%; max-height: calc(100vh - 200px); object-fit: contain; }
+.att-pv-body.text iframe { width: 100%; height: calc(100vh - 200px); border: 0; background: #fff; }
+.att-pv-body.audio { padding: 32px; }
+.att-preview .modal-foot { display: flex; align-items: center; gap: 6px; }
+.att-preview .modal-foot .spacer { flex: 1; }

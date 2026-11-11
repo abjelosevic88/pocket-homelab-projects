@@ -342,6 +342,31 @@ func (s *Server) remoteCall(ctx context.Context, rem *store.Remote, method, path
 	return json.NewDecoder(res.Body).Decode(out)
 }
 
+// remoteFile reads one of the other instance's attachment files as the person.
+func (s *Server) remoteFile(ctx context.Context, rem *store.Remote, id int64) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rem.URL+"/api/v1/attachments/"+strconv.FormatInt(id, 10)+"/file", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+rem.Token)
+	req.Header.Set("X-Pocket-Source", "projects-remote")
+	res, err := (&http.Client{Transport: remoteTransport(rem.Proxy)}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%s can't be reached from this server (%v)", rem.Host(), errors.Unwrap(err))
+	}
+	defer res.Body.Close()
+	if res.StatusCode >= 300 {
+		return nil, remoteError{status: res.StatusCode, msg: rem.Host() + ": " + res.Status}
+	}
+	data, err := io.ReadAll(io.LimitReader(res.Body, codeMaxFileBytes+1))
+	if err == nil && len(data) > codeMaxFileBytes {
+		err = errors.New("larger than it said")
+	}
+	return data, err
+}
+
 // remoteError keeps the other instance's answer (404 stays a 404 here).
 type remoteError struct {
 	status int
@@ -475,8 +500,12 @@ type remoteIssue struct {
 		UserID    *int64 `json:"user_id"`
 	} `json:"comment_list"`
 	Attachments []struct {
+		ID       int64  `json:"id"`
 		Kind     string `json:"kind"`
 		Title    string `json:"title"`
+		FileName string `json:"file_name"`
+		Mime     string `json:"mime"`
+		Size     int64  `json:"size"`
 		Subtitle string `json:"subtitle"`
 		URL      string `json:"url"`
 		State    string `json:"state"`

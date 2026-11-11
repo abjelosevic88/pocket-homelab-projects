@@ -500,3 +500,18 @@ func TestPersonAISetup(t *testing.T) {
 		t.Fatalf("ben back on the team's: %v", d)
 	}
 }
+
+func TestWithinLimits(t *testing.T) {
+	files := []codeFile{{Name: "a", Size: 300 << 10}, {Name: "big", Size: codeMaxFileBytes + 1}}
+	for i := 0; i < codeMaxFiles; i++ {
+		files = append(files, codeFile{Name: "s", Size: 1})
+	}
+	withinLimits(files)
+	if !files[0].Sent || files[1].Sent || files[1].Why != "too large to send" {
+		t.Fatalf("small sent, big not: %+v", files[:2])
+	}
+	last := files[len(files)-1]
+	if last.Sent || last.Why == "too large to send" {
+		t.Fatalf("the ninth file is over the count, not too large: %+v", last)
+	}
+}
