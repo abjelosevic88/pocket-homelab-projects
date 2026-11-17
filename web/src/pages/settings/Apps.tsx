@@ -14,7 +14,7 @@ const META: Record<string, { icon: string; color: string; what: string }> = {
   calendar: { icon: 'calendar', color: '#ea580c', what: '“Schedule” a meeting or work session for an issue, project or milestone, and see your events in the Projects calendar.' },
   contacts: { icon: 'users', color: '#0891b2', what: 'Stakeholders of a project and contacts on an issue (client, requester), picked from your contacts.' },
   tasks: { icon: 'check-circle', color: '#16a34a', what: '“Add to my Tasks”: a personal to-do linked to the issue; completing the issue completes the to-do.' },
-  notes: { icon: 'note', color: '#ca8a04', what: 'Notes that link to a project on its page, and “New note” prefilled with the project’s link.' },
+  notes: { icon: 'note', color: '#2563eb', what: 'Notes that link to a project on its page, and “New note” prefilled with the project’s link.' },
   draw: { icon: 'draw', color: '#db2777', what: '“Drawing” in a description or comment puts in one of your sketches or diagrams as a picture that stays up to date; clicking it opens Pocket Draw. Start a new one from there too.' },
   ai: { icon: 'sparkles', color: '#7c3aed', what: '“Code with Pocket AI” on an issue: a Claude Code or Codex conversation in the team’s code folder, ready for you to send.' },
   time: { icon: 'timer', color: '#0d9488', what: 'The timer on an issue is your one timer in Pocket Time: start it here and it runs there, stop it in either place. Starting another offers to stop the one running.' },
