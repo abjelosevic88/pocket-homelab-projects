@@ -175,6 +175,15 @@ function previewKind(a: Attachment): '' | 'image' | 'text' | 'video' | 'audio' {
   return ''
 }
 
+// A picture's row shows the picture itself; clicking it previews (the file icon comes back if it won't load).
+function AttThumb({ a, onOpen }: { a: Attachment; onOpen: (e: React.MouseEvent) => void }) {
+  const [broken, setBroken] = useState(false)
+  if (broken) return <span className="att-ico file"><Icon name="file" size={15} /></span>
+  return <a className="att-thumb" href={a.url} target="_blank" rel="noreferrer" onClick={onOpen} title="Preview (⌘-click: new tab)" aria-label={`Preview ${a.file_name || a.title}`}>
+    <img src={a.url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+  </a>
+}
+
 // AttachmentPreview shows a file over the issue; ← → go through the others that preview.
 function AttachmentPreview({ files, index, onIndex, onClose }: { files: Attachment[]; index: number; onIndex: (i: number) => void; onClose: () => void }) {
   const a = files[index]
@@ -281,8 +290,8 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
           )
           return (
             <Fragment key={a.id}>
-            <div className="att-row">
-              <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
+            <div className={`att-row${previewKind(a) === 'image' ? ' has-thumb' : ''}`}>
+              {previewKind(a) === 'image' ? <AttThumb a={a} onOpen={openPreview(a)} /> : <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>}
               <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer" onClick={openPreview(a)} title={previewKind(a) ? 'Preview (⌘-click: new tab)' : undefined}>{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
               {remove_}
