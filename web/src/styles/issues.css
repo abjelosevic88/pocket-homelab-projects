@@ -255,15 +255,19 @@ button.ic-chip:hover { background: var(--hover); }
 @media (hover: none) { .rel-row .x-btn, .att-row .x-btn, .ct-row .x-btn { opacity: .6; } }
 .att-ico { width: 28px; height: 28px; border-radius: 7px; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); flex-shrink: 0; }
 .att-ico.event { color: #8b5cf6; } .att-ico.task { color: #16a34a; } .att-ico.pull_request, .att-ico.commit { color: #f97316; } .att-ico.note { color: #c9a35b; }
-/* big enough to tell screenshots apart: a wide frame, cropped from the top-left where a screenshot's context is */
-.att-thumb { width: 144px; height: 90px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: var(--surface-2); border: 1px solid var(--hairline); display: block; }
-.att-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: left top; display: block; transition: transform .15s; transform-origin: left top; }
-.att-thumb:hover img { transform: scale(1.04); }
-.att-row.has-thumb { padding-top: 8px; padding-bottom: 8px; gap: 14px; }
-/* the remove button grows with the taller row */
-.att-row.has-thumb .x-btn { width: 36px; height: 36px; border-radius: 8px; }
-.att-row.has-thumb .x-btn svg { width: 18px; height: 18px; }
-@media (max-width: 640px) { .att-thumb { width: 104px; height: 66px; } .att-row.has-thumb { gap: 10px; } .att-row.has-thumb .x-btn { width: 32px; height: 32px; } .att-row.has-thumb .x-btn svg { width: 16px; height: 16px; } }
+/* pictures: a grid of thumbnails, no names (on hover); cropped from the top-left where a screenshot's context is */
+.att-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; padding: 12px; }
+.att-tile { position: relative; aspect-ratio: 16 / 10; border-radius: 8px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--hairline); }
+.att-tile > a { display: block; width: 100%; height: 100%; }
+.att-tile img { width: 100%; height: 100%; object-fit: cover; object-position: left top; display: block; transition: transform .15s; transform-origin: left top; }
+.att-tile:hover img { transform: scale(1.04); }
+.att-tile-broken { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; height: 100%; padding: 8px; color: var(--muted); text-align: center; }
+.att-tile-broken small { font-size: 11.5px; overflow-wrap: anywhere; }
+.att-tile-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border: 0; border-radius: 7px; display: grid; place-items: center; cursor: pointer; color: #fff; background: rgba(0, 0, 0, .55); opacity: 0; transition: opacity .12s, background .12s; }
+.att-tile:hover .att-tile-x, .att-tile-x:focus-visible { opacity: 1; }
+.att-tile-x:hover { background: rgba(0, 0, 0, .8); }
+@media (hover: none) { .att-tile-x { opacity: .85; } }
+@media (max-width: 640px) { .att-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; padding: 10px; } }
 .att-main { display: flex; flex-direction: column; min-width: 0; }
 /* the whole title, wrapping: a pull request's title is how it is told apart */
 .att-main a, .att-main .att-title { color: var(--text); font-weight: 500; overflow-wrap: anywhere; line-height: 1.35; }

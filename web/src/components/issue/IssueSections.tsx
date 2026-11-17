@@ -175,13 +175,18 @@ function previewKind(a: Attachment): '' | 'image' | 'text' | 'video' | 'audio' {
   return ''
 }
 
-// A picture's row shows the picture itself; clicking it previews (the file icon comes back if it won't load).
-function AttThumb({ a, onOpen }: { a: Attachment; onOpen: (e: React.MouseEvent) => void }) {
+// A picture is a tile in the grid: just the picture (its name on hover); clicking it previews,
+// the cross removes it. If it won't load, the tile shows the file icon and the name instead.
+function AttTile({ a, onOpen, onRemove }: { a: Attachment; onOpen: (e: React.MouseEvent) => void; onRemove?: () => void }) {
   const [broken, setBroken] = useState(false)
-  if (broken) return <span className="att-ico file"><Icon name="file" size={15} /></span>
-  return <a className="att-thumb" href={a.url} target="_blank" rel="noreferrer" onClick={onOpen} title="Preview (⌘-click: new tab)" aria-label={`Preview ${a.file_name || a.title}`}>
-    <img src={a.url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
-  </a>
+  const name = a.file_name || a.title || ''
+  return <div className="att-tile">
+    <a href={a.url} target="_blank" rel="noreferrer" onClick={onOpen} title={`${name}${a.size ? ` · ${bytes(a.size)}` : ''} · ${ago(a.created_at)}`} aria-label={`Preview ${name}`}>
+      {broken ? <span className="att-tile-broken"><Icon name="file" size={20} /><small>{name}</small></span>
+        : <img src={a.url} alt={name} loading="lazy" decoding="async" onError={() => setBroken(true)} />}
+    </a>
+    {onRemove && <button type="button" className="att-tile-x" aria-label={`Remove ${name}`} title="Remove" onClick={onRemove}><Icon name="x" size={14} /></button>}
+  </div>
 }
 
 // AttachmentPreview shows a file over the issue; ← → go through the others that preview.
@@ -231,7 +236,10 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
   const review = usePRReview(issue.attachment_list)
   const [prOpen, setPrOpen] = useState<number | null>(null)
   const list = issue.attachment_list
-  const previews = list.filter(a => previewKind(a))
+  // pictures go in a grid of thumbnails above the other attachments (and come first in the preview)
+  const pictures = list.filter(a => previewKind(a) === 'image')
+  const others = list.filter(a => previewKind(a) !== 'image')
+  const previews = [...pictures, ...others.filter(a => previewKind(a))]
   const [preview, setPreview] = useState<number | null>(null)
   // a plain click previews; ⌘/Ctrl/Shift-click or middle click still opens a tab
   const openPreview = (a: Attachment) => (e: React.MouseEvent) => {
@@ -257,7 +265,10 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
         </>}
       </div>
       {list.length > 0 ? <div className="ip-box">
-        {list.map(a => {
+        {pictures.length > 0 && <div className="att-grid">
+          {pictures.map(a => <AttTile key={a.id} a={a} onOpen={openPreview(a)} onRemove={canEdit ? () => remove(a) : undefined} />)}
+        </div>}
+        {others.map(a => {
           const sub = [ATT_KIND[a.kind], a.subtitle && a.kind !== 'event' ? a.subtitle : a.kind === 'event' && a.subtitle ? a.subtitle.replace('T', ' ').slice(0, 16) : '', a.kind === 'file' && a.size ? bytes(a.size) : '', ago(a.created_at)].filter(Boolean).join(' · ')
           const pr = prs[a.id]
           const statusError = a.kind === 'pull_request' ? (a.meta as { status_error?: string } | null)?.status_error : ''
@@ -290,8 +301,8 @@ export function Attachments({ issue, canEdit, onChanged, uploader }: { issue: Is
           )
           return (
             <Fragment key={a.id}>
-            <div className={`att-row${previewKind(a) === 'image' ? ' has-thumb' : ''}`}>
-              {previewKind(a) === 'image' ? <AttThumb a={a} onOpen={openPreview(a)} /> : <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>}
+            <div className="att-row">
+              <span className={`att-ico ${a.kind}`}><Icon name={ATT_ICON[a.kind] || 'paperclip'} size={15} /></span>
               <span className="att-main">{a.url ? <a href={a.url} target="_blank" rel="noreferrer" onClick={openPreview(a)} title={previewKind(a) ? 'Preview (⌘-click: new tab)' : undefined}>{a.title || a.file_name || a.url}</a> : <span className="att-title">{a.title}</span>}<small>{sub}</small></span>
               {a.state && <span className={`att-state ${a.state.toLowerCase()}`}>{a.state}</span>}
               {remove_}
