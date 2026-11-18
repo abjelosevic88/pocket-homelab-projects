@@ -28,6 +28,7 @@ import { sharedNoteURL } from './SharedNotePage'
 import { type DockTab, IssueDock, newDockKey } from '../components/issue/IssueDock'
 import { openTab, setTabDocks, tabDocks } from '../lib/tabs'
 import { IssueDeploy, useIssueDeploy } from '../components/issue/Deploy'
+import { copyIssueForAI } from '../lib/issue-copy'
 import { CodeButton, CodeConversations, type CodePanel, sameConversation, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
 import '../styles/issues.css'
 
@@ -123,12 +124,13 @@ export default function IssuePage() {
     setPick({ prop, at: r })
   }
   const copy = async (text: string, what: string) => { await copyText(text); toast(`Copied ${what}`) }
+  const copyForAI = async () => { if (!d) return; const ok = await copyIssueForAI(d, app); toast(ok ? `Copied ${d.identifier} for AI — paste it into Claude` : 'Could not copy', ok ? 'ok' : 'err') }
 
-  // keyboard: S/A/P/L/D/E pickers, M comment, ⌘. copy ID, Esc back
+  // keyboard: S/A/P/L/D/E pickers, M comment, ⌘. copy ID, ⇧⌘. copy for AI, Esc back
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (!d) return
-      if ((e.metaKey || e.ctrlKey) && e.key === '.') { e.preventDefault(); copy(d.identifier, d.identifier); return }
+      if ((e.metaKey || e.ctrlKey) && (e.key === '.' || e.key === '>' || e.code === 'Period')) { e.preventDefault(); if (e.shiftKey) copyForAI(); else copy(d.identifier, d.identifier); return }
       if (e.metaKey || e.ctrlKey || e.altKey || keysBusy(e)) return
       const map: Record<string, SideProp> = { s: 'state', a: 'assignee', p: 'priority', l: 'labels', d: 'due', e: 'estimate' }
       const k = e.key.toLowerCase()
@@ -170,6 +172,7 @@ export default function IssuePage() {
     { label: fav ? 'Remove from favorites' : 'Add to favorites', icon: 'star', onSelect: toggleFav },
     { label: d.subscribed ? 'Unsubscribe' : 'Subscribe', icon: 'bell', onSelect: toggleSub },
     'sep',
+    { label: 'Copy for AI', icon: 'sparkles', hint: '⇧⌘.', onSelect: copyForAI },
     { label: 'Copy ID', icon: 'copy', hint: '⌘.', onSelect: () => copy(d.identifier, d.identifier) },
     { label: 'Copy link', icon: 'link', onSelect: () => copy(d.url, 'the link') },
     { label: 'Copy git branch name', icon: 'git-branch', onSelect: () => copy(d.branch_name, d.branch_name) },
@@ -201,6 +204,7 @@ export default function IssuePage() {
             <span className="spacer" style={{ flex: 1 }} />
             {!d.deleted_at && <CodeButton issue={d} code={code} onStarted={() => { load(); code.reload() }} breakdown={canEdit ? () => breakdownRef.current?.() : undefined} />}
             <button type="button" className={`btn ghost icon-only sm star-btn ${fav ? 'on' : ''}`} onClick={toggleFav} aria-label={fav ? 'Remove from favorites' : 'Add to favorites'} title="Favorite"><Icon name="star" size={15} fill={!!fav} /></button>
+            <button type="button" className="btn ghost sm copy-ai-btn" onClick={copyForAI} aria-label="Copy for AI" title="Copy the whole issue (description, comments, sub-issues, PRs, files) to paste into Claude or another assistant (⇧⌘.)"><Icon name="sparkles" size={15} /><span className="hide-mobile">Copy for AI</span></button>
             <button type="button" className="btn ghost icon-only sm" onClick={() => copy(d.identifier, d.identifier)} aria-label="Copy ID" title="Copy ID (⌘.)"><Icon name="copy" size={15} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={e => setMenu(rectOf(e.currentTarget))} aria-label="Issue menu" title="More"><Icon name="more" size={16} /></button>
           </div>
@@ -219,7 +223,7 @@ export default function IssuePage() {
           <Relations issue={d} canEdit={canEdit} onChanged={load} addRef={relAdd} />
           <Attachments issue={d} canEdit={canEdit} onChanged={load} uploader={uploader} />
           <Contacts issue={d} canEdit={canEdit} onChanged={load} addRef={contactAdd} />
-          {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} /></div>}
+          {mobile && <div className="ip-sec"><SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} copyForAI={copyForAI} /></div>}
           <IssueActivity ref={activity} issue={d} onChanged={load} canEdit={canEdit} />
         </div>
       </div>
@@ -239,7 +243,7 @@ export default function IssuePage() {
           {canEdit && <button type="button" className="side-btn" onClick={e => relAdd.current?.(rectOf(e.currentTarget))}><Icon name="link" size={15} />Add a relation</button>}
           {canEdit && <button type="button" className="side-btn" onClick={e => contactAdd.current?.(rectOf(e.currentTarget))}><Icon name="users" size={15} />Add a contact</button>}
         </div>
-        <SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} />
+        <SideExtras issue={d} code={code} canEdit={canEdit} onChanged={load} onSchedule={() => setSchedule(true)} onTask={addTask} copy={copy} copyForAI={copyForAI} />
       </aside>}
       {pick && pick.prop !== 'parent' && <PropertyPicker prop={pick.prop} issue={d} anchor={pick.at} onClose={() => setPick(null)} onPatch={p => patchUndo(d, p)} />}
       {pick?.prop === 'parent' && <IssueSearchPicker anchor={pick.at} title="Parent issue" exclude={[d.id, ...d.sub_issues.map(s => s.id)]} teamId={d.team_id} onClose={() => setPick(null)} onPick={p => patchUndo(d, { parent_id: p.id })} />}
@@ -367,7 +371,7 @@ function MobileChips({ issue, canEdit, onOpen }: { issue: IssueDetail; canEdit: 
 
 // ---------- time, integrations, copy ----------
 
-function SideExtras({ issue, code, canEdit, onChanged, onSchedule, onTask, copy }: { issue: IssueDetail; code: IssueCode; canEdit: boolean; onChanged: () => void; onSchedule: () => void; onTask: (when: string) => void; copy: (t: string, w: string) => void }) {
+function SideExtras({ issue, code, canEdit, onChanged, onSchedule, onTask, copy, copyForAI }: { issue: IssueDetail; code: IssueCode; canEdit: boolean; onChanged: () => void; onSchedule: () => void; onTask: (when: string) => void; copy: (t: string, w: string) => void; copyForAI: () => void }) {
   const app = useApp()
   const { toast } = useToast()
   const [dur, setDur] = useState('')
@@ -424,6 +428,7 @@ function SideExtras({ issue, code, canEdit, onChanged, onSchedule, onTask, copy 
       {!issue.deleted_at && <CodeSide issue={issue} code={code} onStarted={() => { onChanged(); code.reload() }} />}
       <div className="ip-side-sec ip-side-actions">
         <h4><Icon name="copy" size={13} />Copy</h4>
+        <button type="button" className="side-btn" onClick={copyForAI} title="The whole issue as Markdown: paste it into Claude or another assistant"><Icon name="sparkles" size={15} />For AI<span className="hint">⇧⌘.</span></button>
         <button type="button" className="side-btn" onClick={() => copy(issue.identifier, issue.identifier)}><Icon name="hash" size={15} />ID<span className="hint">⌘.</span></button>
         <button type="button" className="side-btn" onClick={() => copy(issue.url, 'the link')}><Icon name="link" size={15} />Link</button>
         <button type="button" className="side-btn" onClick={() => copy(issue.branch_name, issue.branch_name)} title={issue.branch_name}><Icon name="git-branch" size={15} /><span className="ellipsis">Git branch</span><span className="hint ellipsis" style={{ maxWidth: 120 }}>{issue.branch_name}</span></button>
