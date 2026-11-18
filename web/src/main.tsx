@@ -11,6 +11,7 @@ import { rememberWorkspace, startWorkspace } from './lib/remotes'
 import { Loading, ToastProvider } from './components/ui'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { HubReport } from './components/HubReport'
 import Login from './pages/Login'
 import TeamIssues from './pages/TeamIssues'
 import TeamAI from './pages/TeamAI'
@@ -78,7 +79,8 @@ function Home() {
 }
 
 function App() {
-  return (
+  return (<>
+    <HubReport />
     <Routes>
       <Route path="/login" element={<Login mode="login" />} />
       <Route path="/setup" element={<Login mode="setup" />} />
@@ -117,7 +119,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
-  )
+  </>)
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

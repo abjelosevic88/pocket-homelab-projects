@@ -25,7 +25,8 @@ const SIDEBAR_KEY = 'pp-sidebar'
 
 /** Pocket Hub (the native app showing Pocket apps in web views) puts this on
  *  the page; undefined in a browser. handle() says what the page does itself:
- *  false = it can't, the hub does it its own way (a page load). */
+ *  false = it can't, the hub does it its own way (a page load). /pocket-ask.js's
+ *  pocketApp.handle is the same, through the shared helper. */
 type PocketHub = { handle?: (h: { navigate: (url: string) => boolean; toggleSidebar: () => boolean } | Record<string, never>) => void }
 
 const section = (path: string) => path.split('/').slice(0, 3).join('/')
@@ -121,18 +122,25 @@ export default function Layout() {
   const hubRef = useRef({ navigate, toggleSidebar })
   hubRef.current = { navigate, toggleSidebar }
   useEffect(() => {
-    const hub = (window as unknown as { pocketHub?: PocketHub }).pocketHub
-    if (!hub?.handle) return
-    hub.handle({
-      navigate: url => {
+    const own = {
+      navigate: (url: string) => {
         const to = hubRoute(url, remotes.current)
         if (to == null) return false
         if (to !== location.pathname.slice(BASE.length) + location.search + location.hash) hubRef.current.navigate(to)
         return true
       },
       toggleSidebar: () => { hubRef.current.toggleSidebar(); return true },
-    })
-    return () => hub.handle?.({})
+    }
+    // through pocketApp when /pocket-ask.js gave it (also if it comes later), else to the hub itself
+    let target: PocketHub | undefined
+    const register = () => {
+      const w = window as unknown as { pocketHub?: PocketHub; pocketApp?: PocketHub }
+      target = w.pocketApp?.handle ? w.pocketApp : w.pocketHub
+      target?.handle?.(own)
+    }
+    register()
+    window.addEventListener('pocket-app-ready', register)
+    return () => { window.removeEventListener('pocket-app-ready', register); target?.handle?.({}) }
   }, [])
   useEffect(() => { if (drawer) setSidebarOpen(false) }, [loc.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setKnownKeys(app.teams.map(t => t.key)) }, [app.teams])
