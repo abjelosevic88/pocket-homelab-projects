@@ -348,7 +348,7 @@ func (s *Server) handleAITriage(w http.ResponseWriter, r *http.Request) {
 	}
 	labels, _ := s.store.TeamLabels(ctx, is.TeamID)
 	members, _ := s.store.TeamMembers(ctx, is.TeamID)
-	projects, _ := s.store.ListProjects(ctx, store.ProjectFilter{AllowedTeamIDs: []int64{is.TeamID}, Statuses: []string{"planned", "started", "paused", "backlog"}})
+	projects, _ := s.store.ListProjects(ctx, store.ProjectFilter{AllowedTeamIDs: []int64{is.TeamID}, Statuses: []string{"planned", "started", "blocked", "paused", "backlog"}})
 	var lb, mb, pb []string
 	for _, l := range labels {
 		if !l.IsGroup {

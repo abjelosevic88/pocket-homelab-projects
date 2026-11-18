@@ -18,7 +18,7 @@ export const CADENCES: { value: number; label: string }[] = [
   { value: 0, label: 'No reminders' }, { value: 7, label: 'Every week' }, { value: 14, label: 'Every 2 weeks' }, { value: 30, label: 'Every month' },
 ]
 export const cadenceLabel = (d: number) => CADENCES.find(c => c.value === d)?.label || (d ? `Every ${d} days` : 'No reminders')
-export const STATUS_GROUP_ORDER: ProjectStatus[] = ['started', 'planned', 'paused', 'backlog', 'completed', 'canceled']
+export const STATUS_GROUP_ORDER: ProjectStatus[] = ['started', 'blocked', 'planned', 'paused', 'backlog', 'completed', 'canceled']
 
 export const statusItems = (): PickItem<ProjectStatus>[] => PROJECT_STATUSES.map(s => ({ value: s, label: PROJECT_STATUS_LABEL[s], icon: <ProjectStatusIcon status={s} /> }))
 export const priorityItems = (): PickItem<number>[] => [1, 2, 3, 4, 0].map(p => ({ value: p, label: PRIORITIES.find(x => x.value === p)!.label, icon: <PriorityIcon priority={p} /> }))

@@ -22,7 +22,7 @@ interface Prefs { tab: Tab; lead: 'anyone' | 'me'; group: GroupBy; layout: 'list
 
 const TABS: { id: Tab; label: string; statuses: ProjectStatus[] }[] = [
   { id: 'all', label: 'All', statuses: PROJECT_STATUSES },
-  { id: 'active', label: 'Active', statuses: ['started', 'planned', 'paused'] },
+  { id: 'active', label: 'Active', statuses: ['started', 'blocked', 'planned', 'paused'] },
   { id: 'backlog', label: 'Backlog', statuses: ['backlog'] },
   { id: 'completed', label: 'Completed', statuses: ['completed'] },
   { id: 'canceled', label: 'Canceled', statuses: ['canceled'] },

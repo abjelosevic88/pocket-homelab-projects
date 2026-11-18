@@ -30,8 +30,8 @@ export interface Team {
 
 export interface Progress { total: number; started: number; completed: number; canceled: number; points: number; completed_points: number; percent: number }
 
-export type ProjectStatus = 'backlog' | 'planned' | 'started' | 'paused' | 'completed' | 'canceled'
-export const PROJECT_STATUSES: ProjectStatus[] = ['backlog', 'planned', 'started', 'paused', 'completed', 'canceled']
+export type ProjectStatus = 'backlog' | 'planned' | 'started' | 'blocked' | 'paused' | 'completed' | 'canceled'
+export const PROJECT_STATUSES: ProjectStatus[] = ['backlog', 'planned', 'started', 'blocked', 'paused', 'completed', 'canceled']
 export type Health = '' | 'on_track' | 'at_risk' | 'off_track'
 
 export interface Milestone { id: number; project_id: number; name: string; description: string; target_date: string; sort_order: number; created_at: string; progress: Progress }

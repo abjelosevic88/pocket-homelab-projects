@@ -201,7 +201,7 @@ export default function Roadmap() {
                         <button type="button" className="rm-name rm-name-btn" onClick={() => navigate(`/project/${p.id}`)} title={p.name}>
                           <ProjectMark icon={p.icon} color={p.color} size={16} />
                           <span className="ellipsis grow">{p.name}</span>
-                          {!mobile && (p.last_update || p.status === 'started') && <HealthBadge health={p.health} />}
+                          {!mobile && (p.last_update || p.status === 'started' || p.status === 'blocked') && <HealthBadge health={p.health} />}
                           {mobile && <span className={`health-dot-only ${p.health || 'none'}`} title={p.health} />}
                         </button>
                         <div className="rm-track" style={{ width: W }}>

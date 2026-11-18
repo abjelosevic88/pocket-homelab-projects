@@ -101,7 +101,7 @@ export default function ProjectPage() {
             <ProjectMark icon={p.icon} color={p.color} size={22} />
           </button>
           <NameInput value={p.name} disabled={!canEdit} onSave={name => save({ name })} />
-          {!mobile && (p.last_update || p.status === 'started') && <HealthBadge health={p.health} />}
+          {!mobile && (p.last_update || p.status === 'started' || p.status === 'blocked') && <HealthBadge health={p.health} />}
           <span className="spacer" />
           <FavoriteStar id={p.id} />
           <MenuButton items={menu} label="Project menu" align="right" width={240}><Icon name="more" size={18} /></MenuButton>
@@ -110,7 +110,7 @@ export default function ProjectPage() {
           <PropChip icon={<ProjectStatusIcon status={p.status} />} label={PROJECT_STATUS_LABEL[p.status]} disabled={!canEdit} title="Status" onOpen={a => pick.show('status', a)} />
           <PropChip icon={<PriorityIcon priority={p.priority} />} label={p.priority ? priorityLabel(p.priority) : 'No priority'} disabled={!canEdit} title="Priority" onOpen={a => pick.show('priority', a)} />
           <PropChip icon={<PersonAvatar person={lead} size={16} />} label={lead ? lead.name || lead.email : 'No lead'} disabled={!canEdit} title="Lead" onOpen={a => pick.show('lead', a)} />
-          {mobile && (p.last_update || p.status === 'started') && <HealthBadge health={p.health} />}
+          {mobile && (p.last_update || p.status === 'started' || p.status === 'blocked') && <HealthBadge health={p.health} />}
         </div>
         <nav className="tabs pp-tabs" role="tablist">
           {TABS.map((t, i) => <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} title={`${t.label} (${i + 1})`} onClick={() => navigate(`/project/${p.id}/${t.id}`)}>
