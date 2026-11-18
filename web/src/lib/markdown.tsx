@@ -1,18 +1,36 @@
-import React, { useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { drawPicture, useDrawApp } from './draw'
 import { useApp } from './app-context'
+import { BASE } from './api'
+import { Icon } from '../components/icons'
 
 // A small Markdown renderer for descriptions, comments, updates and docs: headings,
 // paragraphs, lists (nested, with checkboxes), tables, bold, italic, strike, code,
 // fenced code, Mermaid diagrams (```mermaid), quotes, rules, links, images, backslash
-// escapes, issue identifiers (WEB-12 → the issue) and @mentions.
+// escapes, issue identifiers (WEB-12 → the issue) and @mentions. A link to a
+// page of this app ([Plan](/issue/WEB-1/shared/3), put in with [[) stays in
+// this workspace; a shared note's link shows as a chip, and a page that
+// provides MarkdownLinks (the issue page) can open it beside itself.
 // A drawing from Pocket Draw (![title](D/d/12/picture.svg)) shows its current
 // picture through Projects and opens in Pocket Draw.
 
 let knownKeys = new Set<string>()
 /** The team keys whose identifiers become links (set by the app once teams load). */
 export function setKnownKeys(keys: string[]) { knownKeys = new Set(keys.map(k => k.toUpperCase())) }
+
+/** Opens an in-app link in place (a shared note in the issue's panel); false = follow it as usual. */
+export const MarkdownLinks = createContext<((path: string, label: string) => boolean) | null>(null)
+
+const SHARED_PATH = /^\/(?:issue\/[^/]+|team\/[^/]+)\/shared\/\d+$/
+
+function AppLink({ path, label }: { path: string; label: React.ReactNode }) {
+  const open = useContext(MarkdownLinks)
+  const note = SHARED_PATH.test(path)
+  return <a href={BASE + path} target="_blank" rel="noreferrer" className={note ? 'md-note-link' : undefined} title={note ? 'Shared note' : undefined}
+    onClick={e => { if (!e.defaultPrevented && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && open?.(path, typeof label === 'string' ? label : '')) e.preventDefault() }}>
+    {note && <Icon name="users" size={12} />}{label}</a>
+}
 
 function inline(s: string, key = 0): React.ReactNode[] {
   const out: React.ReactNode[] = []
@@ -25,7 +43,7 @@ function inline(s: string, key = 0): React.ReactNode[] {
     else if (m[2] || m[3]) out.push(<strong key={i++}>{inline(t.slice(2, -2), i * 100)}</strong>)
     else if (m[4] || m[5]) out.push(<em key={i++}>{inline(t.slice(1, -1), i * 100)}</em>)
     else if (m[6]) out.push(<s key={i++}>{inline(t.slice(2, -2), i * 100)}</s>)
-    else if (m[7]) out.push(<a key={i++} href={m[9]} target="_blank" rel="noreferrer">{m[8]}</a>)
+    else if (m[7]) out.push(/^\/(?!\/)/.test(m[9]) ? <AppLink key={i++} path={m[9]} label={m[8]} /> : <a key={i++} href={m[9]} target="_blank" rel="noreferrer">{m[8]}</a>)
     else if (m[10]) out.push(<a key={i++} href={t} target="_blank" rel="noreferrer">{t}</a>)
     else if (m[11]) {
       const d = drawPicture(m[13])

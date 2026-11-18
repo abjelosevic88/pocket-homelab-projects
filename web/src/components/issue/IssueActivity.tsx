@@ -153,8 +153,8 @@ export const IssueActivity = forwardRef<ActivityHandle, { issue: IssueDetail; on
           : <Thread key={'c' + e.c!.id} issue={issue} root={e.c!} replies={replies(e.c!.id)} onChanged={onChanged} />)}
       </div>
       <div className="composer" ref={composer}>
-        <MarkdownEditor value={draft} onChange={setDraft} onSubmit={post} placeholder="Leave a comment… (@ to mention)" teamId={issue.team_id} issueRef={issue.id} minRows={2} preview={false} />
-        <div className="composer-foot"><span className="faint xsmall">Markdown · paste images</span><span className="spacer" />
+        <MarkdownEditor value={draft} onChange={setDraft} onSubmit={post} placeholder="Leave a comment… (@ to mention, [[ to link a shared note)" teamId={issue.team_id} issueRef={issue.id} issueIdent={issue.identifier} minRows={2} preview={false} />
+        <div className="composer-foot"><span className="faint xsmall">Markdown · [[ links a shared note · paste images</span><span className="spacer" />
           <button type="button" className="btn primary sm" disabled={!draft.trim() || busy} onClick={post}>Comment<kbd className="kbd-on-primary">⌘↵</kbd></button></div>
       </div>
     </section>
@@ -182,7 +182,7 @@ function Thread({ issue, root, replies, onChanged }: { issue: IssueDetail; root:
       <OneComment issue={issue} c={root} onChanged={onChanged} />
       {replies.map(r => <OneComment key={r.id} issue={issue} c={r} onChanged={onChanged} reply />)}
       {replying ? <div className="reply-box">
-        <MarkdownEditor value={reply} onChange={setReply} onSubmit={send} autoFocus placeholder="Reply…" teamId={issue.team_id} issueRef={issue.id} minRows={2} preview={false} />
+        <MarkdownEditor value={reply} onChange={setReply} onSubmit={send} autoFocus placeholder="Reply…" teamId={issue.team_id} issueRef={issue.id} issueIdent={issue.identifier} minRows={2} preview={false} />
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 6 }}><button type="button" className="btn ghost sm" onClick={() => setReplying(false)}>Cancel</button><button type="button" className="btn primary sm" disabled={!reply.trim()} onClick={send}>Reply</button></div>
       </div> : <div className="cmt-foot">
         <button type="button" className="btn ghost xs" style={{ width: 'auto', padding: '0 8px' }} onClick={() => setReplying(true)}><Icon name="message" size={13} />Reply</button>
@@ -219,7 +219,7 @@ function OneComment({ issue, c, onChanged, reply }: { issue: IssueDetail; c: Com
         </span>
       </div>
       {edit !== null ? <div className="cmt-text">
-        <MarkdownEditor value={edit} onChange={setEdit} onSubmit={save} autoFocus teamId={issue.team_id} issueRef={issue.id} minRows={2} preview={false} />
+        <MarkdownEditor value={edit} onChange={setEdit} onSubmit={save} autoFocus teamId={issue.team_id} issueRef={issue.id} issueIdent={issue.identifier} minRows={2} preview={false} />
         <div className="row" style={{ justifyContent: 'flex-end', marginTop: 6 }}><button type="button" className="btn ghost sm" onClick={() => setEdit(null)}>Cancel</button><button type="button" className="btn primary sm" onClick={save}>Save</button></div>
       </div> : <div className="cmt-text"><Markdown text={c.body} /></div>}
       {c.reactions.length > 0 && <div className="cmt-reacts">
