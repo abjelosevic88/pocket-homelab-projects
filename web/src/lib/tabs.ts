@@ -43,6 +43,9 @@ export function openTab(ref: string, title: string, type?: StateType) {
   set(cur ? tabs.map(t => t.ref === r ? { ...t, title, type } : t) : [...tabs, { ref: r, title, type }], closed.filter(t => t.ref !== r))
 }
 
+/** The issue's tab, if it has one (its title and status, before it loads). */
+export const tabOf = (ref: string): IssueTab | undefined => tabs.find(t => t.ref === norm(ref))
+
 /** The tab's side panel: its tabs (conversations, notes) and which one shows. */
 export function tabDocks(ref: string): { docks: DockTabSaved[]; active: number } {
   const t = tabs.find(x => x.ref === norm(ref))

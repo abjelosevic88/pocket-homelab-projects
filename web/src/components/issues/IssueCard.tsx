@@ -4,6 +4,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../lib/app-context'
+import { prefetchOnHover, rememberIssues } from '../../lib/issue-cache'
 import { estimateLabel, isDone } from '../../lib/issues'
 import type { GroupKey, Issue } from '../../lib/types'
 import { Icon } from '../icons'
@@ -33,8 +34,8 @@ export function IssueCard({ issue, properties, groupBy, selected, focused, onTog
   return (
     <div className={`issue-card ${selected ? 'selected' : ''} ${focused ? 'focused' : ''} ${done ? 'done' : ''} ${dragging ? 'drag-src' : ''}`}
       data-issue-id={issue.id} data-pocket-ask role="button" tabIndex={-1} aria-label={`${issue.identifier} ${issue.title}`}
-      onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); onToggleSelect?.(e) } else navigate(`/issue/${issue.identifier}`) }}
-      onContextMenu={e => { e.preventDefault(); act.openMenu({ x: e.clientX, y: e.clientY, w: 0, h: 0 }) }} {...dragProps}>
+      onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); onToggleSelect?.(e) } else { rememberIssues([issue]); navigate(`/issue/${issue.identifier}`) } }}
+      onContextMenu={e => { e.preventDefault(); act.openMenu({ x: e.clientX, y: e.clientY, w: 0, h: 0 }) }} {...prefetchOnHover(issue.identifier, issue)} {...dragProps}>
       <div className="ic-top">
         {onToggleSelect && <span className={`row-check ${selected ? 'on' : ''}`} onClick={e => { e.stopPropagation(); onToggleSelect(e) }} role="checkbox" aria-checked={!!selected} aria-label="Select">{selected && <Icon name="check" size={11} strokeWidth={3} />}</span>}
         {has('id') && <span className="ident">{issue.identifier}</span>}

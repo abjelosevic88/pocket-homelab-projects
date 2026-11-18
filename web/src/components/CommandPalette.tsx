@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp } from '../lib/app-context'
+import { rememberIssues } from '../lib/issue-cache'
 import type { Issue } from '../lib/types'
 import { Icon } from './icons'
 import { ProjectMark, StatusIcon } from './issue-bits'
@@ -34,7 +35,7 @@ export function CommandPalette({ onClose, commands }: { onClose: () => void; com
     const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean)
     const hit = (s: string) => words.every(w => s.toLowerCase().includes(w))
     const out: Row[] = []
-    for (const is of hits) out.push({ key: 'i' + is.id, group: 'Issues', icon: <StatusIcon state={app.state(is.state_id)} />, label: is.title, sub: is.identifier, run: () => navigate(`/issue/${is.identifier}`) })
+    for (const is of hits) out.push({ key: 'i' + is.id, group: 'Issues', icon: <StatusIcon state={app.state(is.state_id)} />, label: is.title, sub: is.identifier, run: () => { rememberIssues([is]); navigate(`/issue/${is.identifier}`) } })
     if (words.length) {
       for (const p of app.projects) if (hit(p.name + ' ' + p.summary)) out.push({ key: 'p' + p.id, group: 'Projects', icon: <ProjectMark icon={p.icon} color={p.color} />, label: p.name, sub: p.summary, run: () => navigate(`/project/${p.id}`) })
       for (const t of app.teams) if (hit(t.name + ' ' + t.key)) out.push({ key: 't' + t.id, group: 'Teams', icon: <TeamMark team={t} />, label: t.name, sub: t.key, run: () => navigate(`/team/${t.key}/issues`) })
