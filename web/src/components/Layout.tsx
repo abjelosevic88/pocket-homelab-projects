@@ -19,9 +19,15 @@ import { AppChat } from './AppChat'
 import { keyLabel, useChatKey } from '../lib/chat-key'
 import { IssueTabs } from './IssueTabs'
 import { reopenTab } from '../lib/tabs'
-import { goInApp, inAppPath } from '../lib/follow'
+import { goInApp, hubRoute, inAppPath } from '../lib/follow'
 
 const SIDEBAR_KEY = 'pp-sidebar'
+
+/** Pocket Hub (the native app showing Pocket apps in web views) puts this on
+ *  the page; undefined in a browser. handle() says what the page does itself:
+ *  false = it can't, the hub does it its own way (a page load). */
+type PocketHub = { handle?: (h: { navigate: (url: string) => boolean; toggleSidebar: () => boolean } | Record<string, never>) => void }
+
 const section = (path: string) => path.split('/').slice(0, 3).join('/')
 
 /** Is the keyboard busy in a field (or a menu)? Then page shortcuts stay out of the way. */
@@ -109,6 +115,25 @@ export default function Layout() {
   const drawerOpenedAt = useRef(0)
   const toggleSidebar = () => setSidebarOpen(o => { drawerOpenedAt.current = performance.now(); const n = !o; if (!drawer) localStorage.setItem(SIDEBAR_KEY, n ? '1' : '0'); return n })
   const closeDrawer = () => { if (drawer) setSidebarOpen(false) }
+  // Pocket Hub: a link from another app (an issue Pocket AI names) opens here
+  // in place, and its "app's sidebar" shortcut works the sidebar like [ does.
+  // Registered once; the ref always has this render's navigate and toggle.
+  const hubRef = useRef({ navigate, toggleSidebar })
+  hubRef.current = { navigate, toggleSidebar }
+  useEffect(() => {
+    const hub = (window as unknown as { pocketHub?: PocketHub }).pocketHub
+    if (!hub?.handle) return
+    hub.handle({
+      navigate: url => {
+        const to = hubRoute(url, remotes.current)
+        if (to == null) return false
+        if (to !== location.pathname.slice(BASE.length) + location.search + location.hash) hubRef.current.navigate(to)
+        return true
+      },
+      toggleSidebar: () => { hubRef.current.toggleSidebar(); return true },
+    })
+    return () => hub.handle?.({})
+  }, [])
   useEffect(() => { if (drawer) setSidebarOpen(false) }, [loc.pathname]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setKnownKeys(app.teams.map(t => t.key)) }, [app.teams])
 
