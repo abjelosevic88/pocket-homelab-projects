@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, V1 } from '../lib/api'
 import { emitChange, useApp, useLive } from '../lib/app-context'
 import { estimateLabel, isDone, parseMinutes, patchIssue, priorityLabel } from '../lib/issues'
-import { Markdown, toggleCheckbox } from '../lib/markdown'
+import { Markdown, MarkdownLinks, toggleCheckbox } from '../lib/markdown'
 import { addDays, fmtMinutes, shortDate, today } from '../lib/dates'
 import { ago } from '../lib/format'
 import type { Issue, IssueDetail, TimeEntry } from '../lib/types'
@@ -100,6 +100,16 @@ export default function IssuePage() {
     if (!d) return
     openDock({ kind: 'shared', url: sharedNoteURL(d.identifier, n.id), title: n.title, id: String(n.id) })
   }, [d, openDock])
+  // A shared note linked in a comment or the description ([[) opens in the panel
+  // beside the issue (on phones: its page); a team's shared note opens its page.
+  const openLink = useCallback((path: string, label: string) => {
+    const m = /^\/issue\/([^/]+)\/shared\/(\d+)$/.exec(path)
+    if (!m || !d || mobile) return false
+    const ident = decodeURIComponent(m[1]), own = ident.toUpperCase() === d.identifier.toUpperCase() || ident === String(d.id)
+    const n = own ? d.shared_notes.find(x => String(x.id) === m[2]) : null
+    openDock({ kind: 'shared', url: sharedNoteURL(own ? d.identifier : ident, Number(m[2])), title: n?.title || label || 'Shared note', id: m[2] })
+    return true
+  }, [d, openDock, mobile])
   useLive(load, ['issue', 'comment', 'timer'], d ? [d.team_id] : undefined)
   // Opened by an alias (moved issue) or by id: show the current identifier.
   useEffect(() => { if (d && ref.toUpperCase() !== d.identifier.toUpperCase()) navigate(`/issue/${d.identifier}`, { replace: true }) }, [d?.identifier]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -190,7 +200,7 @@ export default function IssuePage() {
   ]
 
   return (
-    <CodePanelContext.Provider value={codePanel}>
+    <CodePanelContext.Provider value={codePanel}><MarkdownLinks.Provider value={openLink}>
     <div className="ip-wrap"
       onDragOver={e => { if (canEdit && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropping(true) } }}
       onDragLeave={e => { if (e.currentTarget === e.target || !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropping(false) }}
@@ -254,7 +264,7 @@ export default function IssuePage() {
       {moveTeam && <TeamMove issue={d} anchor={moveTeam} onClose={() => setMoveTeam(null)} onMoved={fresh => { toast(`Moved to ${app.team(fresh.team_id)?.name} as ${fresh.identifier}`); navigate(`/issue/${fresh.identifier}`, { replace: true }) }} />}
       {schedule && <ScheduleDialog issue={d} onClose={() => setSchedule(false)} onDone={() => { setSchedule(false); load() }} />}
     </div>
-    </CodePanelContext.Provider>
+    </MarkdownLinks.Provider></CodePanelContext.Provider>
   )
 }
 
@@ -305,7 +315,7 @@ function Description({ issue, canEdit, onSaved }: { issue: IssueDetail; canEdit:
   }, [draft, editing, save])
   if (editing) return (
     <div className="ip-desc">
-      <MarkdownEditor value={draft} onChange={setDraft} autoFocus minRows={4} teamId={issue.team_id} issueRef={issue.id} placeholder="Add a description… (Markdown, @ to mention, paste images)"
+      <MarkdownEditor value={draft} onChange={setDraft} autoFocus minRows={4} teamId={issue.team_id} issueRef={issue.id} issueIdent={issue.identifier} placeholder="Add a description… (Markdown, @ to mention, [[ for a shared note, paste images)"
         onBlur={() => { save(draft); setEditing(false) }} onSubmit={() => { save(draft); setEditing(false) }} preview={false} bare />
       <div className="faint xsmall">{state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : 'Saves as you type · ⌘↵ to finish'}</div>
     </div>

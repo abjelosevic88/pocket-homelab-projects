@@ -178,6 +178,10 @@
 .md-suggest button { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 13.5px; text-align: left; background: none; border: 0; height: 32px; padding: 0 8px; border-radius: 6px; color: var(--text); cursor: pointer; min-width: 0; }
 .md-suggest button.hi { background: var(--hover); }
 .md-suggest small { color: var(--muted); font-size: 12px; }
+.md-suggest button > .ellipsis { min-width: 0; }
+.md-suggest button > small.ellipsis { flex-shrink: 0; max-width: 45%; margin-left: auto; }
+.md .md-note-link { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; background: var(--accent-soft); padding: 0 6px; border-radius: 6px; text-decoration: none; vertical-align: baseline; }
+.md .md-note-link svg { flex-shrink: 0; }
 
 /* ---------- new issue dialog ---------- */
 .create-issue.modal { width: min(760px, 100%); }
