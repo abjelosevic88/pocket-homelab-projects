@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -125,6 +126,35 @@ func TestTeamsIssuesAndAccess(t *testing.T) {
 	alex.do("POST", "/api/v1/teams", map[string]any{"name": "Web", "key": "web", "preset": "software"}, 201, &team)
 	if team.Key != "WEB" || len(team.States) < 5 || team.Role != "admin" || len(team.Labels) == 0 {
 		t.Fatalf("team: %+v", team)
+	}
+	// Blocked comes right after In Progress, for new teams and (migration 0022) old ones.
+	stateNames := func() string {
+		var tm store.Team
+		alex.do("GET", "/api/v1/teams/WEB", nil, 200, &tm)
+		var n []string
+		for _, st := range tm.States {
+			n = append(n, st.Name)
+		}
+		return strings.Join(n, ",")
+	}
+	const withBlocked = "Backlog,Todo,In Progress,Blocked,In Review,Done,Canceled,Duplicate"
+	if got := stateNames(); got != withBlocked {
+		t.Fatalf("new team states: %s", got)
+	}
+	mig, err := os.ReadFile("../store/migrations/0022_blocked_state.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.store.DB.Exec(`DELETE FROM workflow_states WHERE name = 'Blocked'`); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ { // the second run finds Blocked there and adds nothing
+		if _, err := s.store.DB.Exec(string(mig)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := stateNames(); got != withBlocked {
+		t.Fatalf("migrated team states: %s", got)
 	}
 	if alex.status("POST", "/api/v1/teams", map[string]any{"name": "Other", "key": "WEB"}) != 409 {
 		t.Fatal("duplicate key accepted")

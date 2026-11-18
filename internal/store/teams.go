@@ -149,9 +149,10 @@ type TeamPreset struct {
 
 // TeamPresets are the starting points offered when a team is created.
 var TeamPresets = []TeamPreset{
-	{ID: "software", Name: "Software", Description: "Backlog → Todo → In Progress → In Review → Done, two-week cycles, story points.",
+	{ID: "software", Name: "Software", Description: "Backlog → Todo → In Progress → Blocked → In Review → Done, two-week cycles, story points.",
 		States: []State{{Name: "Backlog", Type: "backlog", Color: "#94a3b8"}, {Name: "Todo", Type: "unstarted", Color: "#64748b"},
-			{Name: "In Progress", Type: "started", Color: "#f59e0b"}, {Name: "In Review", Type: "started", Color: "#22c55e"},
+			{Name: "In Progress", Type: "started", Color: "#f59e0b"}, {Name: "Blocked", Type: "started", Color: "#ef4444", Description: "Can't move until something else happens."},
+			{Name: "In Review", Type: "started", Color: "#22c55e"},
 			{Name: "Done", Type: "completed", Color: "#5e6ad2"}, {Name: "Canceled", Type: "canceled", Color: "#94a3b8"},
 			{Name: "Duplicate", Type: "canceled", Color: "#94a3b8"}},
 		Labels: []Label{{Name: "Bug", Color: "#ef4444"}, {Name: "Feature", Color: "#8b5cf6"}, {Name: "Improvement", Color: "#3b82f6"},
@@ -159,7 +160,8 @@ var TeamPresets = []TeamPreset{
 		Cycles: true, Estimates: "fibonacci"},
 	{ID: "kanban", Name: "Simple kanban", Description: "To do → Doing → Done. Nothing else to set up.",
 		States: []State{{Name: "Backlog", Type: "backlog", Color: "#94a3b8"}, {Name: "To do", Type: "unstarted", Color: "#64748b"},
-			{Name: "Doing", Type: "started", Color: "#f59e0b"}, {Name: "Done", Type: "completed", Color: "#5e6ad2"},
+			{Name: "Doing", Type: "started", Color: "#f59e0b"}, {Name: "Blocked", Type: "started", Color: "#ef4444", Description: "Can't move until something else happens."},
+			{Name: "Done", Type: "completed", Color: "#5e6ad2"},
 			{Name: "Canceled", Type: "canceled", Color: "#94a3b8"}},
 		Labels: []Label{{Name: "Idea", Color: "#8b5cf6"}, {Name: "Urgent", Color: "#ef4444"}}},
 	{ID: "household", Name: "Home & household", Description: "Ideas → Planned → In progress → Waiting → Done, for renovations, repairs, purchases and chores.",
@@ -170,7 +172,7 @@ var TeamPresets = []TeamPreset{
 			{Name: "Cleaning", Color: "#0ea5e9"}, {Name: "Paperwork", Color: "#64748b"}, {Name: "Car", Color: "#6366f1"}}},
 	{ID: "client", Name: "Client work", Description: "Requests land in Triage; Backlog → Todo → In Progress → Waiting on client → Review → Done; hours tracked.",
 		States: []State{{Name: "Triage", Type: "triage", Color: "#f97316"}, {Name: "Backlog", Type: "backlog", Color: "#94a3b8"},
-			{Name: "Todo", Type: "unstarted", Color: "#64748b"}, {Name: "In Progress", Type: "started", Color: "#f59e0b"},
+			{Name: "Todo", Type: "unstarted", Color: "#64748b"}, {Name: "In Progress", Type: "started", Color: "#f59e0b"}, {Name: "Blocked", Type: "started", Color: "#ef4444", Description: "Can't move until something else happens."},
 			{Name: "Waiting on client", Type: "started", Color: "#a855f7"}, {Name: "Review", Type: "started", Color: "#22c55e"},
 			{Name: "Done", Type: "completed", Color: "#5e6ad2"}, {Name: "Canceled", Type: "canceled", Color: "#94a3b8"}},
 		Labels: []Label{{Name: "Billable", Color: "#10b981"}, {Name: "Non-billable", Color: "#94a3b8"}, {Name: "Bug", Color: "#ef4444"},
@@ -254,7 +256,7 @@ func (s *Store) CreateTeam(ctx context.Context, t *Team, preset TeamPreset, crea
 	}
 	var defaultState int64
 	for i, st := range states {
-		r, err := tx.ExecContext(ctx, `INSERT INTO workflow_states (team_id, name, type, color, position) VALUES (?, ?, ?, ?, ?)`, t.ID, st.Name, st.Type, st.Color, float64(i+1))
+		r, err := tx.ExecContext(ctx, `INSERT INTO workflow_states (team_id, name, type, color, description, position) VALUES (?, ?, ?, ?, ?, ?)`, t.ID, st.Name, st.Type, st.Color, st.Description, float64(i+1))
 		if err != nil {
 			return err
 		}
