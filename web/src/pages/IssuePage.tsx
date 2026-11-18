@@ -113,6 +113,7 @@ export default function IssuePage() {
   const [dropping, setDropping] = useState(false)
   const [schedule, setSchedule] = useState(false)
   const [menu, setMenu] = useState<Anchor | null>(null)
+  const [copyMenu, setCopyMenu] = useState<Anchor | null>(null)
   const [moveTeam, setMoveTeam] = useState<Anchor | null>(null)
   const uploader = useUploader(d || ({ id: 0, team_id: 0 } as IssueDetail), load)
 
@@ -168,15 +169,17 @@ export default function IssuePage() {
     try { await api.post(`${V1}/issues/${d.id}/task`, { when }); toast('Added to your Pocket Tasks'); load() } catch (e) { toast((e as Error).message, 'err') }
   }
   const md = `[${d.identifier} ${d.title}](${d.url})`
+  const copyItems: MenuItem[] = [
+    { label: 'Copy ID', icon: 'hash', hint: '⌘.', onSelect: () => copy(d.identifier, d.identifier) },
+    { label: 'Copy link', icon: 'link', onSelect: () => copy(d.url, 'the link') },
+    { label: 'Copy as Markdown link', icon: 'file-text', onSelect: () => copy(md, 'as Markdown') },
+    { label: 'Copy git branch name', icon: 'git-branch', onSelect: () => copy(d.branch_name, d.branch_name) },
+    'sep',
+    { label: 'Copy for AI', icon: 'sparkles', hint: '⇧⌘.', onSelect: copyForAI },
+  ]
   const menuItems: MenuItem[] = [
     { label: fav ? 'Remove from favorites' : 'Add to favorites', icon: 'star', onSelect: toggleFav },
     { label: d.subscribed ? 'Unsubscribe' : 'Subscribe', icon: 'bell', onSelect: toggleSub },
-    'sep',
-    { label: 'Copy for AI', icon: 'sparkles', hint: '⇧⌘.', onSelect: copyForAI },
-    { label: 'Copy ID', icon: 'copy', hint: '⌘.', onSelect: () => copy(d.identifier, d.identifier) },
-    { label: 'Copy link', icon: 'link', onSelect: () => copy(d.url, 'the link') },
-    { label: 'Copy git branch name', icon: 'git-branch', onSelect: () => copy(d.branch_name, d.branch_name) },
-    { label: 'Copy as Markdown', icon: 'file-text', onSelect: () => copy(md, 'as Markdown') },
     ...(canEdit ? ['sep' as const,
       { label: 'Add a relation…', icon: 'link', onSelect: () => relAdd.current?.(menu!) },
       { label: 'Add a contact…', icon: 'users', onSelect: () => contactAdd.current?.(menu!) },
@@ -204,8 +207,7 @@ export default function IssuePage() {
             <span className="spacer" style={{ flex: 1 }} />
             {!d.deleted_at && <CodeButton issue={d} code={code} onStarted={() => { load(); code.reload() }} breakdown={canEdit ? () => breakdownRef.current?.() : undefined} />}
             <button type="button" className={`btn ghost icon-only sm star-btn ${fav ? 'on' : ''}`} onClick={toggleFav} aria-label={fav ? 'Remove from favorites' : 'Add to favorites'} title="Favorite"><Icon name="star" size={15} fill={!!fav} /></button>
-            <button type="button" className="btn ghost sm copy-ai-btn" onClick={copyForAI} aria-label="Copy for AI" title="Copy the whole issue (description, comments, sub-issues, PRs, files) to paste into Claude or another assistant (⇧⌘.)"><Icon name="sparkles" size={15} /><span className="hide-mobile">Copy for AI</span></button>
-            <button type="button" className="btn ghost icon-only sm" onClick={() => copy(d.identifier, d.identifier)} aria-label="Copy ID" title="Copy ID (⌘.)"><Icon name="copy" size={15} /></button>
+            <button type="button" className="btn ghost icon-only sm" onClick={e => setCopyMenu(rectOf(e.currentTarget))} aria-label="Copy" aria-haspopup="menu" title="Copy: ID, link, Markdown, for AI"><Icon name="copy" size={15} /></button>
             <button type="button" className="btn ghost icon-only sm" onClick={e => setMenu(rectOf(e.currentTarget))} aria-label="Issue menu" title="More"><Icon name="more" size={16} /></button>
           </div>
           <TitleEditor issue={d} canEdit={canEdit} onSave={async t => { const f = await patchIssue(d.id, { title: t }).catch(e => { toast((e as Error).message, 'err'); return null }); if (f) { merge(f); emitChange({ kind: 'issue', team_ids: [d.team_id], ids: [d.id] }) } }} />
@@ -248,6 +250,7 @@ export default function IssuePage() {
       {pick && pick.prop !== 'parent' && <PropertyPicker prop={pick.prop} issue={d} anchor={pick.at} onClose={() => setPick(null)} onPatch={p => patchUndo(d, p)} />}
       {pick?.prop === 'parent' && <IssueSearchPicker anchor={pick.at} title="Parent issue" exclude={[d.id, ...d.sub_issues.map(s => s.id)]} teamId={d.team_id} onClose={() => setPick(null)} onPick={p => patchUndo(d, { parent_id: p.id })} />}
       {menu && <Menu anchor={menu} items={menuItems} width={240} align="right" onClose={() => setMenu(null)} />}
+      {copyMenu && <Menu anchor={copyMenu} items={copyItems} width={240} align="right" onClose={() => setCopyMenu(null)} />}
       {moveTeam && <TeamMove issue={d} anchor={moveTeam} onClose={() => setMoveTeam(null)} onMoved={fresh => { toast(`Moved to ${app.team(fresh.team_id)?.name} as ${fresh.identifier}`); navigate(`/issue/${fresh.identifier}`, { replace: true }) }} />}
       {schedule && <ScheduleDialog issue={d} onClose={() => setSchedule(false)} onDone={() => { setSchedule(false); load() }} />}
     </div>
