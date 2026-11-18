@@ -7,7 +7,7 @@ import (
 )
 
 // ProjectStatuses in roadmap order.
-var ProjectStatuses = []string{"backlog", "planned", "started", "paused", "completed", "canceled"}
+var ProjectStatuses = []string{"backlog", "planned", "started", "blocked", "paused", "completed", "canceled"}
 
 // ValidProjectStatus reports whether st is a project status.
 func ValidProjectStatus(st string) bool {
@@ -102,7 +102,7 @@ func (s *Store) ListProjects(ctx context.Context, f ProjectFilter) ([]*Project, 
 		}
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT `+projectCols+` FROM projects p WHERE `+strings.Join(where, " AND ")+`
-		ORDER BY CASE p.status WHEN 'started' THEN 0 WHEN 'planned' THEN 1 WHEN 'paused' THEN 2 WHEN 'backlog' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END,
+		ORDER BY CASE p.status WHEN 'started' THEN 0 WHEN 'blocked' THEN 1 WHEN 'planned' THEN 2 WHEN 'paused' THEN 3 WHEN 'backlog' THEN 4 WHEN 'completed' THEN 5 ELSE 6 END,
 		p.sort_order, lower(p.name)`, args...)
 	if err != nil {
 		return nil, err
@@ -544,9 +544,9 @@ func (s *Store) LastUpdateAt(ctx context.Context, projectID int64) string {
 	return at.String
 }
 
-// ActiveProjects lists every started project on the box (update reminders).
+// ActiveProjects lists every started or blocked project on the box (update reminders).
 func (s *Store) ActiveProjects(ctx context.Context) ([]*Project, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT `+projectCols+` FROM projects p WHERE p.deleted_at IS NULL AND p.status = 'started'`)
+	rows, err := s.DB.QueryContext(ctx, `SELECT `+projectCols+` FROM projects p WHERE p.deleted_at IS NULL AND p.status IN ('started', 'blocked')`)
 	if err != nil {
 		return nil, err
 	}

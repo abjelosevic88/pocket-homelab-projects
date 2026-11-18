@@ -87,11 +87,12 @@ export function ProjectMark({ icon, color, size = 15 }: { icon?: string; color?:
   return <svg className="project-mark" width={size} height={size} viewBox="0 0 16 16" aria-hidden><rect x="2" y="2" width="12" height="12" rx="3.5" fill={color || '#5e6ad2'} fillOpacity=".2" stroke={color || '#5e6ad2'} strokeWidth="1.6" /></svg>
 }
 
-export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = { backlog: 'Backlog', planned: 'Planned', started: 'In progress', paused: 'Paused', completed: 'Completed', canceled: 'Canceled' }
-const PROJECT_STATUS_COLOR: Record<ProjectStatus, string> = { backlog: '#94a3b8', planned: '#8b8b96', started: '#f59e0b', paused: '#a855f7', completed: '#5e6ad2', canceled: '#94a3b8' }
+export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = { backlog: 'Backlog', planned: 'Planned', started: 'In progress', blocked: 'Blocked', paused: 'Paused', completed: 'Completed', canceled: 'Canceled' }
+const PROJECT_STATUS_COLOR: Record<ProjectStatus, string> = { backlog: '#94a3b8', planned: '#8b8b96', started: '#f59e0b', blocked: '#ef4444', paused: '#a855f7', completed: '#5e6ad2', canceled: '#94a3b8' }
 
 export function ProjectStatusIcon({ status, size = 14 }: { status: ProjectStatus; size?: number }) {
-  const map: Record<ProjectStatus, StateType> = { backlog: 'backlog', planned: 'unstarted', started: 'started', paused: 'started', completed: 'completed', canceled: 'canceled' }
+  const map: Record<ProjectStatus, StateType> = { backlog: 'backlog', planned: 'unstarted', started: 'started', blocked: 'started', paused: 'started', completed: 'completed', canceled: 'canceled' }
+  if (status === 'blocked') return <svg className="status-ico" width={size} height={size} viewBox="0 0 16 16" aria-hidden><circle cx="8" cy="8" r="6" fill="none" stroke={PROJECT_STATUS_COLOR.blocked} strokeWidth="1.8" /><path d="M5.4 8h5.2" stroke={PROJECT_STATUS_COLOR.blocked} strokeWidth="1.8" strokeLinecap="round" /></svg>
   if (status === 'paused') return <svg className="status-ico" width={size} height={size} viewBox="0 0 16 16" aria-hidden><circle cx="8" cy="8" r="6" fill="none" stroke={PROJECT_STATUS_COLOR.paused} strokeWidth="1.8" /><path d="M6.6 5.8v4.4M9.4 5.8v4.4" stroke={PROJECT_STATUS_COLOR.paused} strokeWidth="1.6" strokeLinecap="round" /></svg>
   return <StatusIcon type={map[status]} size={size} state={{ id: 0, team_id: 0, name: '', type: map[status], color: PROJECT_STATUS_COLOR[status], description: '', position: 0 }} />
 }

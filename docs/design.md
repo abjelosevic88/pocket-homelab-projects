@@ -46,7 +46,7 @@ team ─┬─ workflow states (triage | backlog | unstarted | started | complet
                  ├─ comments (threads, reactions, @mentions), history, attachments, time entries
                  └─ links to Pocket Tasks / Calendar / Notes / Forgejo commits & pull requests
 
-project ─┬─ teams, lead, members, status (backlog | planned | started | paused | completed | canceled)
+project ─┬─ teams, lead, members, status (backlog | planned | started | blocked | paused | completed | canceled)
          ├─ health (on track | at risk | off track, from the latest update), priority, start / target date
          ├─ milestones, documents, resources (links), stakeholders (Pocket Contacts)
          └─ updates (status posts with health; reminder to the lead every N days)

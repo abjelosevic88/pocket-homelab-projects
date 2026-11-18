@@ -102,9 +102,9 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, d)
 }
 
-// updateDue reports whether a started project's lead owes an update.
+// updateDue reports whether a started or blocked project's lead owes an update.
 func (s *Server) updateDue(p *store.Project, now time.Time) bool {
-	if p.Status != "started" || p.UpdateCadenceDays <= 0 {
+	if (p.Status != "started" && p.Status != "blocked") || p.UpdateCadenceDays <= 0 {
 		return false
 	}
 	last := p.CreatedAt
@@ -179,7 +179,7 @@ func (s *Server) applyProject(ctx context.Context, a *access, who actor, p *stor
 	}
 	if in.Status != nil {
 		if !store.ValidProjectStatus(*in.Status) {
-			return nil, badRequest("status is backlog, planned, started, paused, completed or canceled")
+			return nil, badRequest("status is backlog, planned, started, blocked, paused, completed or canceled")
 		}
 		rec("status", p.Status, *in.Status, "", "")
 		if *in.Status != p.Status {
@@ -425,7 +425,7 @@ func (s *Server) handlePatchProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func projectStatusName(st string) string {
-	return map[string]string{"backlog": "in the backlog", "planned": "planned", "started": "in progress", "paused": "paused", "completed": "completed", "canceled": "canceled"}[st]
+	return map[string]string{"backlog": "in the backlog", "planned": "planned", "started": "in progress", "blocked": "blocked", "paused": "paused", "completed": "completed", "canceled": "canceled"}[st]
 }
 
 func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {

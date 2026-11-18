@@ -305,6 +305,18 @@ func TestProjectsCyclesAndCalendar(t *testing.T) {
 	if p.Health != "at_risk" {
 		t.Fatalf("health: %s", p.Health)
 	}
+	// Blocked keeps the start date and stays among the active projects.
+	alex.do("PATCH", fmt.Sprintf("/api/v1/projects/%d", p.ID), map[string]any{"status": "blocked"}, 200, &p)
+	if p.Status != "blocked" || p.StartedAt == nil || p.CompletedAt != nil {
+		t.Fatalf("blocked: %+v", p)
+	}
+	if active, _ := s.store.ActiveProjects(context.Background()); len(active) != 1 || active[0].ID != p.ID {
+		t.Fatalf("active projects: %d", len(active))
+	}
+	if c := alex.status("PATCH", fmt.Sprintf("/api/v1/projects/%d", p.ID), map[string]any{"status": "stuck"}); c != 400 {
+		t.Fatalf("unknown status accepted: %d", c)
+	}
+	alex.do("PATCH", fmt.Sprintf("/api/v1/projects/%d", p.ID), map[string]any{"status": "started"}, 200, &p)
 
 	var cycles []store.Cycle
 	alex.do("GET", "/api/v1/teams/WEB/cycles", nil, 200, &cycles)

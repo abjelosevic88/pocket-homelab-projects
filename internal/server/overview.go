@@ -73,7 +73,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			current = append(current, c)
 		}
 	}
-	projects, _ := s.store.ListProjects(ctx, store.ProjectFilter{AllowedTeamIDs: a.ids(), Statuses: []string{"started", "planned", "paused"}})
+	projects, _ := s.store.ListProjects(ctx, store.ProjectFilter{AllowedTeamIDs: a.ids(), Statuses: []string{"started", "blocked", "planned", "paused"}})
 	var attention []map[string]any
 	now := time.Now()
 	for _, p := range projects {
