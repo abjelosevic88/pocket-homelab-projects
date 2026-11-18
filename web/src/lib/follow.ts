@@ -32,13 +32,32 @@ function rawPath(href: string, remotes: Remote[]): string | null {
   return rem ? `/r/${rem.id}${m[2] || '/'}${rest}` : u.pathname + rest
 }
 
+/** The router path of an in-app address in the open workspace, or null for
+ *  another workspace (BASE is fixed for the page's life: switching is a page load). */
+export function routeHere(path: string): string | null {
+  const p = path.replace(/[?#].*$/, ''), rest = path.slice(p.length)
+  const here = BASE ? p === BASE || p.startsWith(BASE + '/') : !p.startsWith('/r/')
+  return here ? ((BASE ? p.slice(BASE.length) : p) || '/') + rest : null
+}
+
 /** Opens an in-app address: in this workspace without a reload (go), another
  *  workspace is a page load. */
 export function goInApp(path: string, go: (path: string) => void) {
-  const p = path.replace(/[?#].*$/, ''), rest = path.slice(p.length)
-  const here = BASE ? p === BASE || p.startsWith(BASE + '/') : !p.startsWith('/r/')
-  if (here) go(((BASE ? p.slice(BASE.length) : p) || '/') + rest)
+  const to = routeHere(path)
+  if (to != null) go(to)
   else location.assign(path)
+}
+
+/** Where a link Pocket Hub hands over opens without a reload: a page of the
+ *  open workspace on this site. Null for another site, another workspace
+ *  (own ↔ connected, or another connected one) and what isn't a page (the
+ *  API, files): the hub loads those. */
+export function hubRoute(url: string, remotes: Remote[]): string | null {
+  let u: URL
+  try { u = new URL(url, location.href) } catch { return null }
+  if (u.origin !== location.origin) return null
+  const path = inAppPath(u.href, remotes)
+  return path == null ? null : routeHere(path)
 }
 
 /** A link a framed conversation handed over: a Projects page opens in this
