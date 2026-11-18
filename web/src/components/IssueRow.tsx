@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { emitChange, useApp } from '../lib/app-context'
+import { prefetchOnHover, rememberIssues } from '../lib/issue-cache'
 import { estimateLabel, isDone, patchIssue } from '../lib/issues'
 import { ago } from '../lib/format'
 import type { Issue } from '../lib/types'
@@ -107,12 +108,12 @@ export function IssueRow({ issue, properties, selected, focused, onToggleSelect,
   const has = (p: string) => properties.includes(p)
   const done = isDone(issue.state_type)
   const click = (p: Prop) => (e: React.MouseEvent) => { e.stopPropagation(); if (act.canEdit) act.openProp(p, rectOf(e.currentTarget)) }
-  const open = () => (onOpen ? onOpen(issue) : navigate(`/issue/${issue.identifier}`))
+  const open = () => { rememberIssues([issue]); if (onOpen) onOpen(issue); else navigate(`/issue/${issue.identifier}`) }
   return (
     <div className={`issue-row ${selected ? 'selected' : ''} ${focused ? 'focused' : ''} ${done ? 'done' : ''} ${className}`} style={depth ? { paddingLeft: 12 + depth * 22 } : undefined}
       data-issue-id={issue.id} data-pocket-ask role="row" tabIndex={-1}
       onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); onToggleSelect?.(e) } else open() }}
-      onContextMenu={e => { e.preventDefault(); act.openMenu({ x: e.clientX, y: e.clientY, w: 0, h: 0 }) }} {...dragHandle}>
+      onContextMenu={e => { e.preventDefault(); act.openMenu({ x: e.clientX, y: e.clientY, w: 0, h: 0 }) }} {...prefetchOnHover(issue.identifier, issue)} {...dragHandle}>
       {onToggleSelect && <span className={`row-check ${selected ? 'on' : ''}`} onClick={e => { e.stopPropagation(); onToggleSelect(e) }} role="checkbox" aria-checked={!!selected} aria-label="Select">{selected && <Icon name="check" size={11} strokeWidth={3} />}</span>}
       {has('priority') && <button type="button" className="cell-btn prio" onClick={click('priority')} title="Priority"><PriorityIcon priority={issue.priority} /></button>}
       {has('id') && <span className="ident">{issue.identifier}</span>}

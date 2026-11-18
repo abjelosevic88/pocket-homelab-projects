@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { useApp, useLive } from '../lib/app-context'
+import { cacheIssue, rememberIssues } from '../lib/issue-cache'
 import { ago, stamp } from '../lib/format'
 import { addDays, nextWeek, parse, today, tomorrow, wdDate } from '../lib/dates'
 import type { IssueDetail, Notification, ProjectDetail } from '../lib/types'
@@ -63,6 +64,7 @@ export default function Inbox() {
   const load = useCallback(() => {
     api.get<{ notifications: Notification[]; unread: number }>(`${V1}/notifications?filter=${filter}`)
       .then(r => {
+        rememberIssues(r.notifications.map(n => n.issue))
         // In "Unread", the item being read stays until the person moves on.
         const keep = selRef.current
         const fresh = r.notifications
@@ -321,7 +323,7 @@ function IssuePreview({ id, commentId, actions }: { id: number; commentId: numbe
   const progress = useStateProgress()
   const [is, setIs] = useState<IssueDetail | null>(null)
   const [err, setErr] = useState('')
-  useEffect(() => { api.get<IssueDetail>(`${V1}/issues/${id}`).then(setIs).catch(e => setErr((e as Error).message)) }, [id])
+  useEffect(() => { api.get<IssueDetail>(`${V1}/issues/${id}`).then(x => { cacheIssue(x); setIs(x) }).catch(e => setErr((e as Error).message)) }, [id])
   if (err) return <div className="ib-pv-body"><Empty title="Can't show this issue" icon="alert">{err}</Empty></div>
   if (!is) return <div className="ib-pv-body"><div className="loading"><Spinner /> Loading…</div></div>
   const state = app.state(is.state_id)

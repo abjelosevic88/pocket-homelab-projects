@@ -6,11 +6,12 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, V1 } from '../lib/api'
 import { emitChange, useApp, useLive } from '../lib/app-context'
-import { estimateLabel, isDone, parseMinutes, patchIssue, priorityLabel } from '../lib/issues'
+import { estimateLabel, isDone, parseMinutes, patchIssue, priorityLabel, STATE_TYPE_LABEL } from '../lib/issues'
 import { Markdown, MarkdownLinks, toggleCheckbox } from '../lib/markdown'
 import { addDays, fmtMinutes, shortDate, today } from '../lib/dates'
 import { ago } from '../lib/format'
-import type { Issue, IssueDetail, TimeEntry } from '../lib/types'
+import type { Issue, IssueDetail, IssueRef, StateType, TimeEntry } from '../lib/types'
+import { cachedIssue, cacheIssue, forgetIssue, knownIssue } from '../lib/issue-cache'
 import { Icon } from '../components/icons'
 import { DueChip, LabelPill, PersonAvatar, PriorityIcon, ProjectMark, StatusIcon, personName, useStateProgress } from '../components/issue-bits'
 import { MarkdownEditor } from '../components/MarkdownEditor'
@@ -26,7 +27,7 @@ import { IssueActivity, type ActivityHandle } from '../components/issue/IssueAct
 import { Attachments, Contacts, IssueNotes, Relations, SharedNotes, SubIssues, useUploader } from '../components/issue/IssueSections'
 import { sharedNoteURL } from './SharedNotePage'
 import { type DockTab, IssueDock, newDockKey } from '../components/issue/IssueDock'
-import { openTab, setTabDocks, tabDocks } from '../lib/tabs'
+import { openTab, setTabDocks, tabDocks, tabOf } from '../lib/tabs'
 import { IssueDeploy, useIssueDeploy } from '../components/issue/Deploy'
 import { copyIssueForAI } from '../lib/issue-copy'
 import { CodeButton, CodeConversations, type CodePanel, sameConversation, CodePanelContext, CodeSide, type IssueCode, useIssueCode } from '../components/issue/CodeWithAI'
@@ -40,13 +41,24 @@ export default function IssuePage() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const mobile = useIsMobile()
-  const [d, setD] = useState<IssueDetail | null>(null)
+  // An issue opened lately shows at once as it was, and refreshes behind
+  // (lib/issue-cache); one only a list knew shows its header meanwhile.
+  const [d, setD] = useState<IssueDetail | null>(() => cachedIssue(ref) || null)
   const [err, setErr] = useState<{ status: number; msg: string } | null>(null)
+  // only the latest answer counts: an earlier load (the issue before, or one a
+  // live change overtook) never replaces what a newer one brought
+  const seq = useRef(0)
   const load = useCallback(() => {
-    api.get<IssueDetail>(`${V1}/issues/${encodeURIComponent(ref)}`).then(x => { setD(x); setErr(null) })
-      .catch(e => setErr({ status: (e as ApiError).status || 0, msg: (e as Error).message }))
+    const n = ++seq.current
+    api.get<IssueDetail>(`${V1}/issues/${encodeURIComponent(ref)}`).then(x => { if (n === seq.current) { setD(x); setErr(null) } })
+      .catch(e => {
+        if (n !== seq.current) return
+        if ((e as ApiError).status === 404) forgetIssue(ref)
+        setErr({ status: (e as ApiError).status || 0, msg: (e as Error).message })
+      })
   }, [ref])
-  useEffect(() => { setD(null); load() }, [load])
+  useEffect(() => { setD(cachedIssue(ref) || null); setErr(null); load() }, [load]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (d) cacheIssue(d, ref) }, [d]) // eslint-disable-line react-hooks/exhaustive-deps
   // The panel beside the issue (replaces the properties while open): tabs of Pocket AI
   // conversations and notes
   const [docks, setDocks] = useState<DockTab[]>([])
@@ -154,7 +166,10 @@ export default function IssuePage() {
   })
 
   if (err) return <div className="page"><Empty title={err.status === 404 ? 'Issue not found' : 'Could not load the issue'} icon="search">{err.status === 404 ? 'It may have been deleted, or it belongs to a team you are not in.' : err.msg}</Empty></div>
-  if (!d) return <Loading />
+  if (!d) {
+    const known = knownIssue(ref), tab = tabOf(ref)
+    return known ? <IssueHeader issue={known} /> : tab ? <IssueHeader issue={{ identifier: tab.ref, title: tab.title, state_type: tab.type }} /> : <Loading />
+  }
 
   const team = d.team || app.team(d.team_id)
   const state = app.state(d.state_id)
@@ -265,6 +280,46 @@ export default function IssuePage() {
       {schedule && <ScheduleDialog issue={d} onClose={() => setSchedule(false)} onDone={() => { setSchedule(false); load() }} />}
     </div>
     </MarkdownLinks.Provider></CodePanelContext.Provider>
+  )
+}
+
+/** What's known of an issue before it loads (its row in a list, a
+ *  notification, its tab): the header and the main properties, laid out as
+ *  the page will be, instead of a bare "Loading…". */
+type KnownIssue = Pick<IssueRef, 'identifier' | 'title'> & Partial<Pick<IssueRef, 'team_id' | 'state_id' | 'priority'>> & { state_type?: StateType; label_ids?: number[]; assignee_id?: number | null }
+function IssueHeader({ issue }: { issue: KnownIssue }) {
+  const app = useApp()
+  const progress = useStateProgress()
+  const team = app.team(issue.team_id) || app.teamByKey(issue.identifier.split('-')[0])
+  const state = app.state(issue.state_id)
+  const assignee = app.person(issue.assignee_id)
+  const labels = (issue.label_ids || []).flatMap(id => { const l = app.label(id); return l ? [l] : [] })
+  const status = <><StatusIcon state={state} type={issue.state_type} progress={progress(state)} />{state?.name || (issue.state_type && STATE_TYPE_LABEL[issue.state_type])}</>
+  const prio = issue.priority !== undefined && <><PriorityIcon priority={issue.priority} />{priorityLabel(issue.priority)}</>
+  const who = 'assignee_id' in issue && <><PersonAvatar person={assignee} size={20} />{assignee ? personName(assignee) : 'Unassigned'}</>
+  const pills = labels.map(l => <LabelPill key={l.id} name={l.name} color={l.color} />)
+  return (
+    <div className="ip-wrap">
+      <div className="ip-main"><div className="ip-inner">
+        <div className="ip-crumbs">
+          {team && <><Link to={`/team/${team.key}/issues`}><TeamMark team={team} size={16} />{team.name}</Link><Icon name="chevron-right" size={13} className="faint" /></>}
+          <span className="ident">{issue.identifier}</span>
+        </div>
+        <h1 className="ip-title">{issue.title}</h1>
+        <div className="ip-chips">
+          {(state || issue.state_type) && <span className="chip">{status}</span>}
+          {!!issue.priority && <span className="chip">{prio}</span>}
+          {pills.length > 0 && <span className="chip">{pills}</span>}
+        </div>
+        <Loading />
+      </div></div>
+      <aside className="ip-side" aria-label="Properties"><div className="ip-props">
+        {(state || issue.state_type) && <div className="ip-prop"><span className="lbl">Status</span><span className="ip-val">{status}</span></div>}
+        {prio && <div className="ip-prop"><span className="lbl">Priority</span><span className={`ip-val ${issue.priority ? '' : 'is-empty'}`}>{prio}</span></div>}
+        {who && <div className="ip-prop"><span className="lbl">Assignee</span><span className={`ip-val ${assignee ? '' : 'is-empty'}`}>{who}</span></div>}
+        {pills.length > 0 && <div className="ip-prop"><span className="lbl">Labels</span><span className="ip-val labels">{pills}</span></div>}
+      </div></aside>
+    </div>
   )
 }
 

@@ -1,6 +1,7 @@
 // Helpers shared by every issue view: priorities, estimates, grouping, sorting, filters in the URL.
 import { api, V1 } from './api'
 import type { Display, GroupKey, Issue, IssueFilter, Person, SortKey, State, StateType, Team } from './types'
+import { rememberIssues } from './issue-cache'
 
 export const PRIORITIES = [
   { value: 0, label: 'No priority' },
@@ -181,7 +182,9 @@ export function orderBetween(before?: Issue, after?: Issue): number {
 export async function fetchIssues(filter: IssueFilter, extra: Record<string, string | number | boolean> = {}): Promise<{ issues: Issue[]; total: number }> {
   const p = new URLSearchParams({ filter: JSON.stringify(filter), limit: '2000' })
   for (const [k, v] of Object.entries(extra)) p.set(k, String(v))
-  return api.get(`${V1}/issues?${p.toString()}`)
+  const r = await api.get<{ issues: Issue[]; total: number }>(`${V1}/issues?${p.toString()}`)
+  rememberIssues(r.issues) // an issue opened from the list shows its header at once
+  return r
 }
 
 export const patchIssue = <T = Issue>(ref: number | string, body: Record<string, unknown>) => api.patch<T>(`${V1}/issues/${ref}`, body)

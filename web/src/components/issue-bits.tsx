@@ -2,6 +2,7 @@
 // label pills, people, due dates, project marks and health.
 import { Link } from 'react-router-dom'
 import { useApp } from '../lib/app-context'
+import { prefetchOnHover } from '../lib/issue-cache'
 import { dueState, isDone, priorityLabel } from '../lib/issues'
 import { shortDate } from '../lib/dates'
 import type { Health, Person, ProjectStatus, State, StateType } from '../lib/types'
@@ -117,7 +118,7 @@ export function ProgressBar({ percent, color }: { percent: number; color?: strin
 
 /** "WEB-12" linking to the issue. */
 export function IssueLink({ identifier, title, done }: { identifier: string; title?: string; done?: boolean }) {
-  return <Link to={`/issue/${identifier}`} className={`issue-link ${done ? 'done' : ''}`}><span className="ident">{identifier}</span>{title && <span className="ellipsis">{title}</span>}</Link>
+  return <Link to={`/issue/${identifier}`} className={`issue-link ${done ? 'done' : ''}`} {...prefetchOnHover(identifier)}><span className="ident">{identifier}</span>{title && <span className="ellipsis">{title}</span>}</Link>
 }
 
 export { isDone }
