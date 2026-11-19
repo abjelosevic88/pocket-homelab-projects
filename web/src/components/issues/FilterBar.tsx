@@ -10,10 +10,12 @@ import { PersonAvatar, PriorityIcon, ProjectMark, StatusIcon } from '../issue-bi
 import { PickerMenu, type PickItem } from '../pickers'
 import { type Anchor, Menu, rectOf } from '../ui'
 
-export type FilterKey = 'status' | 'assignee' | 'creator' | 'priority' | 'labels' | 'project' | 'milestone' | 'cycle' | 'due' | 'blocked' | 'subscribed'
+export type FilterKey = 'status' | 'assignee' | 'creator' | 'priority' | 'labels' | 'project' | 'milestone' | 'cycle' | 'due' | 'updated' | 'blocked' | 'subscribed'
 type V = string | number
 
 const DUE_LABEL: Record<string, string> = { overdue: 'Overdue', today: 'Due today', week: 'Due this week', month: 'Due this month', none: 'No due date', any: 'Has a due date' }
+/** Rolling windows of the "Recently updated" filter: created, changed, moved to another status or commented on. */
+export const UPDATED_LABEL: Record<string, string> = { '24h': 'Last 24 hours', '3d': 'Last 3 days', '7d': 'Last 7 days', '30d': 'Last 30 days' }
 const CYCLE_REL: Record<string, string> = { current: 'Current cycle', next: 'Next cycle', previous: 'Previous cycle' }
 
 export const FILTER_META: { key: FilterKey; label: string; icon: string }[] = [
@@ -26,6 +28,7 @@ export const FILTER_META: { key: FilterKey; label: string; icon: string }[] = [
   { key: 'milestone', label: 'Milestone', icon: 'diamond' },
   { key: 'cycle', label: 'Cycle', icon: 'cycle' },
   { key: 'due', label: 'Due date', icon: 'calendar' },
+  { key: 'updated', label: 'Recently updated', icon: 'clock' },
   { key: 'blocked', label: 'Blocked', icon: 'alert-triangle' },
   { key: 'subscribed', label: 'Subscribed by me', icon: 'bell' },
 ]
@@ -63,6 +66,7 @@ export function useFilterModel(teamIds: number[]) {
         ...app.cycles.filter(c => tids.has(c.team_id)).sort((a, b) => b.starts_on.localeCompare(a.starts_on)).map(c => ({ value: c.id, label: c.name || `Cycle ${c.number}`, icon: <Icon name="cycle" size={13} />, hint: `${shortDate(c.starts_on)} – ${shortDate(c.ends_on)}`, group: teams.length > 1 ? app.team(c.team_id)?.name : 'Cycles' })),
       ]
       case 'due': return Object.entries(DUE_LABEL).map(([v, l]) => ({ value: v, label: l, icon: <Icon name="calendar" size={13} /> }))
+      case 'updated': return Object.entries(UPDATED_LABEL).map(([v, l]) => ({ value: v, label: l, icon: <Icon name="clock" size={13} />, keywords: 'recent changed created status moved' }))
       default: return []
     }
   }
@@ -77,6 +81,7 @@ export function useFilterModel(teamIds: number[]) {
       case 'milestone': return f.milestone_ids || []
       case 'cycle': return [...(f.cycle ? [f.cycle] : []), ...(f.cycle_ids || [])]
       case 'due': return f.due ? [f.due] : []
+      case 'updated': return f.updated_within ? [f.updated_within] : []
       case 'blocked': return f.blocked ? [1] : []
       case 'subscribed': return f.subscribed_by ? [f.subscribed_by] : []
     }
@@ -96,6 +101,7 @@ export function useFilterModel(teamIds: number[]) {
       case 'milestone': put('milestone_ids', nums); break
       case 'cycle': put('cycle', (strs[strs.length - 1] as IssueFilter['cycle']) || undefined); put('cycle_ids', nums); break
       case 'due': put('due', (strs[strs.length - 1] as IssueFilter['due']) || undefined); break
+      case 'updated': put('updated_within', (strs[strs.length - 1] as IssueFilter['updated_within']) || undefined); break
       case 'blocked': put('blocked', vals.length ? true : undefined); break
       case 'subscribed': put('subscribed_by', vals.length ? me : undefined); break
     }
@@ -113,11 +119,12 @@ export function useFilterModel(teamIds: number[]) {
       case 'milestone': return vals.map(v => app.milestone(v as number)?.name || '?')
       case 'cycle': return vals.map(v => (typeof v === 'string' ? CYCLE_REL[v] || v : v === 0 ? 'No cycle' : (() => { const c = app.cycle(v); return c ? c.name || `Cycle ${c.number}` : '?' })()))
       case 'due': return vals.map(v => DUE_LABEL[v as string] || String(v))
+      case 'updated': return vals.map(v => UPDATED_LABEL[v as string] || String(v))
       case 'blocked': return vals.length ? ['Blocked'] : []
       case 'subscribed': return vals.length ? ['Me'] : []
     }
   }
-  const multi = (k: FilterKey) => !['due', 'blocked', 'subscribed'].includes(k)
+  const multi = (k: FilterKey) => !['due', 'updated', 'blocked', 'subscribed'].includes(k)
   return { items, get, set, names, multi, single, teams }
 }
 
@@ -164,9 +171,9 @@ export function FilterBar({ filter, onChange, teamIds, extra }: { filter: IssueF
         const solo = f.key === 'blocked' || f.key === 'subscribed'
         return (
           <span key={f.key} className="filter-chip">
-            <button type="button" className="fc-part fc-key" onClick={e => !solo && open(f.key, rectOf(e.currentTarget.parentElement!))}><Icon name={f.icon} size={13} />{f.label}</button>
+            <button type="button" className="fc-part fc-key" onClick={e => !solo && open(f.key, rectOf(e.currentTarget.parentElement!))}><Icon name={f.icon} size={13} />{f.key === 'updated' ? 'Updated' : f.label}</button>
             {!solo && <>
-              <span className="fc-part fc-op">{m.multi(f.key) && names.length > 1 ? 'is any of' : 'is'}</span>
+              <span className="fc-part fc-op">{f.key === 'updated' ? 'in' : m.multi(f.key) && names.length > 1 ? 'is any of' : 'is'}</span>
               <button type="button" className="fc-part fc-val" onClick={e => open(f.key, rectOf(e.currentTarget.parentElement!))} title={names.join(', ')}>
                 {names.length > 2 ? `${names[0]}, ${names[1]} +${names.length - 2}` : names.join(', ')}
               </button>

@@ -126,6 +126,8 @@ export interface IssueFilter {
   priorities?: number[]; label_ids?: number[]; label_mode?: 'any' | 'all'; not_label_ids?: number[]; project_ids?: number[]
   milestone_ids?: number[]; cycle_ids?: number[]; cycle?: 'current' | 'next' | 'previous'; parent_id?: number; top_level?: boolean
   due?: 'overdue' | 'today' | 'week' | 'month' | 'none' | 'any'; due_from?: string; due_to?: string; created_since?: string; updated_since?: string
+  /** Rolling window: created, changed, moved or commented on within it. */
+  updated_within?: '24h' | '3d' | '7d' | '30d'
   show_completed?: 'all' | 'none' | 'day' | 'week' | 'month'; subscribed_by?: number; blocked?: boolean; archived?: '' | 'include' | 'only'
   q?: string; sort?: SortKey
   ids?: number[]; snoozed?: '' | 'include'; trash?: boolean

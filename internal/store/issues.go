@@ -35,6 +35,7 @@ type IssueFilter struct {
 	DueTo          string   `json:"due_to,omitempty"`
 	CreatedSince   string   `json:"created_since,omitempty"`
 	UpdatedSince   string   `json:"updated_since,omitempty"`
+	UpdatedWithin  string   `json:"updated_within,omitempty"` // rolling window: 24h | 3d | 7d | 30d (created, changed, moved or commented on)
 	ShowCompleted  string   `json:"show_completed,omitempty"` // all (default) | none | day | week | month
 	SubscribedBy   int64    `json:"subscribed_by,omitempty"`
 	Blocked        bool     `json:"blocked,omitempty"`
@@ -288,6 +289,9 @@ func (s *Store) ListIssues(ctx context.Context, f IssueFilter) ([]*Issue, int, e
 	}
 	if f.UpdatedSince != "" {
 		add(`i.updated_at >= ?`, f.UpdatedSince)
+	}
+	if d := UpdatedWindow(f.UpdatedWithin); d > 0 {
+		add(`i.updated_at >= ?`, time.Now().UTC().Add(-d).Format(time.RFC3339))
 	}
 	switch f.ShowCompleted {
 	case "none":
@@ -840,4 +844,20 @@ func SortedIDs(ids []int64) []int64 {
 	out := append([]int64(nil), ids...)
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
+}
+
+// UpdatedWindow is the length of a rolling "recently updated" window (24h, 3d,
+// 7d, 30d); 0 when the value isn't one of them.
+func UpdatedWindow(v string) time.Duration {
+	switch v {
+	case "24h", "1d":
+		return 24 * time.Hour
+	case "3d":
+		return 3 * 24 * time.Hour
+	case "7d":
+		return 7 * 24 * time.Hour
+	case "30d":
+		return 30 * 24 * time.Hour
+	}
+	return 0
 }

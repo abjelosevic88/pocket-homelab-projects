@@ -47,7 +47,7 @@ including former identifiers after a move or a key change). Shapes are in `web/s
 `team` (keys), `team_id`, `ids`, `state_id`, `state_type`, `status` (open/done/started/…), `assignee_id` (`me`, ids,
 `none`), `creator_id`, `priority`, `label_id` (+`label_mode=all`), `not_label_id`, `project_id`, `milestone_id`,
 `cycle_id`, `cycle` (current/next/previous), `parent`, `top_level`, `due` (overdue/today/week/month/none/any),
-`due_from`, `due_to`, `created_since`, `updated_since`, `show_completed` (none/day/week/month), `subscribed`,
+`due_from`, `due_to`, `created_since`, `updated_since`, `updated_within` (24h/3d/7d/30d, rolling), `show_completed` (none/day/week/month), `subscribed`,
 `blocked`, `archived` (include/only), `snoozed=include`, `trash=1`, `source_app`, `source_ref`, `url`, `q` (words or
 an identifier), `sort` (manual/priority/updated/created/due/title/estimate/identifier), `limit` (≤5000), `offset`.
 
