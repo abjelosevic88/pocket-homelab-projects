@@ -146,6 +146,7 @@ func (s *Server) filterFromQuery(r *http.Request, a *access) store.IssueFilter {
 	str(&f.DueTo, "due_to")
 	str(&f.CreatedSince, "created_since")
 	str(&f.UpdatedSince, "updated_since")
+	str(&f.UpdatedWithin, "updated_within")
 	str(&f.ShowCompleted, "show_completed")
 	str(&f.Archived, "archived")
 	str(&f.Snoozed, "snoozed")
