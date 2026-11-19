@@ -296,6 +296,12 @@ func remoteTransport(proxy string) http.RoundTripper {
 	}
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.ResponseHeaderTimeout = 60 * time.Second
+	// Through a proxy (Tailscale's SOCKS) the local leg stays up when the
+	// tunnel behind it drops, so a pooled HTTP/2 connection can go silent
+	// without ever closing: every call then waits on it until the page gives
+	// up (the app stuck on Loading…). Pinging an idle connection notices and
+	// drops it, and the next call dials a fresh one.
+	t.HTTP2 = &http.HTTP2Config{SendPingTimeout: 15 * time.Second, PingTimeout: 10 * time.Second, WriteByteTimeout: 15 * time.Second}
 	if proxy != "" {
 		if u, err := url.Parse(proxy); err == nil {
 			t.Proxy = http.ProxyURL(u)
