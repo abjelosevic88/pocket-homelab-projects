@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	core "github.com/abjelosevic88/pocket-homelab-core/sdk"
 	"github.com/abjelosevic88/pocket-homelab-projects/internal/store"
 )
 
@@ -20,6 +21,11 @@ func (s *Server) importRoutes(r chi.Router) {
 	r.Get("/export/issues.csv", s.handleExportCSV)
 	r.Get("/teams/{ref}/export.json", s.handleExportTeam)
 	r.Post("/teams/{ref}/import", s.handleImport)
+	// Pocket Move: the person's own issues (move.go)
+	r.Get("/export.json", s.handleExportMine)
+	r.Get("/export/my-issues.csv", s.handleExportMineCSV)
+	r.Post("/import", s.handleImportMine)
+	r.Get(strings.TrimPrefix(core.PortablePath, "/api/v1"), portable.Handler())
 }
 
 // handleExportCSV downloads the issues matching the same filters as GET /issues.
@@ -39,6 +45,12 @@ func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err, "export")
 		return
 	}
+	s.writeIssuesCSV(w, r, a, list, fmt.Sprintf("issues-%s.csv", time.Now().Format("20060102")))
+}
+
+// writeIssuesCSV writes issues in the CSV the import reads back (Linear's columns).
+func (s *Server) writeIssuesCSV(w http.ResponseWriter, r *http.Request, a *access, list []*store.Issue, filename string) {
+	ctx := r.Context()
 	n := newNamer(s, ctx)
 	labelName := map[int64]string{}
 	labels, _ := s.store.LabelsOf(ctx, a.ids())
@@ -46,7 +58,7 @@ func (s *Server) handleExportCSV(w http.ResponseWriter, r *http.Request) {
 		labelName[l.ID] = l.Name
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="issues-%s.csv"`, time.Now().Format("20060102")))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	cw := csv.NewWriter(w)
 	_ = cw.Write([]string{"ID", "Title", "Description", "Status", "Status Type", "Priority", "Estimate", "Assignee", "Creator", "Labels", "Project", "Milestone",
 		"Cycle", "Parent", "Due Date", "Created", "Updated", "Started", "Completed", "Canceled", "Archived", "URL"})

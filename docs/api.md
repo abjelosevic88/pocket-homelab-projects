@@ -69,6 +69,7 @@ an identifier), `sort` (manual/priority/updated/created/due/title/estimate/ident
 | `POST /issues/{ref}/event {title?, start, duration_min, all_day?, location, conference, description, user_ids, emails}` | an event in Pocket Calendar |
 | `POST /issues/{ref}/code {action: investigate\|fix\|chat, note?}` · `GET /issues/{ref}/code` | a Pocket AI draft in the team's code folder → `{url, draft_id}`; the issue's conversations with their state |
 | `GET /export/issues.csv?<filters>` | |
+| `GET /export.json` · `GET /export/my-issues.csv` · `POST /import` · `GET /pocket/portable` | Pocket Move can copy your issues out and bring them in: the issues you wrote or are assigned to (in the teams you are in) with your own comments; the import puts them in the team with the same key, else your first team, as yours, and skips issues you already have there (same title and date) |
 
 ## Projects
 
