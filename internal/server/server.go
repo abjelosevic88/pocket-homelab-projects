@@ -385,6 +385,7 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PROJECTS",
 		Publishes: coreTopics,
 		Offers:    linkOffers,
+		Portable:  portable,
 		Uses:      append(appUses(), core.InferenceUse()),
 	}
 	if s.cfg.BaseURL != "" {

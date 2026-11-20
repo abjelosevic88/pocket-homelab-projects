@@ -22,6 +22,20 @@ var linkOffers = []core.Offer{
 	{Scope: "worklog:write", Name: "Log time on issues", Description: "Log time you tracked elsewhere on an issue (Pocket Time writes a finished timer back); change or remove only the time that app logged itself."},
 }
 
+// portable is what Pocket Move may copy out and bring in for a person
+// (docs/move.md in pocket-homelab-core; move.go): the issues they wrote or
+// are assigned to, in the teams they belong to, with their own comments.
+// Register adds move:export/import.
+var portable = &core.Portable{
+	Exports: []core.PortableExport{
+		{Path: "/api/v1/export.json", File: "projects.json", Kind: core.KindPocket, Title: "The issues you wrote or are assigned to, with their team, status, labels, project and your own comments"},
+		{Path: "/api/v1/export/my-issues.csv", File: "issues.csv", Kind: core.KindCSV, Title: "The same issues as a table (Linear's columns)"},
+	},
+	Imports: []core.PortableImport{
+		{Path: "/api/v1/import", Kind: core.KindPocket, ContentType: "application/json", MaxBytes: 64 << 20, Title: "Adds the issues to the team with the same key, else to your first team, as yours, with your comments; issues you already have there (same title and date) are skipped"},
+	},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -54,6 +68,9 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
+	if portable.LinkAllows(scopes, r) {
+		return true
+	}
 	path := r.URL.Path
 	if p, ok := r.Context().Value(agentPathKey).(string); ok && p != "" {
 		path = p // the workspace guard's own /r/{id} detour, checked as asked
