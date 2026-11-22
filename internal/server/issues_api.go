@@ -427,19 +427,32 @@ func opHook(ctx context.Context, op *core.Operation) func(id int64) store.TxHook
 }
 
 // defaultAssignee is who a team's new issue goes to when nobody was named:
-// the person creating it (a team member, not git or the system), nobody, or a
-// chosen member while they are still on the team.
-func (s *Server) defaultAssignee(ctx context.Context, team *store.Team, who actor) *int64 {
+// the person creating it (a team member, not git or the system), the lead of
+// the issue's project (else the creator), nobody, or a chosen member while
+// they are still on the team.
+func (s *Server) defaultAssignee(ctx context.Context, team *store.Team, who actor, projectID *int64) *int64 {
+	member := func(id int64) bool {
+		role := s.store.TeamRole(ctx, team.ID, id)
+		return role != "" && role != "guest"
+	}
+	creator := func() *int64 {
+		if who.id > 0 && who.app != "git" && who.app != "system" && member(who.id) {
+			return ptr(who.id)
+		}
+		return nil
+	}
 	switch v := team.DefaultAssignee; v {
 	case "none":
 		return nil
 	case "", "creator":
-		if who.id > 0 && who.app != "git" && who.app != "system" {
-			if role := s.store.TeamRole(ctx, team.ID, who.id); role != "" && role != "guest" {
-				return ptr(who.id)
+		return creator()
+	case "project_lead":
+		if projectID != nil && *projectID > 0 {
+			if p, err := s.store.GetProject(ctx, *projectID); err == nil && p.LeadID != nil && member(*p.LeadID) {
+				return ptr(*p.LeadID)
 			}
 		}
-		return nil
+		return creator()
 	default:
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err == nil && id > 0 && s.store.TeamRole(ctx, team.ID, id) != "" {
@@ -513,7 +526,7 @@ func (s *Server) createIssue(ctx context.Context, a *access, who actor, in issue
 	// Nobody named (field absent or null) and no template's choice: the team's default
 	// assignee. An explicit 0 / "none" from the client stays unassigned.
 	if in.AssigneeID == nil && in.Assignee == "" && is.AssigneeID == nil {
-		is.AssigneeID = s.defaultAssignee(ctx, team, who)
+		is.AssigneeID = s.defaultAssignee(ctx, team, who, is.ProjectID)
 	}
 	if strings.TrimSpace(is.Title) == "" {
 		return nil, badRequest("an issue needs a title")

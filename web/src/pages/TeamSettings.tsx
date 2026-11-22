@@ -7,6 +7,7 @@ import { Icon } from '../components/icons'
 import { TeamMark } from '../components/pickers'
 import { Empty, Tabs } from '../components/ui'
 import { GeneralTab } from './team-settings/General'
+import { FieldsTab } from './team-settings/Fields'
 import { MembersTab } from './team-settings/Members'
 import { WorkflowTab } from './team-settings/Workflow'
 import { LabelsTab } from './team-settings/Labels'
@@ -20,9 +21,10 @@ import { NotesTab } from './team-settings/Notes'
 import { ROLE_LABEL } from './team-settings/common'
 import '../styles/settings-ui.css'
 
-type TabId = 'general' | 'members' | 'workflow' | 'labels' | 'cycles' | 'templates' | 'integrations' | 'ai' | 'files' | 'notes' | 'import'
+type TabId = 'general' | 'fields' | 'members' | 'workflow' | 'labels' | 'cycles' | 'templates' | 'integrations' | 'ai' | 'files' | 'notes' | 'import'
 const TABS: { id: TabId; label: string; icon: string }[] = [
   { id: 'general', label: 'General', icon: 'settings' },
+  { id: 'fields', label: 'Fields', icon: 'sliders' },
   { id: 'members', label: 'Members', icon: 'users' },
   { id: 'workflow', label: 'Workflow', icon: 'columns' },
   { id: 'labels', label: 'Labels', icon: 'tag' },
@@ -68,6 +70,7 @@ export default function TeamSettings() {
         <div className="ui-ts-tabs"><Tabs tabs={TABS} value={tab} onChange={t => navigate(`/team/${team.key}/settings/${t}`, { replace: true })} /></div>
         <div className="ui-ts-body" key={tab + team.id}>
           {tab === 'general' && <GeneralTab {...props} />}
+          {tab === 'fields' && <FieldsTab {...props} />}
           {tab === 'members' && <MembersTab {...props} />}
           {tab === 'workflow' && <WorkflowTab {...props} />}
           {tab === 'labels' && <LabelsTab {...props} />}

@@ -144,7 +144,7 @@ export function useDescribeFilter(teamIds: number[] = []) {
   }
 }
 
-export function FilterBar({ filter, onChange, teamIds, extra }: { filter: IssueFilter; onChange: (f: IssueFilter) => void; teamIds: number[]; extra?: React.ReactNode }) {
+export function FilterBar({ filter, onChange, teamIds, extra, on = () => true }: { filter: IssueFilter; onChange: (f: IssueFilter) => void; teamIds: number[]; extra?: React.ReactNode; on?: (field: string) => boolean }) {
   const m = useFilterModel(teamIds)
   const [menu, setMenu] = useState<Anchor | null>(null)
   const [pick, setPick] = useState<{ key: FilterKey; at: Anchor } | null>(null)
@@ -186,7 +186,7 @@ export function FilterBar({ filter, onChange, teamIds, extra }: { filter: IssueF
       {extra}
       {menu && <Menu anchor={menu} width={220} onClose={() => setMenu(null)} items={[
         { heading: 'Filter by' },
-        ...FILTER_META.filter(f => f.key !== 'milestone' || (m.items('milestone').length > 0)).filter(f => f.key !== 'cycle' || m.teams.some(t => t.cycles_enabled))
+        ...FILTER_META.filter(f => f.key !== 'milestone' || (m.items('milestone').length > 0)).filter(f => f.key !== 'cycle' || m.teams.some(t => t.cycles_enabled)).filter(f => on(f.key))
           .map(f => ({ label: f.label, icon: f.icon, checked: f.key === 'blocked' || f.key === 'subscribed' ? m.get(filter, f.key).length > 0 : undefined, onSelect: () => open(f.key, menu) })),
       ]} />}
       {pick && <PickerMenu<V> anchor={pick.at} items={m.items(pick.key)} multi={m.multi(pick.key)} selected={m.get(filter, pick.key)}

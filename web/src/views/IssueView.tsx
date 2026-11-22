@@ -8,7 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { emitChange, useApp, useLive } from '../lib/app-context'
 import {
-  applyPatchLocally, defaultsForGroup, displayOf, fetchIssues, filterIsEmpty, groupIssues, mergeFilters, moveBetweenGroups, orderBetween,
+  applyPatchLocally, defaultsForGroup, displayOf, fetchIssues, fieldOn, fieldsOn, filterIsEmpty, groupIssues, narrowDisplay, mergeFilters, moveBetweenGroups, orderBetween,
   patchIssue, sortIssues, SORT_LABEL, type Group, type Lookups,
 } from '../lib/issues'
 import type { Display, GroupKey, Issue, IssueFilter } from '../lib/types'
@@ -120,7 +120,10 @@ export function IssueView(props: IssueViewProps) {
     setSt({ key: storageKey, display: readJSON<Display>(dKey), filter: readJSON<IssueFilter>(fKey), collapsed: new Set(Array.isArray(c) ? c : []) })
   }
   const urlLayout = params.get('layout')
-  const display = displayOf({ ...defaultDisplay, ...(props.display ?? st.display) })
+  // Fields the teams shown switched off (Team settings → Fields) leave the display.
+  const viewTeamIds = teamIds ?? filter.team_ids ?? []
+  const on = fieldsOn(viewTeamIds.length ? app.teams.filter(t => viewTeamIds.includes(t.id)) : app.teams.filter(t => !t.archived_at))
+  const display = narrowDisplay(displayOf({ ...defaultDisplay, ...(props.display ?? st.display) }), on)
   const userFilter = props.userFilter ?? st.filter
   const changeDisplay = (d: Display) => {
     if (urlLayout) { const p = new URLSearchParams(params); p.delete('layout'); setParams(p, { replace: true }) }
@@ -258,7 +261,7 @@ export function IssueView(props: IssueViewProps) {
   const lastG = useRef(0)
   const targets = (): Issue[] => (selectedIssues.length ? selectedIssues : focusId !== null && byId.get(focusId) ? [byId.get(focusId)!] : [])
   const openPicker = (prop: Prop) => {
-    const list = targets().filter(i => app.canEdit(i.team_id))
+    const list = targets().filter(i => app.canEdit(i.team_id) && fieldOn(app.team(i.team_id), prop))
     if (!list.length) return
     const el = root.current?.querySelector(`[data-issue-id="${focusId ?? list[0].id}"]`)
     const r = el ? rectOf(el) : { x: window.innerWidth / 2 - 130, y: 140, w: 0, h: 0 }
@@ -367,7 +370,6 @@ export function IssueView(props: IssueViewProps) {
   const [saving, setSaving] = useState(false)
   const filtered = !filterIsEmpty(userFilter)
   const multiTeam = tIds.length !== 1
-  const cyclesOn = (tIds.length ? app.teams.filter(t => tIds.includes(t.id)) : app.teams).some(t => t.cycles_enabled)
 
   const row = (r: Row) => (
     <IssueRow key={r.issue.id} issue={r.issue} properties={display.properties} depth={r.depth} showTeam={showTeam}
@@ -482,13 +484,13 @@ export function IssueView(props: IssueViewProps) {
   return (
     <div ref={root} className={`issue-view ${bare ? 'bare' : ''} ${fill ? 'fill' : ''} ${selected.size ? 'selecting' : ''} ${board ? 'is-board' : 'is-list'}`}>
       {!bare && <div className="view-bar iv-bar">
-        <FilterBar filter={userFilter} onChange={changeFilter} teamIds={tIds} />
+        <FilterBar filter={userFilter} onChange={changeFilter} teamIds={tIds} on={on} />
         <span className="spacer" />
         <SearchBox value={userFilter.q || ''} onChange={q => changeFilter({ ...userFilter, q: q || undefined })} />
         {issues && <span className="iv-count" title="Issues shown">{issues.length} issue{issues.length === 1 ? '' : 's'}</span>}
         {toolbarExtra}
         {props.saveView !== false && <button type="button" className="btn ghost sm" onClick={() => setSaving(true)} title="Save these filters and display as a view"><Icon name="layers" size={14} /><span className="hide-mobile">Save view</span></button>}
-        <DisplayButton display={display} onChange={changeDisplay} multiTeam={multiTeam} cyclesOn={cyclesOn} defaults={defaultDisplay} />
+        <DisplayButton display={display} onChange={changeDisplay} multiTeam={multiTeam} on={on} defaults={defaultDisplay} />
       </div>}
       <div className="iv-body">{body}</div>
       {selectedIssues.length > 0 && <BulkBar issues={selectedIssues} total={visible.length} onClear={() => setSelected(new Set())} onSelectAll={() => setSelected(new Set(visible.map(i => i.id)))}

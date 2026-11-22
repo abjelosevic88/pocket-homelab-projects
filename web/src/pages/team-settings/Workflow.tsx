@@ -98,7 +98,7 @@ export function WorkflowTab({ team, admin }: TabProps) {
                   {isDefault && <span className="badge accent" title="New issues start here">Default</span>}
                   {admin && <MenuButton label={`More for ${s.name}`} align="right" className="btn ghost icon-only sm" items={[
                     { label: 'Edit…', icon: 'edit', onSelect: () => setEdit(s) },
-                    ...(['backlog', 'unstarted', 'started'].includes(s.type) ? [{ label: isDefault ? 'Default for new issues' : 'Make default for new issues', icon: 'star', disabled: isDefault, onSelect: () => patchTeam({ default_state_id: s.id }, `New issues start in ${s.name}`) }] : []),
+                    ...(['backlog', 'unstarted', 'started'].includes(s.type) || (s.type === 'triage' && team.triage_enabled) ? [{ label: isDefault ? 'Default for new issues' : 'Make default for new issues', icon: 'star', disabled: isDefault, onSelect: () => patchTeam({ default_state_id: s.id }, `New issues start in ${s.name}`) }] : []),
                     { label: 'Move up', icon: 'arrow-up', disabled: i === 0, onSelect: () => move(s, -1) },
                     { label: 'Move down', icon: 'arrow-down', disabled: i === byType[type].length - 1, onSelect: () => move(s, 1) },
                     'sep',

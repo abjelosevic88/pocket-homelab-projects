@@ -2,7 +2,7 @@
 // selected, and a picker that works for a whole selection (across teams).
 import { useState } from 'react'
 import { useApp } from '../../lib/app-context'
-import { STATE_TYPE_LABEL } from '../../lib/issues'
+import { fieldsOn, STATE_TYPE_LABEL } from '../../lib/issues'
 import { STATE_TYPES, type Issue } from '../../lib/types'
 import { Icon } from '../icons'
 import { StatusIcon } from '../issue-bits'
@@ -52,6 +52,7 @@ export function BulkBar({ issues, onClear, onPatch, onDelete, onSelectAll, total
   const app = useApp()
   const [pick, setPick] = useState<{ prop: Prop; at: Anchor } | null>(null)
   const canCycle = new Set(issues.map(i => i.team_id)).size === 1 && !!app.team(issues[0]?.team_id)?.cycles_enabled
+  const on = fieldsOn([...new Set(issues.map(i => i.team_id))].map(id => app.team(id)).filter(t => !!t))
   const btn = (prop: Prop, icon: string, label: string) => (
     <button type="button" className="bb-btn" onClick={e => setPick({ prop, at: rectOf(e.currentTarget) })} title={label}><Icon name={icon} size={14} /><span className="bb-l">{label}</span></button>
   )
@@ -62,11 +63,11 @@ export function BulkBar({ issues, onClear, onPatch, onDelete, onSelectAll, total
       <span className="bb-sep" />
       {btn('state', 'circle', 'Status')}
       {btn('assignee', 'user', 'Assignee')}
-      {btn('priority', 'bar-chart', 'Priority')}
-      {btn('labels', 'tag', 'Labels')}
+      {on('priority') && btn('priority', 'bar-chart', 'Priority')}
+      {on('labels') && btn('labels', 'tag', 'Labels')}
       {btn('project', 'briefcase', 'Project')}
       {canCycle && btn('cycle', 'cycle', 'Cycle')}
-      {btn('due', 'calendar', 'Due date')}
+      {on('due') && btn('due', 'calendar', 'Due date')}
       <button type="button" className="bb-btn danger" onClick={onDelete} title="Delete (⌫)"><Icon name="trash" size={14} /><span className="bb-l">Delete</span></button>
       <span className="bb-sep" />
       <button type="button" className="bb-btn icon" onClick={onClear} aria-label="Clear the selection" title="Clear the selection (Esc)"><Icon name="x" size={15} /></button>

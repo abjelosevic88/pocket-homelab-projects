@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, upload, V1 } from '../lib/api'
 import { emitChange, useApp } from '../lib/app-context'
-import { estimateLabel, priorityLabel } from '../lib/issues'
+import { estimateLabel, fieldOn, priorityLabel } from '../lib/issues'
 import { shortDate } from '../lib/dates'
 import type { Attachment, Issue, Template } from '../lib/types'
 import { Icon } from './icons'
@@ -55,14 +55,19 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
   const teamDefaultAssignee = (): number | null => {
     const v = team?.default_assignee || 'creator'
     if (v === 'none') return null
-    if (v === 'creator') return team?.role && team.role !== 'guest' ? app.user?.id ?? null : null
+    const creator = team?.role && team.role !== 'guest' ? app.user?.id ?? null : null
+    if (v === 'creator') return creator
+    if (v === 'project_lead') {
+      const lead = app.project(d.project_id)?.lead_id
+      return lead && (!team?.members || team.members.some(m => m.id === lead && m.role !== 'guest')) ? lead : creator
+    }
     const id = Number(v)
     return id > 0 && (!team?.members || team.members.some(m => m.id === id)) ? id : null
   }
   const assigneeTouched = useRef(defaults.assignee_id !== undefined)
   useEffect(() => {
     if (!assigneeTouched.current) setD(x => ({ ...x, assignee_id: teamDefaultAssignee() }))
-  }, [teamId, team?.default_assignee]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [teamId, team?.default_assignee, team?.default_assignee === 'project_lead' ? d.project_id : 0]) // eslint-disable-line react-hooks/exhaustive-deps
   // The project picked last time in this team (unless opened from a project, or picked here already)
   const projectTouched = useRef(defaults.project_id !== undefined)
   useEffect(() => {
@@ -180,14 +185,14 @@ export function CreateIssueModal({ defaults, onClose }: { defaults: IssueDefault
       </div>
       <div className="ci-props">
         <button type="button" className="chip" onClick={open('state')}><StatusIcon state={state} />{state?.name || 'Status'}</button>
-        <button type="button" className="chip" onClick={open('priority')}><PriorityIcon priority={d.priority} />{d.priority ? priorityLabel(d.priority) : 'Priority'}</button>
+        {fieldOn(team, 'priority') && <button type="button" className="chip" onClick={open('priority')}><PriorityIcon priority={d.priority} />{d.priority ? priorityLabel(d.priority) : 'Priority'}</button>}
         <button type="button" className="chip" onClick={open('assignee')}><PersonAvatar person={app.person(d.assignee_id)} size={16} />{d.assignee_id ? personName(app.person(d.assignee_id)) : 'Assignee'}</button>
-        <button type="button" className="chip" onClick={open('labels')}>{d.label_ids.length ? d.label_ids.map(id => { const l = app.label(id); return l ? <LabelPill key={id} name={l.name} color={l.color} /> : null }) : <><Icon name="tag" size={13} />Labels</>}</button>
+        {fieldOn(team, 'labels') && <button type="button" className="chip" onClick={open('labels')}>{d.label_ids.length ? d.label_ids.map(id => { const l = app.label(id); return l ? <LabelPill key={id} name={l.name} color={l.color} /> : null }) : <><Icon name="tag" size={13} />Labels</>}</button>}
         <button type="button" className="chip" onClick={open('project')}>{project ? <><ProjectMark icon={project.icon} color={project.color} size={13} />{project.name}</> : <><Icon name="briefcase" size={13} />Project</>}</button>
-        {project && <button type="button" className="chip" onClick={open('milestone')}><Icon name="diamond" size={12} />{app.milestone(d.milestone_id)?.name || 'Milestone'}</button>}
-        {team?.cycles_enabled && <button type="button" className="chip" onClick={open('cycle')}><Icon name="cycle" size={13} />{cycle ? cycle.name || `Cycle ${cycle.number}` : 'Cycle'}</button>}
-        {team?.estimate_scale !== 'none' && <button type="button" className="chip" onClick={open('estimate')}><Icon name="triangle" size={12} />{d.estimate !== null ? estimateLabel(team?.estimate_scale, d.estimate) : 'Estimate'}</button>}
-        <button type="button" className="chip" onClick={open('due')}><Icon name="calendar" size={13} />{d.due_date ? shortDate(d.due_date) : 'Due date'}</button>
+        {project && fieldOn(team, 'milestone') && <button type="button" className="chip" onClick={open('milestone')}><Icon name="diamond" size={12} />{app.milestone(d.milestone_id)?.name || 'Milestone'}</button>}
+        {fieldOn(team, 'cycle') && <button type="button" className="chip" onClick={open('cycle')}><Icon name="cycle" size={13} />{cycle ? cycle.name || `Cycle ${cycle.number}` : 'Cycle'}</button>}
+        {fieldOn(team, 'estimate') && <button type="button" className="chip" onClick={open('estimate')}><Icon name="triangle" size={12} />{d.estimate !== null ? estimateLabel(team?.estimate_scale, d.estimate) : 'Estimate'}</button>}
+        {fieldOn(team, 'due') && <button type="button" className="chip" onClick={open('due')}><Icon name="calendar" size={13} />{d.due_date ? shortDate(d.due_date) : 'Due date'}</button>}
       </div>
       <div className="ci-foot">
         <button type="button" className="btn ghost sm" onClick={writeWithAI} disabled={ai} title="Pocket AI writes a description with acceptance criteria"><Icon name="sparkles" size={14} />{ai ? 'Writing…' : 'Write with AI'}</button>

@@ -19,11 +19,14 @@ export interface State { id: number; team_id: number; name: string; type: StateT
 export interface Label { id: number; team_id: number; parent_id: number | null; name: string; color: string; description: string; is_group: boolean; position: number; issues: number }
 export interface TeamMember extends Person { role: TeamRole; joined_at: string }
 
+/** Issue fields a team can switch off (Team settings → Fields). */
+export type HideableField = 'priority' | 'labels' | 'milestone' | 'due'
+
 export interface Team {
   id: number; key: string; name: string; description: string; color: string; icon: string; issue_seq: number
   triage_enabled: boolean; cycles_enabled: boolean; cycle_weeks: number; cycle_start_day: number; cycle_cooldown_weeks: number
   cycle_upcoming: number; cycle_rollover: boolean; estimate_scale: EstimateScale; auto_archive_months: number
-  default_state_id: number | null; default_assignee?: string; notes_folder?: string; created_by: number | null; created_at: string; updated_at: string; archived_at: string | null
+  default_state_id: number | null; default_assignee?: string; hidden_fields?: HideableField[]; notes_folder?: string; created_by: number | null; created_at: string; updated_at: string; archived_at: string | null
   role?: TeamRole; members?: TeamMember[]; states?: State[]; labels?: Label[]
   counts?: { open: number; started: number; triage: number; members: number; projects: number }
 }

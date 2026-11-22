@@ -7,11 +7,11 @@ import { Icon } from '../icons'
 import { Select } from '../Select'
 import { type Anchor, Popover, Segmented, Switch, rectOf } from '../ui'
 
-export function DisplayButton({ display, onChange, multiTeam, cyclesOn, defaults }: { display: ReturnType<typeof displayOf>; onChange: (d: Display) => void; multiTeam: boolean; cyclesOn: boolean; defaults?: Display }) {
+export function DisplayButton({ display, onChange, multiTeam, on = () => true, defaults }: { display: ReturnType<typeof displayOf>; onChange: (d: Display) => void; multiTeam: boolean; on?: (field: string) => boolean; defaults?: Display }) {
   const [at, setAt] = useState<Anchor | null>(null)
   const set = (p: Display) => onChange({ ...display, ...p })
-  const groups: GroupKey[] = ['state', 'assignee', 'priority', 'project', 'label', ...(cyclesOn ? ['cycle' as const] : []), 'milestone', ...(multiTeam ? ['team' as const] : []), 'none']
-  const sorts: SortKey[] = ['manual', 'priority', 'updated', 'created', 'due', 'title', 'estimate', 'identifier']
+  const groups = (['state', 'assignee', 'priority', 'project', 'label', 'cycle', 'milestone', ...(multiTeam ? ['team' as const] : []), 'none'] as GroupKey[]).filter(g => on(g))
+  const sorts = (['manual', 'priority', 'updated', 'created', 'due', 'title', 'estimate', 'identifier'] as SortKey[]).filter(s => on(s))
   const board = display.layout === 'board'
   const props = display.properties
   const toggleProp = (p: string) => set({ properties: props.includes(p) ? props.filter(x => x !== p) : [...props, p] })
@@ -47,7 +47,7 @@ export function DisplayButton({ display, onChange, multiTeam, cyclesOn, defaults
         <div className="dp-section">
           <div className="dp-label">Display properties</div>
           <div className="dp-props">
-            {ALL_PROPERTIES.map(p => <button key={p} type="button" className={`dp-prop ${props.includes(p) ? 'on' : ''}`} aria-pressed={props.includes(p)} onClick={() => toggleProp(p)}>{PROPERTY_LABEL[p] || p}</button>)}
+            {ALL_PROPERTIES.filter(p => on(p)).map(p => <button key={p} type="button" className={`dp-prop ${props.includes(p) ? 'on' : ''}`} aria-pressed={props.includes(p)} onClick={() => toggleProp(p)}>{PROPERTY_LABEL[p] || p}</button>)}
           </div>
         </div>
         {changed && <div className="dp-foot"><button type="button" className="btn ghost sm" onClick={() => onChange({ ...DEFAULT_DISPLAY, ...defaults })}><Icon name="undo" size={14} />Reset to default</button></div>}

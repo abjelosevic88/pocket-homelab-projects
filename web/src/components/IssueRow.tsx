@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
 import { emitChange, useApp } from '../lib/app-context'
 import { prefetchOnHover, rememberIssues } from '../lib/issue-cache'
-import { estimateLabel, isDone, patchIssue } from '../lib/issues'
+import { estimateLabel, fieldOn, isDone, patchIssue } from '../lib/issues'
 import { ago } from '../lib/format'
-import type { Issue } from '../lib/types'
+import type { Issue, Team } from '../lib/types'
 import { Icon } from './icons'
 import { DueChip, PersonAvatar, PriorityIcon, ProjectMark, StatusIcon, useStateProgress } from './issue-bits'
 import { LabelChips, PropertyPicker, type Prop } from './pickers'
@@ -36,17 +36,17 @@ export function useIssuePatch(onUpdated?: (is: Issue) => void) {
 }
 
 /** The context menu of an issue. */
-export function issueMenu(issue: Issue, ctx: { openProp: (p: Prop) => void; navigate: (to: string) => void; toast: ReturnType<typeof useToast>['toast']; canEdit: boolean; onDeleted?: () => void; base: string }): MenuItem[] {
+export function issueMenu(issue: Issue, ctx: { team?: Team; openProp: (p: Prop) => void; navigate: (to: string) => void; toast: ReturnType<typeof useToast>['toast']; canEdit: boolean; onDeleted?: () => void; base: string }): MenuItem[] {
   const url = `${ctx.base}/issue/${issue.identifier}`
   const edit: MenuItem[] = ctx.canEdit ? [
     { label: 'Status', icon: 'circle', hint: 'S', onSelect: () => ctx.openProp('state') },
     { label: 'Assignee', icon: 'user', hint: 'A', onSelect: () => ctx.openProp('assignee') },
-    { label: 'Priority', icon: 'bar-chart', hint: 'P', onSelect: () => ctx.openProp('priority') },
-    { label: 'Labels', icon: 'tag', hint: 'L', onSelect: () => ctx.openProp('labels') },
+    ...(fieldOn(ctx.team, 'priority') ? [{ label: 'Priority', icon: 'bar-chart', hint: 'P', onSelect: () => ctx.openProp('priority') }] : []),
+    ...(fieldOn(ctx.team, 'labels') ? [{ label: 'Labels', icon: 'tag', hint: 'L', onSelect: () => ctx.openProp('labels') }] : []),
     { label: 'Project', icon: 'briefcase', onSelect: () => ctx.openProp('project') },
-    { label: 'Cycle', icon: 'cycle', onSelect: () => ctx.openProp('cycle') },
-    { label: 'Due date', icon: 'calendar', hint: 'D', onSelect: () => ctx.openProp('due') },
-    { label: 'Estimate', icon: 'triangle', hint: 'E', onSelect: () => ctx.openProp('estimate') },
+    ...(fieldOn(ctx.team, 'cycle') ? [{ label: 'Cycle', icon: 'cycle', onSelect: () => ctx.openProp('cycle') }] : []),
+    ...(fieldOn(ctx.team, 'due') ? [{ label: 'Due date', icon: 'calendar', hint: 'D', onSelect: () => ctx.openProp('due') }] : []),
+    ...(fieldOn(ctx.team, 'estimate') ? [{ label: 'Estimate', icon: 'triangle', hint: 'E', onSelect: () => ctx.openProp('estimate') }] : []),
     'sep',
   ] : []
   return [
@@ -79,7 +79,7 @@ export function useIssueActions(issue: Issue, onUpdated?: (is: Issue) => void) {
   const [prop, setProp] = useState<{ p: Prop; at: Anchor } | null>(null)
   const canEdit = app.canEdit(issue.team_id)
   const openProp = (p: Prop, at?: Anchor) => setProp({ p, at: at || menu || { x: window.innerWidth / 2 - 130, y: 120, w: 0, h: 0 } })
-  const items = issueMenu(issue, { openProp: p => openProp(p, menu || undefined), navigate, toast, canEdit, base: window.location.origin })
+  const items = issueMenu(issue, { team: app.team(issue.team_id), openProp: p => openProp(p, menu || undefined), navigate, toast, canEdit, base: window.location.origin })
   // The menu and pickers are portals, but React still bubbles their events to the
   // row/card that renders them — without this, picking a status opens the issue.
   const stop = (e: React.SyntheticEvent) => e.stopPropagation()
@@ -105,7 +105,7 @@ export function IssueRow({ issue, properties, selected, focused, onToggleSelect,
   const state = app.state(issue.state_id)
   const project = app.project(issue.project_id)
   const team = app.team(issue.team_id)
-  const has = (p: string) => properties.includes(p)
+  const has = (p: string) => properties.includes(p) && fieldOn(team, p)
   const done = isDone(issue.state_type)
   const click = (p: Prop) => (e: React.MouseEvent) => { e.stopPropagation(); if (act.canEdit) act.openProp(p, rectOf(e.currentTarget)) }
   const open = () => { rememberIssues([issue]); if (onOpen) onOpen(issue); else navigate(`/issue/${issue.identifier}`) }

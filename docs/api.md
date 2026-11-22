@@ -25,7 +25,7 @@ including former identifiers after a move or a key change). Shapes are in `web/s
 |---|---|
 | `GET /teams` · `POST /teams` | `{name, key?, preset: software\|kanban\|household\|client\|personal, icon, color, description, cycles_enabled, triage_enabled, members: [{user_id\|email, role}]}` |
 | `GET /team-presets` | the presets with their states |
-| `GET /teams/{id\|KEY}` · `PATCH /teams/{…}` | settings (admin): key, name, description, color, icon, triage_enabled, cycles_enabled, cycle_weeks, cycle_start_day (0–6), cycle_cooldown_weeks, cycle_upcoming, cycle_rollover, estimate_scale (none/linear/fibonacci/exponential/tshirt), auto_archive_months, default_state_id, archived |
+| `GET /teams/{id\|KEY}` · `PATCH /teams/{…}` | settings (admin): key, name, description, color, icon, triage_enabled, cycles_enabled, cycle_weeks, cycle_start_day (0–6), cycle_cooldown_weeks, cycle_upcoming, cycle_rollover, estimate_scale (none/linear/fibonacci/exponential/tshirt), auto_archive_months, default_state_id, default_assignee (creator/project_lead/none/a member's id), hidden_fields (any of priority, labels, milestone, due: switched off in the UI, values kept), archived |
 | `DELETE /teams/{…}?confirm=KEY` | deletes the team and every issue in it |
 | `POST /teams/{…}/leave` | |
 | `GET/POST /teams/{…}/members` · `PATCH/DELETE /teams/{…}/members/{uid}` | roles `admin`, `member`, `guest` (read + comment); a team keeps one admin |

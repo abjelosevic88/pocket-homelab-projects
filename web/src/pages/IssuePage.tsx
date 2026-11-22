@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, V1 } from '../lib/api'
 import { emitChange, useApp, useLive } from '../lib/app-context'
-import { estimateLabel, isDone, parseMinutes, patchIssue, priorityLabel, STATE_TYPE_LABEL } from '../lib/issues'
+import { estimateLabel, fieldOn, isDone, parseMinutes, patchIssue, priorityLabel, STATE_TYPE_LABEL } from '../lib/issues'
 import { Markdown, MarkdownLinks, toggleCheckbox } from '../lib/markdown'
 import { addDays, fmtMinutes, shortDate, today } from '../lib/dates'
 import { ago } from '../lib/format'
@@ -157,7 +157,7 @@ export default function IssuePage() {
       if (e.metaKey || e.ctrlKey || e.altKey || keysBusy(e)) return
       const map: Record<string, SideProp> = { s: 'state', a: 'assignee', p: 'priority', l: 'labels', d: 'due', e: 'estimate' }
       const k = e.key.toLowerCase()
-      if (map[k]) { e.preventDefault(); openProp(map[k]); return }
+      if (map[k] && fieldOn(d.team, map[k])) { e.preventDefault(); openProp(map[k]); return }
       if (k === 'm') { e.preventDefault(); activity.current?.focusComposer(); return }
       if (e.key === 'Escape') { e.preventDefault(); if (window.history.length > 1) navigate(-1); else navigate(`/team/${d.team.key}/issues`) }
     }
@@ -407,14 +407,14 @@ function Properties({ issue, canEdit, onOpen }: { issue: IssueDetail; canEdit: b
   return (
     <div className="ip-props">
       {row('state', 'Status', <><StatusIcon state={state} progress={progress(state)} />{state?.name}</>)}
-      {row('priority', 'Priority', <><PriorityIcon priority={issue.priority} />{priorityLabel(issue.priority)}</>, !issue.priority)}
+      {fieldOn(team, 'priority') && row('priority', 'Priority', <><PriorityIcon priority={issue.priority} />{priorityLabel(issue.priority)}</>, !issue.priority)}
       {row('assignee', 'Assignee', <><PersonAvatar person={assignee} size={20} />{assignee ? personName(assignee) : 'Unassigned'}</>, !assignee)}
-      {row('labels', 'Labels', issue.label_ids.length ? issue.label_ids.map(id => { const l = app.label(id); return l ? <LabelPill key={id} name={l.name} color={l.color} /> : null }) : <><Icon name="tag" size={14} />Add labels</>, !issue.label_ids.length, 'labels')}
+      {fieldOn(team, 'labels') && row('labels', 'Labels', issue.label_ids.length ? issue.label_ids.map(id => { const l = app.label(id); return l ? <LabelPill key={id} name={l.name} color={l.color} /> : null }) : <><Icon name="tag" size={14} />Add labels</>, !issue.label_ids.length, 'labels')}
       {row('project', 'Project', project ? <><ProjectMark icon={project.icon} color={project.color} size={15} /><span className="ellipsis">{project.name}</span></> : <><Icon name="briefcase" size={14} />No project</>, !project)}
-      {project && row('milestone', 'Milestone', ms ? <><Icon name="diamond" size={13} />{ms.name}</> : <><Icon name="diamond" size={13} />No milestone</>, !ms)}
-      {team?.cycles_enabled && row('cycle', 'Cycle', cycle ? <><Icon name="cycle" size={14} />{cycle.name || `Cycle ${cycle.number}`}{cycle.status === 'current' && <span className="faint xsmall">current</span>}</> : <><Icon name="cycle" size={14} />No cycle</>, !cycle)}
-      {team && team.estimate_scale !== 'none' && row('estimate', 'Estimate', <><Icon name="triangle" size={13} />{issue.estimate !== null ? estimateLabel(team.estimate_scale, issue.estimate) + (team.estimate_scale !== 'tshirt' ? ' points' : '') : 'No estimate'}</>, issue.estimate === null)}
-      {row('due', 'Due date', issue.due_date ? <DueChip due={issue.due_date} done={isDone(issue.state_type)} /> : <><Icon name="calendar" size={14} />No due date</>, !issue.due_date)}
+      {project && fieldOn(team, 'milestone') && row('milestone', 'Milestone', ms ? <><Icon name="diamond" size={13} />{ms.name}</> : <><Icon name="diamond" size={13} />No milestone</>, !ms)}
+      {fieldOn(team, 'cycle') && row('cycle', 'Cycle', cycle ? <><Icon name="cycle" size={14} />{cycle.name || `Cycle ${cycle.number}`}{cycle.status === 'current' && <span className="faint xsmall">current</span>}</> : <><Icon name="cycle" size={14} />No cycle</>, !cycle)}
+      {team && fieldOn(team, 'estimate') && row('estimate', 'Estimate', <><Icon name="triangle" size={13} />{issue.estimate !== null ? estimateLabel(team.estimate_scale, issue.estimate) + (team.estimate_scale !== 'tshirt' ? ' points' : '') : 'No estimate'}</>, issue.estimate === null)}
+      {fieldOn(team, 'due') && row('due', 'Due date', issue.due_date ? <DueChip due={issue.due_date} done={isDone(issue.state_type)} /> : <><Icon name="calendar" size={14} />No due date</>, !issue.due_date)}
       {row('parent', 'Parent', issue.parent ? <><StatusIcon state={app.state(issue.parent.state_id)} size={13} /><span className="ellipsis">{issue.parent.identifier} {issue.parent.title}</span></> : <><Icon name="subtasks" size={14} />No parent</>, !issue.parent)}
     </div>
   )
@@ -426,13 +426,13 @@ function MobileChips({ issue, canEdit, onOpen }: { issue: IssueDetail; canEdit: 
   return (
     <div className="ip-chips">
       {chip('state', <><StatusIcon state={state} progress={progress(state)} />{state?.name}</>)}
-      {chip('priority', <><PriorityIcon priority={issue.priority} />{issue.priority ? priorityLabel(issue.priority) : 'Priority'}</>, !issue.priority)}
+      {fieldOn(team, 'priority') && chip('priority', <><PriorityIcon priority={issue.priority} />{issue.priority ? priorityLabel(issue.priority) : 'Priority'}</>, !issue.priority)}
       {chip('assignee', <><PersonAvatar person={assignee} size={16} />{assignee ? personName(assignee) : 'Assignee'}</>, !assignee)}
-      {chip('labels', issue.label_ids.length ? issue.label_ids.map(id => { const l = app.label(id); return l ? <LabelPill key={id} name={l.name} color={l.color} /> : null }) : <><Icon name="tag" size={13} />Labels</>, !issue.label_ids.length)}
+      {fieldOn(team, 'labels') && chip('labels', issue.label_ids.length ? issue.label_ids.map(id => { const l = app.label(id); return l ? <LabelPill key={id} name={l.name} color={l.color} /> : null }) : <><Icon name="tag" size={13} />Labels</>, !issue.label_ids.length)}
       {chip('project', project ? <><ProjectMark icon={project.icon} color={project.color} size={13} />{project.name}</> : <><Icon name="briefcase" size={13} />Project</>, !project)}
-      {team?.cycles_enabled && chip('cycle', <><Icon name="cycle" size={13} />{cycle ? cycle.name || `Cycle ${cycle.number}` : 'Cycle'}</>, !cycle)}
-      {team && team.estimate_scale !== 'none' && chip('estimate', <><Icon name="triangle" size={12} />{issue.estimate !== null ? estimateLabel(team.estimate_scale, issue.estimate) : 'Estimate'}</>, issue.estimate === null)}
-      {chip('due', <><Icon name="calendar" size={13} />{issue.due_date ? shortDate(issue.due_date) : 'Due date'}</>, !issue.due_date)}
+      {fieldOn(team, 'cycle') && chip('cycle', <><Icon name="cycle" size={13} />{cycle ? cycle.name || `Cycle ${cycle.number}` : 'Cycle'}</>, !cycle)}
+      {team && fieldOn(team, 'estimate') && chip('estimate', <><Icon name="triangle" size={12} />{issue.estimate !== null ? estimateLabel(team.estimate_scale, issue.estimate) : 'Estimate'}</>, issue.estimate === null)}
+      {fieldOn(team, 'due') && chip('due', <><Icon name="calendar" size={13} />{issue.due_date ? shortDate(issue.due_date) : 'Due date'}</>, !issue.due_date)}
     </div>
   )
 }

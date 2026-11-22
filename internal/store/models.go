@@ -36,29 +36,31 @@ type APIToken struct {
 
 // Team owns issues, a workflow, labels, cycles and templates.
 type Team struct {
-	ID                 int64   `json:"id"`
-	Key                string  `json:"key"`
-	Name               string  `json:"name"`
-	Description        string  `json:"description"`
-	Color              string  `json:"color"`
-	Icon               string  `json:"icon"`
-	IssueSeq           int64   `json:"issue_seq"`
-	TriageEnabled      bool    `json:"triage_enabled"`
-	CyclesEnabled      bool    `json:"cycles_enabled"`
-	CycleWeeks         int     `json:"cycle_weeks"`
-	CycleStartDay      int     `json:"cycle_start_day"`
-	CycleCooldownWeeks int     `json:"cycle_cooldown_weeks"`
-	CycleUpcoming      int     `json:"cycle_upcoming"`
-	CycleRollover      bool    `json:"cycle_rollover"`
-	EstimateScale      string  `json:"estimate_scale"`
-	AutoArchiveMonths  int     `json:"auto_archive_months"`
-	DefaultStateID     *int64  `json:"default_state_id"`
-	DefaultAssignee    string  `json:"default_assignee"` // creator | none | a member's user id
-	GitSecret          string  `json:"-"`
-	CreatedBy          *int64  `json:"created_by"`
-	CreatedAt          string  `json:"created_at"`
-	UpdatedAt          string  `json:"updated_at"`
-	ArchivedAt         *string `json:"archived_at"`
+	ID                 int64  `json:"id"`
+	Key                string `json:"key"`
+	Name               string `json:"name"`
+	Description        string `json:"description"`
+	Color              string `json:"color"`
+	Icon               string `json:"icon"`
+	IssueSeq           int64  `json:"issue_seq"`
+	TriageEnabled      bool   `json:"triage_enabled"`
+	CyclesEnabled      bool   `json:"cycles_enabled"`
+	CycleWeeks         int    `json:"cycle_weeks"`
+	CycleStartDay      int    `json:"cycle_start_day"`
+	CycleCooldownWeeks int    `json:"cycle_cooldown_weeks"`
+	CycleUpcoming      int    `json:"cycle_upcoming"`
+	CycleRollover      bool   `json:"cycle_rollover"`
+	EstimateScale      string `json:"estimate_scale"`
+	AutoArchiveMonths  int    `json:"auto_archive_months"`
+	DefaultStateID     *int64 `json:"default_state_id"`
+	DefaultAssignee    string `json:"default_assignee"` // creator | project_lead | none | a member's user id
+	// Issue fields the team switched off (priority, labels, milestone, due).
+	HiddenFields []string `json:"hidden_fields"`
+	GitSecret    string   `json:"-"`
+	CreatedBy    *int64   `json:"created_by"`
+	CreatedAt    string   `json:"created_at"`
+	UpdatedAt    string   `json:"updated_at"`
+	ArchivedAt   *string  `json:"archived_at"`
 
 	// Filled for the person asking.
 	Role    string         `json:"role,omitempty"`

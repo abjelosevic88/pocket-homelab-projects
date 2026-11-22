@@ -13,19 +13,58 @@ var ErrForbidden = errors.New("forbidden")
 
 const teamCols = `id, key, name, description, color, icon, issue_seq, triage_enabled, cycles_enabled, cycle_weeks, cycle_start_day,
 	cycle_cooldown_weeks, cycle_upcoming, cycle_rollover, estimate_scale, auto_archive_months, default_state_id, git_secret,
-	created_by, created_at, updated_at, archived_at, default_assignee`
+	created_by, created_at, updated_at, archived_at, default_assignee, hidden_fields`
 
 func scanTeam(row interface{ Scan(...any) error }) (*Team, error) {
 	var t Team
 	var def, by sql.NullInt64
 	var archived sql.NullString
+	var hidden string
 	if err := row.Scan(&t.ID, &t.Key, &t.Name, &t.Description, &t.Color, &t.Icon, &t.IssueSeq, &t.TriageEnabled, &t.CyclesEnabled,
 		&t.CycleWeeks, &t.CycleStartDay, &t.CycleCooldownWeeks, &t.CycleUpcoming, &t.CycleRollover, &t.EstimateScale,
-		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, &t.DefaultAssignee); err != nil {
+		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, &t.DefaultAssignee, &hidden); err != nil {
 		return nil, notFound(err)
 	}
 	t.DefaultStateID, t.CreatedBy, t.ArchivedAt = nullI64(def), nullI64(by), nullStr(archived)
+	t.HiddenFields = SplitFields(hidden)
 	return &t, nil
+}
+
+// HideableFields are the issue fields a team can switch off (Team settings →
+// Fields). Cycles and estimates have their own switches (cycles_enabled,
+// estimate_scale "none").
+var HideableFields = []string{"priority", "labels", "milestone", "due"}
+
+// SplitFields reads a stored comma list of hidden fields, keeping only known
+// ones in HideableFields order.
+func SplitFields(v string) []string {
+	out := []string{}
+	have := map[string]bool{}
+	for _, f := range strings.Split(v, ",") {
+		have[strings.TrimSpace(f)] = true
+	}
+	for _, f := range HideableFields {
+		if have[f] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// FieldOn reports whether the team shows an issue field.
+func (t *Team) FieldOn(field string) bool {
+	switch field {
+	case "cycle":
+		return t.CyclesEnabled
+	case "estimate":
+		return t.EstimateScale != "" && t.EstimateScale != "none"
+	}
+	for _, f := range t.HiddenFields {
+		if f == field {
+			return false
+		}
+	}
+	return true
 }
 
 // TeamKeyRe is what a team key may look like (letters and digits, 1–7, starting with a letter).
@@ -100,12 +139,14 @@ func scanTeamRole(rows *sql.Rows, role *string) (*Team, error) {
 	var t Team
 	var def, by sql.NullInt64
 	var archived sql.NullString
+	var hidden string
 	if err := rows.Scan(&t.ID, &t.Key, &t.Name, &t.Description, &t.Color, &t.Icon, &t.IssueSeq, &t.TriageEnabled, &t.CyclesEnabled,
 		&t.CycleWeeks, &t.CycleStartDay, &t.CycleCooldownWeeks, &t.CycleUpcoming, &t.CycleRollover, &t.EstimateScale,
-		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, &t.DefaultAssignee, role); err != nil {
+		&t.AutoArchiveMonths, &def, &t.GitSecret, &by, &t.CreatedAt, &t.UpdatedAt, &archived, &t.DefaultAssignee, &hidden, role); err != nil {
 		return nil, err
 	}
 	t.DefaultStateID, t.CreatedBy, t.ArchivedAt = nullI64(def), nullI64(by), nullStr(archived)
+	t.HiddenFields = SplitFields(hidden)
 	return &t, nil
 }
 
@@ -295,10 +336,10 @@ func (s *Store) UpdateTeam(ctx context.Context, t *Team) error {
 	}
 	_, err := s.DB.ExecContext(ctx, `UPDATE teams SET key = ?, name = ?, description = ?, color = ?, icon = ?, triage_enabled = ?, cycles_enabled = ?,
 		cycle_weeks = ?, cycle_start_day = ?, cycle_cooldown_weeks = ?, cycle_upcoming = ?, cycle_rollover = ?, estimate_scale = ?,
-		auto_archive_months = ?, default_state_id = ?, default_assignee = ?, archived_at = ?, updated_at = ? WHERE id = ?`,
+		auto_archive_months = ?, default_state_id = ?, default_assignee = ?, hidden_fields = ?, archived_at = ?, updated_at = ? WHERE id = ?`,
 		t.Key, t.Name, t.Description, t.Color, t.Icon, t.TriageEnabled, t.CyclesEnabled, t.CycleWeeks, t.CycleStartDay,
 		t.CycleCooldownWeeks, t.CycleUpcoming, t.CycleRollover, t.EstimateScale, t.AutoArchiveMonths, ptrArg(t.DefaultStateID),
-		firstNonEmptyStr(t.DefaultAssignee, "creator"), t.ArchivedAt, Now(), t.ID)
+		firstNonEmptyStr(t.DefaultAssignee, "creator"), strings.Join(t.HiddenFields, ","), t.ArchivedAt, Now(), t.ID)
 	return conflict(err)
 }
 

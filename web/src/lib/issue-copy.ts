@@ -4,7 +4,7 @@
 // who wrote what and when, so the assistant needs nothing else to follow it.
 import { api, V1 } from './api'
 import { useApp } from './app-context'
-import { estimateLabel, priorityLabel } from './issues'
+import { estimateLabel, fieldOn, priorityLabel } from './issues'
 import type { Attachment, Comment, IssueDetail } from './types'
 import { personName } from '../components/issue-bits'
 import { copyText } from '../components/ui'
@@ -49,7 +49,8 @@ export function issueForAI(d: IssueDetail, app: App, noteText: Record<number, st
     ['Completed', day(d.completed_at)],
     ['Canceled', day(d.canceled_at)],
   ]
-  for (const [k, v] of props) if (v) out.push(`- **${k}:** ${v}`)
+  const field: Record<string, string> = { Priority: 'priority', Milestone: 'milestone', Cycle: 'cycle', Labels: 'labels', Estimate: 'estimate', Due: 'due' }
+  for (const [k, v] of props) if (v && (!field[k] || fieldOn(team, field[k]))) out.push(`- **${k}:** ${v}`)
 
   out.push('', '## Description', '', (d.description || '').trim() || '_No description._')
 

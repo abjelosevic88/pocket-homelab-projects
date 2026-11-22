@@ -5,7 +5,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../lib/app-context'
 import { prefetchOnHover, rememberIssues } from '../../lib/issue-cache'
-import { estimateLabel, isDone } from '../../lib/issues'
+import { estimateLabel, fieldOn, isDone } from '../../lib/issues'
 import type { GroupKey, Issue } from '../../lib/types'
 import { Icon } from '../icons'
 import { DueChip, PersonAvatar, PriorityIcon, ProjectMark, ProgressRing, StatusIcon, useStateProgress } from '../issue-bits'
@@ -26,7 +26,7 @@ export function IssueCard({ issue, properties, groupBy, selected, focused, onTog
   const state = app.state(issue.state_id)
   const team = app.team(issue.team_id)
   const project = app.project(issue.project_id)
-  const has = (p: string) => properties.includes(p)
+  const has = (p: string) => properties.includes(p) && fieldOn(team, p)
   const done = isDone(issue.state_type)
   const click = (p: Prop) => (e: React.MouseEvent) => { e.stopPropagation(); if (act.canEdit) act.openProp(p, rectOf(e.currentTarget)) }
   const assignee = app.person(issue.assignee_id)

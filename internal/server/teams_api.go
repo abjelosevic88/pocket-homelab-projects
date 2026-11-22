@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -89,24 +90,25 @@ func (s *Server) handleTeamPresets(w http.ResponseWriter, r *http.Request) {
 }
 
 type teamInput struct {
-	Key                *string `json:"key"`
-	Name               *string `json:"name"`
-	Description        *string `json:"description"`
-	Color              *string `json:"color"`
-	Icon               *string `json:"icon"`
-	Preset             string  `json:"preset"`
-	TriageEnabled      *bool   `json:"triage_enabled"`
-	CyclesEnabled      *bool   `json:"cycles_enabled"`
-	CycleWeeks         *int    `json:"cycle_weeks"`
-	CycleStartDay      *int    `json:"cycle_start_day"`
-	CycleCooldownWeeks *int    `json:"cycle_cooldown_weeks"`
-	CycleUpcoming      *int    `json:"cycle_upcoming"`
-	CycleRollover      *bool   `json:"cycle_rollover"`
-	EstimateScale      *string `json:"estimate_scale"`
-	AutoArchiveMonths  *int    `json:"auto_archive_months"`
-	DefaultStateID     *int64  `json:"default_state_id"`
-	DefaultAssignee    *string `json:"default_assignee"` // creator | none | a member's user id
-	Archived           *bool   `json:"archived"`
+	Key                *string   `json:"key"`
+	Name               *string   `json:"name"`
+	Description        *string   `json:"description"`
+	Color              *string   `json:"color"`
+	Icon               *string   `json:"icon"`
+	Preset             string    `json:"preset"`
+	TriageEnabled      *bool     `json:"triage_enabled"`
+	CyclesEnabled      *bool     `json:"cycles_enabled"`
+	CycleWeeks         *int      `json:"cycle_weeks"`
+	CycleStartDay      *int      `json:"cycle_start_day"`
+	CycleCooldownWeeks *int      `json:"cycle_cooldown_weeks"`
+	CycleUpcoming      *int      `json:"cycle_upcoming"`
+	CycleRollover      *bool     `json:"cycle_rollover"`
+	EstimateScale      *string   `json:"estimate_scale"`
+	AutoArchiveMonths  *int      `json:"auto_archive_months"`
+	DefaultStateID     *int64    `json:"default_state_id"`
+	DefaultAssignee    *string   `json:"default_assignee"` // creator | project_lead | none | a member's user id
+	HiddenFields       *[]string `json:"hidden_fields"`    // priority, labels, milestone, due
+	Archived           *bool     `json:"archived"`
 	Members            []struct {
 		UserID int64  `json:"user_id"`
 		Email  string `json:"email"`
@@ -164,6 +166,14 @@ func (in teamInput) apply(t *store.Team) error {
 		default:
 			return badRequest("estimate_scale is none, linear, fibonacci, exponential or tshirt")
 		}
+	}
+	if in.HiddenFields != nil {
+		for _, f := range *in.HiddenFields {
+			if !slices.Contains(store.HideableFields, f) {
+				return badRequest("hidden_fields holds priority, labels, milestone or due")
+			}
+		}
+		t.HiddenFields = store.SplitFields(strings.Join(*in.HiddenFields, ","))
 	}
 	if in.AutoArchiveMonths != nil {
 		t.AutoArchiveMonths = max(0, min(*in.AutoArchiveMonths, 24))
@@ -315,11 +325,11 @@ func (s *Server) handlePatchTeam(w http.ResponseWriter, r *http.Request) {
 	if in.DefaultAssignee != nil {
 		v := strings.TrimSpace(*in.DefaultAssignee)
 		switch v {
-		case "creator", "none":
+		case "creator", "project_lead", "none":
 		default:
 			id, err := strconv.ParseInt(v, 10, 64)
 			if err != nil || id <= 0 || s.store.TeamRole(ctx, t.ID, id) == "" {
-				writeErr(w, http.StatusBadRequest, "the default assignee is creator, none or a member of the team")
+				writeErr(w, http.StatusBadRequest, "the default assignee is creator, project_lead, none or a member of the team")
 				return
 			}
 		}

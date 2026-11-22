@@ -1,6 +1,6 @@
 // Helpers shared by every issue view: priorities, estimates, grouping, sorting, filters in the URL.
 import { api, V1 } from './api'
-import type { Display, GroupKey, Issue, IssueFilter, Person, SortKey, State, StateType, Team } from './types'
+import type { Display, GroupKey, HideableField, Issue, IssueFilter, Person, SortKey, State, StateType, Team } from './types'
 import { rememberIssues } from './issue-cache'
 
 export const PRIORITIES = [
@@ -30,6 +30,44 @@ export function estimateLabel(scale: Team['estimate_scale'] | undefined, v: numb
   if (v === null || v === undefined) return ''
   if (scale === 'tshirt') return estimateOptions('tshirt').find(o => o.value === v)?.label || String(v)
   return String(v)
+}
+
+/** The issue fields a team can switch off, in settings order. Cycle and estimate
+ *  follow the team's own switches (cycles on, an estimate scale). */
+export const HIDEABLE_FIELDS: { key: HideableField; label: string; icon: string; help: string }[] = [
+  { key: 'priority', label: 'Priority', icon: 'bar-chart', help: 'Urgent, high, medium, low. Without it, drag issues into the order they should be done.' },
+  { key: 'labels', label: 'Labels', icon: 'tag', help: 'Coloured tags on issues.' },
+  { key: 'milestone', label: 'Milestone', icon: 'diamond', help: 'The project milestone an issue belongs to.' },
+  { key: 'due', label: 'Due date', icon: 'calendar', help: 'The day an issue should be done by.' },
+]
+
+/** Does a team show an issue field? Takes field, property, group, sort, filter
+ *  or picker names (label/labels, due, cycle, estimate…); anything else is
+ *  always on. No team (yet) = on. */
+export function fieldOn(team: Team | undefined | null, name: string): boolean {
+  if (!team) return true
+  const f = name === 'label' ? 'labels' : name
+  if (f === 'cycle') return team.cycles_enabled
+  if (f === 'estimate') return !!team.estimate_scale && team.estimate_scale !== 'none'
+  return !(team.hidden_fields || []).includes(f as HideableField)
+}
+
+/** A field shows in a view spanning several teams when any of them uses it. */
+export function fieldsOn(teams: Team[]): (name: string) => boolean {
+  return name => !teams.length || teams.some(t => fieldOn(t, name))
+}
+
+/** The display with switched-off fields taken out: no column, grouping or
+ *  ordering by them (the saved choice comes back when the field does). */
+export function narrowDisplay<D extends Display>(d: D, on: (name: string) => boolean): D {
+  const ok = (g: GroupKey | undefined) => !g || g === 'none' || on(g)
+  return {
+    ...d,
+    group: ok(d.group) ? d.group : 'state',
+    sub_group: ok(d.sub_group) ? d.sub_group : 'none',
+    sort: d.sort && on(d.sort) ? d.sort : 'manual',
+    properties: (d.properties || []).filter(p => on(p)),
+  }
 }
 
 export const GROUP_LABEL: Record<GroupKey, string> = { none: 'No grouping', state: 'Status', assignee: 'Assignee', priority: 'Priority', project: 'Project', cycle: 'Cycle', label: 'Label', milestone: 'Milestone', team: 'Team' }
