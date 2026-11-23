@@ -59,6 +59,7 @@ var linkRoutes = []linkRoute{
 	{"POST", regexp.MustCompile(`^/api/v1/projects/[0-9]+/updates$`), "projects:write"},
 	{"POST", regexp.MustCompile(`^/api/v1/teams/[A-Za-z0-9-]+/memory$`), "projects:write"},
 	{"POST", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+/pull-requests$`), "projects:write"},
+	{"POST", regexp.MustCompile(`^/api/v1/issues/[A-Za-z0-9-]+/relations$`), "projects:write"},
 	// the worklog contract (worklog.go; docs/worklog.md in pocket-homelab-time)
 	{"GET", regexp.MustCompile(`^/api/v1/worklog(/items)?$`), "worklog:read"},
 	{"POST", regexp.MustCompile(`^/api/v1/worklog$`), "worklog:write"},

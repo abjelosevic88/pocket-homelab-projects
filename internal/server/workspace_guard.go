@@ -197,6 +197,14 @@ func (s *Server) agentTarget(r *http.Request, u *store.User, own, said string, r
 		}
 		return ""
 	}
+	if strings.HasSuffix(p, "/relations") {
+		// the other issue of a relation lives in the same workspace
+		m := issueIdentRe.FindStringSubmatch(str("issue"))
+		if m == nil {
+			return "Name the other issue by its identifier (like ATH-12), not a number."
+		}
+		keys = append(keys, m[1])
+	}
 	if pid := str("parent_id"); pid != "" {
 		m := issueIdentRe.FindStringSubmatch(pid)
 		if m == nil {

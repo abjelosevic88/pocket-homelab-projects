@@ -29,6 +29,7 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	bob.do("POST", "/api/v1/teams/ATH/members", map[string]any{"user_id": alexThere.user.ID, "role": "member"}, 200, nil)
 	var there store.Issue
 	bob.do("POST", "/api/v1/issues", map[string]any{"team_id": team.ID, "title": "Pilot setup"}, 201, &there)
+	bob.do("POST", "/api/v1/issues", map[string]any{"team_id": team.ID, "title": "Pilot follow-up"}, 201, nil)
 	// a team over there with the key of one here: said when connecting
 	bob.do("POST", "/api/v1/teams", map[string]any{"name": "Their web", "key": "web", "preset": "software"}, 201, nil)
 	bob.do("POST", "/api/v1/teams/WEB/members", map[string]any{"user_id": alexThere.user.ID, "role": "member"}, 200, nil)
@@ -114,6 +115,9 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 	expect(409, "POST", "/api/v1/issues/ATH-1/comments", own, map[string]any{"body": "x"}, "team only over addr")
 	expect(409, "POST", "/api/v1/issues", own, map[string]any{"title": "x"}, "new issue without team")
 	expect(201, "POST", "/api/v1/issues", own, map[string]any{"title": "New here", "team": "MINE"}, "new issue by key")
+	expect(409, "POST", "/api/v1/issues/MINE-1/relations", own, map[string]any{"type": "related", "issue": "2"}, "relation to a bare number")
+	expect(409, "POST", "/api/v1/issues/MINE-1/relations", own, map[string]any{"type": "related", "issue": "ATH-1"}, "relation into another workspace")
+	expect(201, "POST", "/api/v1/issues/MINE-1/relations", own, map[string]any{"type": "related", "issue": "MINE-2"}, "relation by identifiers")
 	expect(409, "POST", "/api/v1/issues", own, map[string]any{"title": "x", "team": "MINE", "parent_id": "1"}, "parent by number")
 	expect(409, "POST", "/api/v1/projects", own, map[string]any{"name": "P", "team_ids": []int64{only.ID}}, "project by team ids")
 	var proj struct {
@@ -150,6 +154,12 @@ func TestConnectedInboxGuardAndSealedToken(t *testing.T) {
 		}
 	}
 	expect(201, "POST", "/api/v1/issues/ATH-1/comments", addr, map[string]any{"body": "addr"}, "the open workspace")
+	expect(201, "POST", "/api/v1/issues/ATH-1/relations", addr, map[string]any{"type": "blocks", "issue": "ATH-2"}, "relation in the open workspace")
+	var rels []relationOut
+	bob.do("GET", "/api/v1/issues/ATH-2/relations", nil, 200, &rels)
+	if len(rels) != 1 || rels[0].Type != "blocks" {
+		t.Fatalf("relation over there: %+v", rels)
+	}
 	expect(409, "POST", "/api/v1/issues/MINE-1/comments", own, map[string]any{"body": "x"}, "own instance closed now")
 	if c := alex.status("POST", "/api/v1/issues/MINE-1/code", map[string]any{"action": "chat"}); c != 409 {
 		t.Fatalf("Code on a closed workspace: %d", c)
