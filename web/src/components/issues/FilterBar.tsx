@@ -187,7 +187,7 @@ export function FilterBar({ filter, onChange, teamIds, extra, on = () => true }:
       {menu && <Menu anchor={menu} width={220} onClose={() => setMenu(null)} items={[
         { heading: 'Filter by' },
         ...FILTER_META.filter(f => f.key !== 'milestone' || (m.items('milestone').length > 0)).filter(f => f.key !== 'cycle' || m.teams.some(t => t.cycles_enabled)).filter(f => on(f.key))
-          .map(f => ({ label: f.label, icon: f.icon, checked: f.key === 'blocked' || f.key === 'subscribed' ? m.get(filter, f.key).length > 0 : undefined, onSelect: () => open(f.key, menu) })),
+          .map(f => ({ label: f.label, icon: f.icon, hint: (f.key === 'blocked' || f.key === 'subscribed') && m.get(filter, f.key).length > 0 ? <Icon name="check" size={14} /> : undefined, onSelect: () => open(f.key, menu) })),
       ]} />}
       {pick && <PickerMenu<V> anchor={pick.at} items={m.items(pick.key)} multi={m.multi(pick.key)} selected={m.get(filter, pick.key)}
         placeholder={`${FILTER_META.find(f => f.key === pick.key)?.label}…`} onPick={v => toggle(pick.key, v)} onClose={() => setPick(null)} />}
