@@ -1234,6 +1234,12 @@ func (s *Server) afterIssueUpdate(ctx context.Context, who actor, before, is *st
 			}
 		}
 	}
+	if is.ParentID != nil && is.StateType != before.StateType && (is.StateType == "completed" || is.StateType == "canceled") {
+		s.completeWaitingParent(ctx, *is.ParentID)
+	}
+	if before.ParentID != nil && (is.ParentID == nil || *is.ParentID != *before.ParentID) {
+		s.completeWaitingParent(ctx, *before.ParentID) // its last open sub-issue moved away
+	}
 	if is.StateType != before.StateType && (is.StateType == "completed" || before.StateType == "completed") {
 		go s.syncLinkedTasks(context.WithoutCancel(ctx), is, is.StateType == "completed")
 	}
@@ -1321,6 +1327,9 @@ func (s *Server) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 func (s *Server) trashIssue(ctx context.Context, who actor, is *store.Issue) error {
 	if err := s.store.TrashIssue(ctx, is.ID, who.id, who.app); err != nil {
 		return err
+	}
+	if is.ParentID != nil {
+		s.completeWaitingParent(ctx, *is.ParentID) // the last open sub-issue went to the trash
 	}
 	s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}, ActorID: who.id})
 	s.webhook(is.TeamID, "issue.deleted", map[string]any{"id": is.ID, "identifier": is.Identifier, "title": is.Title})

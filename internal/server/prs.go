@@ -329,7 +329,7 @@ func (s *Server) checkPRs(ctx context.Context, teamID, issueID int64) (checked, 
 		if state == "merged" && (meta["linked"] == true || prClosesIssue(p.Attachment, is.Identifier)) {
 			who := s.systemActor("git")
 			who.name = "Git"
-			s.gitMove(ctx, who, is, "completed")
+			s.gitComplete(ctx, who, is, p.ExtApp, p.ExtID)
 		}
 	}
 	return checked, changed

@@ -105,7 +105,7 @@ func (s *Server) handleGitHook(w http.ResponseWriter, r *http.Request) {
 					URL: c.URL, ExtApp: "git", ExtID: c.ID, State: "pushed", Meta: meta})
 				linked++
 				if onDefault && closes[strings.ToUpper(ident)] {
-					s.gitMove(ctx, who, is, "completed")
+					s.gitComplete(ctx, who, is, "git", c.ID)
 				}
 			}
 		}
@@ -136,7 +136,7 @@ func (s *Server) handleGitHook(w http.ResponseWriter, r *http.Request) {
 			linked++
 			switch {
 			case state == "merged" && (closes[strings.ToUpper(ident)] || strings.Contains(strings.ToLower(pr.Head.Ref), strings.ToLower(ident))):
-				s.gitMove(ctx, who, is, "completed")
+				s.gitComplete(ctx, who, is, "git", pr.HTMLURL)
 			case state == "open" && (p.Action == "opened" || p.Action == "reopened" || p.Action == "ready_for_review"):
 				s.gitMove(ctx, who, is, "review")
 			}
@@ -190,7 +190,7 @@ func (s *Server) issueOfTeam(ctx context.Context, team *store.Team, ident string
 // attachGit adds or refreshes a commit / pull request on an issue.
 func (s *Server) attachGit(ctx context.Context, is *store.Issue, att *store.Attachment) {
 	if old, err := s.store.FindAttachment(ctx, is.ID, att.ExtApp, att.ExtID); err == nil {
-		old.Title, old.Subtitle, old.State, old.Meta = att.Title, att.Subtitle, att.State, att.Meta
+		old.Title, old.Subtitle, old.State, old.Meta = att.Title, att.Subtitle, att.State, keepWaiting(old.Meta, att.Meta)
 		if att.URL != "" {
 			old.URL = att.URL
 		}
@@ -203,6 +203,85 @@ func (s *Server) attachGit(ctx context.Context, is *store.Issue, att *store.Atta
 		_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorApp: "git", Field: "git_" + att.Kind, ToLabel: att.Title})
 	}
 	s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}})
+}
+
+// gitComplete completes an issue for a merged pull request or a "fixes"
+// commit, unless it still has open sub-issues: then the commit / pull request
+// is marked as waiting and the issue completes when its last sub-issue is
+// done or canceled (completeWaitingParent).
+func (s *Server) gitComplete(ctx context.Context, who actor, is *store.Issue, extApp, extID string) {
+	if is.StateType == "completed" || is.StateType == "canceled" {
+		return
+	}
+	if open := is.SubTotal - is.SubDone; open > 0 {
+		att, err := s.store.FindAttachment(ctx, is.ID, extApp, extID)
+		if err != nil {
+			return
+		}
+		var meta map[string]any
+		_ = json.Unmarshal(att.Meta, &meta)
+		if meta == nil {
+			meta = map[string]any{}
+		}
+		if meta[waitsForSubIssues] == true {
+			return
+		}
+		meta[waitsForSubIssues] = true
+		att.Meta, _ = json.Marshal(meta)
+		_ = s.store.SaveAttachment(ctx, att)
+		_ = s.store.AddHistory(ctx, store.History{IssueID: &is.ID, ActorApp: "git", Field: "waits_for_sub_issues", ToValue: att.Title, ToLabel: strconv.Itoa(open)})
+		s.send(ctx, change{Kind: "issue", TeamIDs: []int64{is.TeamID}, IDs: []int64{is.ID}})
+		return
+	}
+	s.gitMove(ctx, who, is, "completed")
+}
+
+const waitsForSubIssues = "waits_for_sub_issues"
+
+// keepWaiting carries the waiting mark over when a webhook refreshes the meta.
+func keepWaiting(old, fresh json.RawMessage) json.RawMessage {
+	var o map[string]any
+	if json.Unmarshal(old, &o) != nil || o[waitsForSubIssues] != true {
+		return fresh
+	}
+	var n map[string]any
+	if json.Unmarshal(fresh, &n) != nil || n == nil {
+		n = map[string]any{}
+	}
+	n[waitsForSubIssues] = true
+	out, _ := json.Marshal(n)
+	return out
+}
+
+// completeWaitingParent completes a parent whose merged pull request (or
+// "fixes" commit) was held back by open sub-issues, once all of them are done.
+func (s *Server) completeWaitingParent(ctx context.Context, parentID int64) {
+	parent, err := s.store.GetIssue(ctx, parentID, 0)
+	if err != nil || parent.DeletedAt != nil || parent.SubDone < parent.SubTotal ||
+		parent.StateType == "completed" || parent.StateType == "canceled" {
+		return
+	}
+	atts, err := s.store.Attachments(ctx, parent.ID, 0)
+	if err != nil {
+		return
+	}
+	waiting := false
+	for i := range atts {
+		var meta map[string]any
+		_ = json.Unmarshal(atts[i].Meta, &meta)
+		if meta[waitsForSubIssues] != true {
+			continue
+		}
+		waiting = true
+		delete(meta, waitsForSubIssues)
+		atts[i].Meta, _ = json.Marshal(meta)
+		_ = s.store.SaveAttachment(ctx, &atts[i])
+	}
+	if waiting {
+		who := s.systemActor("git")
+		who.name = "Git"
+		s.gitMove(ctx, who, parent, "completed")
+	}
 }
 
 // gitMove completes an issue or moves it to review (only forward, never back).

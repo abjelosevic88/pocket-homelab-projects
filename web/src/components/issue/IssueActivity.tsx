@@ -26,7 +26,7 @@ function historyIcon(f: string): string {
   if (f === 'cycle') return 'cycle'
   if (f === 'due_date') return 'calendar'
   if (f === 'estimate') return 'triangle'
-  if (f === 'parent') return 'subtasks'
+  if (f === 'parent' || f === 'waits_for_sub_issues') return 'subtasks'
   if (f === 'relation') return 'link'
   if (f.startsWith('attachment')) return 'paperclip'
   if (f === 'event_scheduled') return 'calendar-plus'
@@ -78,6 +78,7 @@ export function historySentence(h: History, isMe: (id: number | null) => boolean
     case 'contact_added': return <>added the contact <B>{to}</B></>
     case 'git_commit': return <>linked the commit <B>{to}</B></>
     case 'git_pull_request': return <>linked the pull request <B>{to}</B></>
+    case 'waits_for_sub_issues': return <>kept the issue open after <B>{h.to_value}</B>: it goes to Done when {h.to_label === '1' ? 'its last sub-issue is' : `its ${h.to_label} open sub-issues are`} done</>
     case 'deploy': return <>deployed <B>{to}</B></>
     case 'deleted': return <>moved the issue to the trash</>
     case 'restored': return <>restored the issue</>
