@@ -153,7 +153,7 @@ export function IssueView(props: IssueViewProps) {
   // ---- data ----
   const eff = useMemo(() => {
     const f = mergeFilters(filter, userFilter)
-    f.show_completed = display.show_completed || filter.show_completed || 'week'
+    f.show_completed = display.show_completed || filter.show_completed || (f.archived ? 'all' : 'week')
     if (!display.show_sub_issues) f.top_level = true
     return f
   }, [JSON.stringify(filter), JSON.stringify(userFilter), display.show_completed, display.show_sub_issues]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -233,6 +233,7 @@ export function IssueView(props: IssueViewProps) {
   const teamsOf = (list: Issue[]) => [...new Set(list.map(i => i.team_id))]
   const bulk = async (ids: number[], set: Record<string, unknown>) => {
     if (!ids.length) return
+    if ('archived' in set) setSelected(new Set())
     setIssues(list => (list || []).map(i => (ids.includes(i.id) ? applyPatchLocally(i, set, L) : i)))
     try {
       const r = await api.post<{ done: number; failed: { id: string; error: string }[] }>(`${V1}/issues/bulk`, { ids, set })
@@ -474,17 +475,18 @@ export function IssueView(props: IssueViewProps) {
   if (err) body = <div className="callout danger m"><Icon name="alert" size={15} />{err}</div>
   else if (!issues) body = <Loading />
   else if (!issues.length && !(board && display.show_empty_groups)) body = (
-    <Empty title={filtered ? 'No issues match' : emptyTitle} icon="layers">
+    <Empty title={filtered ? 'No issues match' : emptyTitle} icon={filter.archived === 'only' ? 'archive' : 'layers'}>
       {filtered ? <>Nothing matches these filters. <button type="button" className="link-btn" onClick={() => changeFilter({})}>Clear the filters</button></> : emptyText}
-      {!filtered && canCreate && <div><button className="btn sm mt-s" onClick={() => create(null)}><Icon name="plus" size={14} />New issue</button></div>}
+      {!filtered && canCreate && filter.archived !== 'only' && <div><button className="btn sm mt-s" onClick={() => create(null)}><Icon name="plus" size={14} />New issue</button></div>}
     </Empty>
   )
   else body = board ? boardEl : list
 
+  const filterOn = (field: string) => on(field) && !(field === 'archived' && filter.archived === 'only')
   return (
     <div ref={root} className={`issue-view ${bare ? 'bare' : ''} ${fill ? 'fill' : ''} ${selected.size ? 'selecting' : ''} ${board ? 'is-board' : 'is-list'}`}>
       {!bare && <div className="view-bar iv-bar">
-        <FilterBar filter={userFilter} onChange={changeFilter} teamIds={tIds} on={on} />
+        <FilterBar filter={userFilter} onChange={changeFilter} teamIds={tIds} on={filterOn} />
         <span className="spacer" />
         <SearchBox value={userFilter.q || ''} onChange={q => changeFilter({ ...userFilter, q: q || undefined })} />
         {issues && <span className="iv-count" title="Issues shown">{issues.length} issue{issues.length === 1 ? '' : 's'}</span>}

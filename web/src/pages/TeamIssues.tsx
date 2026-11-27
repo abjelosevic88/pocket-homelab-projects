@@ -1,5 +1,5 @@
-// A team's issues: All / Active / Backlog / Triage tabs, list or board.
-// /team/:key/:tab with tab ∈ issues | active | backlog | triage | board.
+// A team's issues: All / Active / Backlog / Triage / Board / Archived tabs, list or board.
+// /team/:key/:tab with tab ∈ issues | active | backlog | triage | board | archived.
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { api, V1 } from '../lib/api'
@@ -17,7 +17,7 @@ import { IssueSearchPicker } from '../components/issues/IssueSearch'
 import { Empty, Loading, Segmented, useToast, type Anchor, rectOf } from '../components/ui'
 import '../styles/issues.css'
 
-const TABS = ['issues', 'active', 'backlog', 'triage', 'board'] as const
+const TABS = ['issues', 'active', 'backlog', 'triage', 'board', 'archived'] as const
 type Tab = typeof TABS[number]
 
 export default function TeamIssues() {
@@ -34,7 +34,10 @@ export default function TeamIssues() {
   const base: IssueFilter = { team_ids: [team.id] }
   if (tab === 'active') base.state_types = ['unstarted', 'started']
   if (tab === 'backlog') base.state_types = ['backlog']
-  const defaults: Display = tab === 'board' ? { layout: 'board', show_empty_groups: true } : tab === 'backlog' ? { group: 'none' } : { layout: 'list', group: 'state' }
+  if (tab === 'archived') { base.archived = 'only'; base.show_completed = 'all' }
+  const defaults: Display = tab === 'board' ? { layout: 'board', show_empty_groups: true }
+    : tab === 'archived' ? { layout: 'list', group: 'none', sort: 'updated', show_completed: 'all' }
+    : tab === 'backlog' ? { group: 'none' } : { layout: 'list', group: 'state' }
   const layout = display.layout || defaults.layout || 'list'
   const setLayout = (l: 'list' | 'board') => {
     if (tab === 'board' && l === 'list') { navigate(`/team/${team.key}/issues`); return }
@@ -45,10 +48,12 @@ export default function TeamIssues() {
     { id: 'issues', label: 'All issues' }, { id: 'active', label: 'Active' }, { id: 'backlog', label: 'Backlog' },
     ...(team.triage_enabled ? [{ id: 'triage' as Tab, label: 'Triage', count: triage }] : []),
     { id: 'board', label: 'Board' },
+    { id: 'archived', label: 'Archived' },
   ]
   const emptyText: Record<Tab, string> = {
     issues: 'Create the first issue for this team.', active: 'Nothing is planned or in progress.', backlog: 'The backlog is empty.',
     triage: 'Nothing waits for triage.', board: 'Create the first issue for this team.',
+    archived: 'Completed and canceled issues are archived automatically after the team’s auto-archive period, or manually from an issue’s menu.',
   }
   return (
     <div className="iss-page">
@@ -68,7 +73,7 @@ export default function TeamIssues() {
       </div>
       {tab === 'triage' ? <TriageList team={team} /> :
         <IssueView key={storageKey} fill filter={base} storageKey={storageKey} teamIds={[team.id]} newIssue={{ team_id: team.id }}
-          display={display} onDisplayChange={setDisplay} defaultDisplay={defaults} emptyTitle="No issues here" emptyText={emptyText[tab]} />}
+          display={display} onDisplayChange={setDisplay} defaultDisplay={defaults} emptyTitle={tab === 'archived' ? 'No archived issues' : 'No issues here'} emptyText={emptyText[tab]} />}
     </div>
   )
 }

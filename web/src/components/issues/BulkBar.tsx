@@ -53,6 +53,7 @@ export function BulkBar({ issues, onClear, onPatch, onDelete, onSelectAll, total
   const [pick, setPick] = useState<{ prop: Prop; at: Anchor } | null>(null)
   const canCycle = new Set(issues.map(i => i.team_id)).size === 1 && !!app.team(issues[0]?.team_id)?.cycles_enabled
   const on = fieldsOn([...new Set(issues.map(i => i.team_id))].map(id => app.team(id)).filter(t => !!t))
+  const allArchived = issues.length > 0 && issues.every(i => !!i.archived_at)
   const btn = (prop: Prop, icon: string, label: string) => (
     <button type="button" className="bb-btn" onClick={e => setPick({ prop, at: rectOf(e.currentTarget) })} title={label}><Icon name={icon} size={14} /><span className="bb-l">{label}</span></button>
   )
@@ -68,6 +69,7 @@ export function BulkBar({ issues, onClear, onPatch, onDelete, onSelectAll, total
       {btn('project', 'briefcase', 'Project')}
       {canCycle && btn('cycle', 'cycle', 'Cycle')}
       {on('due') && btn('due', 'calendar', 'Due date')}
+      <button type="button" className="bb-btn" onClick={() => onPatch({ archived: !allArchived })} title={allArchived ? 'Unarchive' : 'Archive'}><Icon name={allArchived ? 'undo' : 'archive'} size={14} /><span className="bb-l">{allArchived ? 'Unarchive' : 'Archive'}</span></button>
       <button type="button" className="bb-btn danger" onClick={onDelete} title="Delete (⌫)"><Icon name="trash" size={14} /><span className="bb-l">Delete</span></button>
       <span className="bb-sep" />
       <button type="button" className="bb-btn icon" onClick={onClear} aria-label="Clear the selection" title="Clear the selection (Esc)"><Icon name="x" size={15} /></button>

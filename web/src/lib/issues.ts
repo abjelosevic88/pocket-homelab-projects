@@ -292,6 +292,7 @@ export function applyPatchLocally(is: Issue, patch: Record<string, unknown>, L: 
       case 'assignee_id': case 'project_id': case 'cycle_id': case 'milestone_id': n[k] = (v as number) || null; break
       case 'add_label_ids': n.label_ids = [...new Set([...n.label_ids, ...(v as number[])])]; break
       case 'remove_label_ids': n.label_ids = n.label_ids.filter(id => !(v as number[]).includes(id)); break
+      case 'archived': n.archived_at = v ? new Date().toISOString() : null; break
       default: n[k] = v
     }
   }

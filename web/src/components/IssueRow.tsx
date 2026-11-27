@@ -58,7 +58,17 @@ export function issueMenu(issue: Issue, ctx: { team?: Team; openProp: (p: Prop) 
     { label: 'Add to my Tasks', icon: 'check-circle', onSelect: async () => {
       try { await api.post(`${V1}/issues/${issue.id}/task`, {}); ctx.toast('Added to Pocket Tasks') } catch (e) { ctx.toast((e as Error).message, 'err') }
     } },
-    ...(ctx.canEdit ? ['sep' as const, { label: 'Delete', icon: 'trash', danger: true, onSelect: async () => {
+    ...(ctx.canEdit ? ['sep' as const, { label: issue.archived_at ? 'Unarchive' : 'Archive', icon: 'archive', onSelect: async () => {
+      const next = !issue.archived_at
+      try {
+        const fresh = await patchIssue(issue.id, { archived: next })
+        emitChange({ kind: 'issue', team_ids: [fresh.team_id], ids: [fresh.id] })
+        ctx.toast(next ? `${issue.identifier} archived` : `${issue.identifier} unarchived`, 'ok', { label: 'Undo', run: async () => {
+          const back = await patchIssue(issue.id, { archived: !next })
+          emitChange({ kind: 'issue', team_ids: [back.team_id], ids: [back.id] })
+        } })
+      } catch (e) { ctx.toast((e as Error).message, 'err') }
+    } }, { label: 'Delete', icon: 'trash', danger: true, onSelect: async () => {
       try {
         await api.del(`${V1}/issues/${issue.id}`)
         emitChange({ kind: 'issue', team_ids: [issue.team_id], ids: [issue.id] })
@@ -121,6 +131,7 @@ export function IssueRow({ issue, properties, selected, focused, onToggleSelect,
       <span className="issue-title ellipsis">
         <span className="t">{issue.title}</span>
         <AIMark identifier={issue.identifier} /><DeployMark identifier={issue.identifier} />
+        {issue.archived_at && <span className="subcount" title={`Archived ${ago(issue.archived_at)}`}><Icon name="archive" size={12} /></span>}
         {has('sub_issues') && issue.sub_total > 0 && <span className="subcount" title="Sub-issues"><Icon name="checklist" size={12} />{issue.sub_done}/{issue.sub_total}</span>}
         {issue.blocked_by > 0 && <span className="blocked" title="Blocked"><Icon name="alert-triangle" size={12} /></span>}
         <a href={`/issue/${issue.identifier}`} className="pocket-ask-link" hidden>{issue.identifier}</a>

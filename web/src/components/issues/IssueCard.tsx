@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../../lib/app-context'
 import { prefetchOnHover, rememberIssues } from '../../lib/issue-cache'
 import { estimateLabel, fieldOn, isDone } from '../../lib/issues'
+import { ago } from '../../lib/format'
 import type { GroupKey, Issue } from '../../lib/types'
 import { Icon } from '../icons'
 import { DueChip, PersonAvatar, PriorityIcon, ProjectMark, ProgressRing, StatusIcon, useStateProgress } from '../issue-bits'
@@ -50,6 +51,7 @@ export function IssueCard({ issue, properties, groupBy, selected, focused, onTog
         <span>{issue.title}</span>
       </div>
       <div className="ic-props">
+        {issue.archived_at && <span className="ic-chip" title={`Archived ${ago(issue.archived_at)}`}><Icon name="archive" size={12} />Archived</span>}
         {has('priority') && issue.priority > 0 && <button type="button" className="ic-chip" onClick={click('priority')} title="Priority"><PriorityIcon priority={issue.priority} /></button>}
         {issue.blocked_by > 0 && <span className="ic-chip blocked" title="Blocked"><Icon name="alert-triangle" size={12} /></span>}
         {has('due') && issue.due_date && <button type="button" className="ic-chip" onClick={click('due')}><DueChip due={issue.due_date} done={done} compact /></button>}

@@ -217,6 +217,7 @@ export default function Layout() {
     ...app.teams.flatMap(t => [
       { id: 'team-' + t.id, label: `${t.name}: issues`, icon: 'layers', keywords: t.key, run: () => navigate(`/team/${t.key}/issues`) },
       { id: 'team-board-' + t.id, label: `${t.name}: board`, icon: 'kanban', keywords: t.key + ' kanban', run: () => navigate(`/team/${t.key}/issues?layout=board`) },
+      { id: 'team-archived-' + t.id, label: `${t.name}: archived`, icon: 'archive', keywords: t.key + ' archive archived', run: () => navigate(`/team/${t.key}/archived`) },
       ...(t.cycles_enabled ? [{ id: 'team-cycles-' + t.id, label: `${t.name}: cycles`, icon: 'cycle', keywords: t.key + ' sprint', run: () => navigate(`/team/${t.key}/cycles`) }] : []),
       { id: 'team-settings-' + t.id, label: `${t.name}: settings`, icon: 'settings', keywords: t.key + ' workflow labels members', run: () => navigate(`/team/${t.key}/settings`) },
     ]),
@@ -243,7 +244,7 @@ export default function Layout() {
 }
 
 const TITLES: Record<string, string> = { inbox: 'Inbox', 'my-issues': 'My issues', projects: 'Projects', roadmap: 'Roadmap', views: 'Views', insights: 'Insights', calendar: 'Calendar', time: 'Time', search: 'Search', trash: 'Trash', teams: 'Teams', doc: 'Document' }
-const TEAM_TABS: Record<string, string> = { issues: 'Issues', active: 'Active', backlog: 'Backlog', triage: 'Triage', cycles: 'Cycles', projects: 'Projects', settings: 'Settings' }
+const TEAM_TABS: Record<string, string> = { issues: 'Issues', active: 'Active', backlog: 'Backlog', triage: 'Triage', board: 'Board', archived: 'Archived', cycles: 'Cycles', projects: 'Projects', settings: 'Settings' }
 
 function TopBar({ onMenu, onPalette, mobile, compact, sidebarOpen }: { onMenu: () => void; onPalette: () => void; mobile: boolean; compact: boolean; sidebarOpen: boolean }) {
   const app = useApp()

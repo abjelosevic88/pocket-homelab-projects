@@ -10,12 +10,13 @@ import { PersonAvatar, PriorityIcon, ProjectMark, StatusIcon } from '../issue-bi
 import { PickerMenu, type PickItem } from '../pickers'
 import { type Anchor, Menu, rectOf } from '../ui'
 
-export type FilterKey = 'status' | 'assignee' | 'creator' | 'priority' | 'labels' | 'project' | 'milestone' | 'cycle' | 'due' | 'updated' | 'blocked' | 'subscribed'
+export type FilterKey = 'status' | 'assignee' | 'creator' | 'priority' | 'labels' | 'project' | 'milestone' | 'cycle' | 'due' | 'updated' | 'blocked' | 'subscribed' | 'archived'
 type V = string | number
 
 const DUE_LABEL: Record<string, string> = { overdue: 'Overdue', today: 'Due today', week: 'Due this week', month: 'Due this month', none: 'No due date', any: 'Has a due date' }
 /** Rolling windows of the "Recently updated" filter: created, changed, moved to another status or commented on. */
 export const UPDATED_LABEL: Record<string, string> = { '24h': 'Last 24 hours', '3d': 'Last 3 days', '7d': 'Last 7 days', '30d': 'Last 30 days' }
+const ARCHIVED_LABEL: Record<string, string> = { only: 'Only archived', include: 'Include archived' }
 const CYCLE_REL: Record<string, string> = { current: 'Current cycle', next: 'Next cycle', previous: 'Previous cycle' }
 
 export const FILTER_META: { key: FilterKey; label: string; icon: string }[] = [
@@ -31,6 +32,7 @@ export const FILTER_META: { key: FilterKey; label: string; icon: string }[] = [
   { key: 'updated', label: 'Recently updated', icon: 'clock' },
   { key: 'blocked', label: 'Blocked', icon: 'alert-triangle' },
   { key: 'subscribed', label: 'Subscribed by me', icon: 'bell' },
+  { key: 'archived', label: 'Archived', icon: 'archive' },
 ]
 
 /** The picker items, current values and setter of each filter, for the teams in view. */
@@ -67,6 +69,7 @@ export function useFilterModel(teamIds: number[]) {
       ]
       case 'due': return Object.entries(DUE_LABEL).map(([v, l]) => ({ value: v, label: l, icon: <Icon name="calendar" size={13} /> }))
       case 'updated': return Object.entries(UPDATED_LABEL).map(([v, l]) => ({ value: v, label: l, icon: <Icon name="clock" size={13} />, keywords: 'recent changed created status moved' }))
+      case 'archived': return Object.entries(ARCHIVED_LABEL).map(([v, l]) => ({ value: v, label: l, icon: <Icon name="archive" size={13} />, keywords: 'archive archived' }))
       default: return []
     }
   }
@@ -84,6 +87,7 @@ export function useFilterModel(teamIds: number[]) {
       case 'updated': return f.updated_within ? [f.updated_within] : []
       case 'blocked': return f.blocked ? [1] : []
       case 'subscribed': return f.subscribed_by ? [f.subscribed_by] : []
+      case 'archived': return f.archived ? [f.archived] : []
     }
   }
   const set = (f: IssueFilter, k: FilterKey, vals: V[]): IssueFilter => {
@@ -104,6 +108,7 @@ export function useFilterModel(teamIds: number[]) {
       case 'updated': put('updated_within', (strs[strs.length - 1] as IssueFilter['updated_within']) || undefined); break
       case 'blocked': put('blocked', vals.length ? true : undefined); break
       case 'subscribed': put('subscribed_by', vals.length ? me : undefined); break
+      case 'archived': put('archived', (strs[strs.length - 1] as IssueFilter['archived']) || undefined); break
     }
     return n
   }
@@ -122,9 +127,10 @@ export function useFilterModel(teamIds: number[]) {
       case 'updated': return vals.map(v => UPDATED_LABEL[v as string] || String(v))
       case 'blocked': return vals.length ? ['Blocked'] : []
       case 'subscribed': return vals.length ? ['Me'] : []
+      case 'archived': return vals.map(v => ARCHIVED_LABEL[v as string] || String(v))
     }
   }
-  const multi = (k: FilterKey) => !['due', 'updated', 'blocked', 'subscribed'].includes(k)
+  const multi = (k: FilterKey) => !['due', 'updated', 'blocked', 'subscribed', 'archived'].includes(k)
   return { items, get, set, names, multi, single, teams }
 }
 
@@ -137,7 +143,7 @@ export function useDescribeFilter(teamIds: number[] = []) {
     if (f.team_ids?.length) parts.push(f.team_ids.map(id => app.team(id)?.name || '?').join(', '))
     for (const meta of FILTER_META) {
       const n = m.names(f, meta.key)
-      if (n.length) parts.push(meta.key === 'blocked' || meta.key === 'subscribed' ? meta.label : `${meta.label}: ${n.join(', ')}`)
+      if (n.length) parts.push(meta.key === 'blocked' || meta.key === 'subscribed' ? meta.label : meta.key === 'archived' ? n[0] : `${meta.label}: ${n.join(', ')}`)
     }
     if (f.q) parts.push(`“${f.q}”`)
     return parts.join(' · ')
@@ -169,10 +175,11 @@ export function FilterBar({ filter, onChange, teamIds, extra, on = () => true }:
       {active.map(f => {
         const names = m.names(filter, f.key)
         const solo = f.key === 'blocked' || f.key === 'subscribed'
+        const valOnly = f.key === 'archived'
         return (
           <span key={f.key} className="filter-chip">
-            <button type="button" className="fc-part fc-key" onClick={e => !solo && open(f.key, rectOf(e.currentTarget.parentElement!))}><Icon name={f.icon} size={13} />{f.key === 'updated' ? 'Updated' : f.label}</button>
-            {!solo && <>
+            <button type="button" className="fc-part fc-key" onClick={e => !solo && open(f.key, rectOf(e.currentTarget.parentElement!))}><Icon name={f.icon} size={13} />{f.key === 'updated' ? 'Updated' : valOnly ? names[0] : f.label}</button>
+            {!solo && !valOnly && <>
               <span className="fc-part fc-op">{f.key === 'updated' ? 'in' : m.multi(f.key) && names.length > 1 ? 'is any of' : 'is'}</span>
               <button type="button" className="fc-part fc-val" onClick={e => open(f.key, rectOf(e.currentTarget.parentElement!))} title={names.join(', ')}>
                 {names.length > 2 ? `${names[0]}, ${names[1]} +${names.length - 2}` : names.join(', ')}
