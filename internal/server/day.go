@@ -54,6 +54,7 @@ type dayProject struct {
 	Name   string     `json:"name"`
 	URL    string     `json:"url"`
 	Events []dayEvent `json:"events"`
+	id     int64
 }
 
 type dayWork struct {
@@ -369,7 +370,7 @@ func (s *Server) dayWork(ctx context.Context, r *http.Request, uid int64, teams 
 		}
 		p := projects[pid]
 		if p == nil {
-			p = &dayProject{Name: name, URL: s.projectURL(r, pid), Events: []dayEvent{}}
+			p = &dayProject{id: pid, Name: name, URL: s.projectURL(r, pid), Events: []dayEvent{}}
 			projects[pid] = p
 			out.Projects = append(out.Projects, p)
 		}

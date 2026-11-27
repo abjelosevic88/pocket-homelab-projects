@@ -81,6 +81,15 @@ func (s *Server) remoteAPI() http.Handler {
 	}
 	r.Post("/issues/{ref}/task", notHere)
 	r.Post("/issues/{ref}/event", notHere)
+	// what Pocket Search, Day and Hub ask (capabilities.go) is answered for this
+	// instance only: nothing they ask reaches a connected one, a tool call the
+	// workspace guard sends here included
+	ownOnly := func(w http.ResponseWriter, r *http.Request) {
+		writeErr(w, http.StatusNotFound, "this is answered for this instance only, not for a connected one")
+	}
+	for _, p := range []string{"/pocket/search", "/pocket/day/{date}", "/pocket/widget", "/pocket/capture"} {
+		r.HandleFunc(p, ownOnly)
+	}
 	// this instance's session and connections, not the other one's
 	r.Post("/auth/logout", s.handleLogout)
 	r.Get("/remotes", s.handleListRemotes)

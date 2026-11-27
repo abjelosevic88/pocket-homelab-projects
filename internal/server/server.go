@@ -161,6 +161,12 @@ func (s *Server) Router() http.Handler {
 			r.Get("/calendar", s.handleCalendar)
 			r.Get("/insights", s.handleInsights)
 
+			// what Pocket Search, Pocket Day and Pocket Hub ask (capabilities.go)
+			r.Get("/pocket/search", core.SearchHandler(s.pocketSearch))
+			r.Get("/pocket/day/{date}", core.DayHandler(s.pocketDay))
+			r.Get("/pocket/widget", core.WidgetHandler(s.pocketWidget))
+			r.Post("/pocket/capture", capabilities.Capture.CaptureHandler(s.pocketCapture))
+
 			s.teamRoutes(r)
 			s.issueRoutes(r)
 			s.projectRoutes(r)
@@ -377,21 +383,27 @@ func (s *Server) coreLoop(ctx context.Context) {
 var coreTopics = []string{"projects.issue_created", "projects.issue_updated", "projects.issue_completed", "projects.comment_added",
 	"projects.project_created", "projects.project_updated", "projects.project_update_posted", "projects.cycle_started", "projects.cycle_completed"}
 
-func (s *Server) registerWithCore(ctx context.Context) error {
+// manifest is what Pocket Core learns about this app.
+func (s *Server) manifest() core.Manifest {
 	m := core.Manifest{
 		Slug: "projects", Name: "Pocket Projects",
 		Description: "Plan and track work like Linear: teams with their own workflow, issues with identifiers, a kanban board, projects with milestones and status updates, cycles, a roadmap, an inbox, insights and time tracking, with meetings in Pocket Calendar, stakeholders from Pocket Contacts, to-dos in Pocket Tasks and Pocket AI to write, split and summarise.",
-		Icon:        "/favicon.svg", Version: Version,
+		Icon:        "/favicon.svg", Category: "Work", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PROJECTS",
-		Publishes: coreTopics,
-		Offers:    linkOffers,
-		Portable:  portable,
-		Uses:      append(appUses(), core.InferenceUse()),
+		Publishes:    coreTopics,
+		Offers:       linkOffers,
+		Portable:     portable,
+		Capabilities: capabilities,
+		Uses:         append(appUses(), core.InferenceUse()),
 	}
 	if s.cfg.BaseURL != "" {
 		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.cfg.BaseURL + "/api/v1/auth/oidc/callback"}}
 	}
-	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, m)
+	return m
+}
+
+func (s *Server) registerWithCore(ctx context.Context) error {
+	reg, err := s.core.Register(ctx, s.cfg.CoreRegistrationKey, s.manifest())
 	if err != nil {
 		return err
 	}

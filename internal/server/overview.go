@@ -53,7 +53,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	a := s.accessOf(r)
 	today := s.today(ctx, a.uid)
-	base := store.IssueFilter{AllowedTeamIDs: a.ids(), ViewerID: a.uid, Today: today, AssigneeIDs: []int64{a.uid}, StateTypes: []string{"triage", "backlog", "unstarted", "started"}}
+	base := myOpenIssues(a, today)
 	mine, total, _ := s.store.ListIssues(ctx, withSort(base, "priority", 50))
 	overdue := withSort(base, "due", 50)
 	overdue.Due = "overdue"
@@ -97,6 +97,12 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"unread": s.store.UnreadCount(ctx, a.uid), "my_issues": s.briefIssues(r, mine, 15), "overdue_issues": s.briefIssues(r, od, 15),
 		"due_soon": s.briefIssues(r, wk, 15), "current_cycles": current, "projects_needing_attention": attention, "app_url": s.publicURL(r),
 	})
+}
+
+// myOpenIssues is the person's open work: what is assigned to them and
+// neither done nor canceled (the dashboard's numbers, Pocket Hub's widget).
+func myOpenIssues(a *access, today string) store.IssueFilter {
+	return store.IssueFilter{AllowedTeamIDs: a.ids(), ViewerID: a.uid, Today: today, AssigneeIDs: []int64{a.uid}, StateTypes: []string{"triage", "backlog", "unstarted", "started"}}
 }
 
 func withSort(f store.IssueFilter, sortBy string, limit int) store.IssueFilter {

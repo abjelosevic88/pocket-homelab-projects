@@ -17,6 +17,7 @@ including former identifiers after a move or a key change). Shapes are in `web/s
 | `GET /dashboard` | your open/overdue/due-this-week/in-progress counts, those issues in brief, current cycles, projects needing attention |
 | `GET /stream` | server-sent events: `change` `{kind, team_ids, ids, actor_id}` whenever something you can see changes |
 | `GET /search?q=` | `{issues, projects, docs, comments}` |
+| `GET /pocket/search?q=&limit=` · `GET /pocket/day/{date}?tz=` · `GET /pocket/widget` · `POST /pocket/capture {request_id, kind: issue, title, text}` | what Pocket Search, Pocket Day and Pocket Hub ask, in the shape every Pocket app answers in ([integrations.md](integrations.md#search-day-and-hub)): the issues `/search` finds, your work on a day as `/day/{date}` collects it, your open issues with the dashboard's numbers, and a quick line kept as a new issue (201 `{id, title, url}`; 400 with a sentence when it can't be placed). This instance only: connected instances are never asked, and `/r/{id}/api/v1/pocket/…` answers 404 for these four |
 | `GET /people` | accounts here plus the Pocket Core household (id 0 until they have an account) |
 
 ## Teams

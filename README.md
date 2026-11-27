@@ -89,6 +89,10 @@
   boards show a live mark while a conversation works, and each team has a "With AI" view.
 - **Forgejo / GitHub**: commits and pull requests that mention `WEB-12` appear on the issue; `fixes WEB-12` closes it.
   With a team GitHub token, linked pull requests are checked every 5 minutes and a merge completes the issue.
+- **Pocket Search, Pocket Day, Pocket Hub**: your issues are found from Pocket Search (`!issues`), Pocket Day can show
+  the issues you created, completed, changed or commented on that day, and Pocket Hub shows your open issues
+  ("My issues") and keeps a quick line as a new issue in your default team, or in the team whose key the line starts
+  with ("WEB: Fix login"). All of it is this server's own workspace: connected instances are never asked.
 - **Default assignee** per team: new issues go to the person creating them (or no one, or a chosen member).
 - Outgoing webhooks (n8n…), a calendar feed for any calendar app, CSV import from Linear, Jira and GitHub, CSV and
   JSON export.

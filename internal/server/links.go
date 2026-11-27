@@ -36,6 +36,18 @@ var portable = &core.Portable{
 	},
 }
 
+// capabilities is what Pocket Search, Pocket Day and Pocket Hub may ask
+// (docs/capabilities.md in pocket-homelab-core; capabilities.go), each on its
+// one route under /api/v1/pocket. Register adds pocket:search/day/widget/capture.
+// All four answer for this instance only, never for a connected one.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "The issues of your teams, by identifier (WEB-12), title and description", Kinds: []string{"issue"}, Bangs: []string{"issues", "issue", "projects"}},
+	Day:    &core.DayFeed{Label: "Projects", One: "issue", Many: "issues", Unit: "count", What: "The issues you created, completed, changed or commented on that day, the time you tracked on them and the project updates you posted"},
+	Widget: &core.Widget{Title: "My issues", What: "The open issues assigned to you: what is in progress first, then by priority and due date"},
+	Capture: &core.QuickCapture{Kinds: []core.CaptureKind{{Kind: "issue", Label: "Issue",
+		What: "A new issue in your default team; start the line with a team's key (\"WEB: Fix login\") to put it in another", Fields: []string{"title"}}}},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -69,7 +81,7 @@ var linkRoutes = []linkRoute{
 var errLinkScope = errors.New("outside the link's scope")
 
 func linkAllows(scopes []string, r *http.Request) bool {
-	if portable.LinkAllows(scopes, r) {
+	if portable.LinkAllows(scopes, r) || capabilities.LinkAllows(scopes, r) {
 		return true
 	}
 	path := r.URL.Path

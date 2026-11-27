@@ -99,6 +99,32 @@ the issue (kind `ai_thread`) and its state (draft, working, waiting, done) follo
 (`POST /teams/{KEY}/memory`), change the issues that app created.
 Every other route answers 403 to a link token.
 
+### Search, Day and Hub
+
+Projects says in its manifest what the apps that bring everything together may ask (Pocket Core's capabilities;
+category **Work**), and answers each on one route, as the person, with the teams that person is on:
+
+| Scope | Route | Answer |
+|---|---|---|
+| `pocket:search` | `GET /api/v1/pocket/search?q=&limit=` | The issues `GET /search` finds (identifier, title, description; archived ones too, not the trash), latest change first: `id` the identifier (`WEB-12`), `title`, `snippet` "WEB-12 · In Progress · Relaunch" (the project, else the team), `date` the last change, `url` `/issue/WEB-12`. Bangs in Pocket Search: `!issues`, `!issue`, `!projects`. Projects, docs and comments are not part of it |
+| `pocket:day` | `GET /api/v1/pocket/day/{YYYY-MM-DD}?tz=` | Your work that day, from the same queries as `GET /day/{date}`: an item per issue ("WEB-12 Fix login", `sub` its project or team, `kind` completed, created, updated, commented or tracked, `done`, `time`, `minutes` tracked) and one per project you posted an update to. `summary` like "2 issues completed, 1 created, 1 h 20 min tracked". Without `tz` your own time zone decides |
+| `pocket:widget` | `GET /api/v1/pocket/widget` | **My issues**: the open issues assigned to you, in progress first, then the rest, each by priority and due date (at most 8; `detail` "In Progress · due tomorrow"), a line like "3 in progress, 2 due this week (1 overdue)", the dashboard's four numbers, `url` `/my-issues` |
+| `pocket:capture` | `POST /api/v1/pocket/capture {request_id, kind: "issue", title, text}` | One new issue: the title, or the text's first line, with the rest as the description. It goes to your default team (Settings → Preferences), else your only team; a line that starts with the key of a team you can add issues to goes there ("WEB: Fix login"). With several teams and no default the answer is 400 and says how to name the team. The same `request_id` again answers the same issue |
+
+Each scope opens its one route and nothing else, and `projects:read`/`projects:write` do not open these routes.
+
+**Only this instance.** A connected instance is another server's data, reached with the token you stored for it.
+None of the four routes asks one: a search from Pocket Search, a day for Pocket Day or a widget for Pocket Hub shows
+this server's workspace only, and a quick line is never kept over there (`/r/{id}/api/v1/pocket/…` answers 404 for
+them, also to a tool call that names the connection as its workspace). `GET /day/{date}`, which Pocket Day's own
+Projects source reads, still adds your work on connected instances as before.
+
+**A captured issue is not private.** It is made the way `POST /issues` makes one: the team's status for new issues
+(its triage when the team sorts what other apps send and the line came through a link), the team's default assignee,
+the history entry, `projects.issue_created` for the team, the live update in the team's lists and the team's
+webhooks. So the team sees it at once, whoever the team gives new issues to gets "assigned you" in their inbox, and a
+person mentioned with @ in the text is told.
+
 ## Events (Pocket Core)
 
 Published with `user_email` (the actor) and `audience_emails` (the team), inside the same transaction as the change:
